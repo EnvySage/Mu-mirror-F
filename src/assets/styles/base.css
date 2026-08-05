@@ -1,0 +1,15 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100dvh;
+  width: 100vw;
+}
+
+a { color: var(--accent); text-decoration: none; }
+button { font-family: var(--font); }
+input, textarea { font-family: var(--font); }

@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mirror - AI日记</title>
+<style>
+:root {
+  --bg: #F5F5F7;
+  --surface: #FFFFFF;
+  --text-primary: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #AEAEB2;
+  --accent: #4F46E5;
+  --accent-light: #EEF0FF;
+  --accent-hover: #4338CA;
+  --border: #E8E8ED;
+  --success: #34C759;
+  --success-light: #E8F9ED;
+  --warning: #FF9F0A;
+  --warning-light: #FFF4E5;
+  --danger: #FF3B30;
+  --danger-light: #FFE5E3;
+  --processing: #5856D6;
+  --processing-light: #F0F0FF;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --nav-height: 60px;
+  --sidebar-width: 280px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: var(--font);
+  background: #E8E8ED;
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100dvh;
+  width: 100vw;
+}
+
+.app {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  display: none;
+  width: var(--sidebar-width);
+  height: 100%;
+  background: var(--surface);
+  border-right: 0.5px solid var(--border);
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-header { padding: 28px 24px 20px; }
+.sidebar-logo { display: flex; align-items: center; gap: 10px; }
+.sidebar-logo-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-logo-icon svg { width: 18px; height: 18px; stroke: #fff; }
+.sidebar-logo-text { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+
+.sidebar-nav { flex: 1; padding: 8px 12px; overflow-y: auto; }
+.sidebar-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.15s ease;
+  border: none; background: none; width: 100%; text-align: left;
+  font-family: var(--font);
+}
+.sidebar-nav-item:hover { background: var(--bg); }
+.sidebar-nav-item.active { background: var(--accent-light); }
+.sidebar-nav-item svg { width: 20px; height: 20px; stroke: var(--text-tertiary); flex-shrink: 0; }
+.sidebar-nav-item.active svg { stroke: var(--accent); }
+.sidebar-nav-item span { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.sidebar-nav-item.active span { color: var(--accent); font-weight: 600; }
+
+.sidebar-write {
+  margin: 8px 12px 16px; padding: 12px 14px;
+  border-radius: var(--radius-sm); background: var(--accent);
+  color: #fff; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  width: calc(100% - 24px); font-family: var(--font); transition: background 0.15s;
+}
+.sidebar-write:hover { background: var(--accent-hover); }
+.sidebar-write svg { width: 18px; height: 18px; stroke: #fff; }
+
+/* Sidebar Stats */
+.sidebar-stats {
+  padding: 16px 20px; margin: 0 12px 12px;
+  background: var(--bg); border-radius: var(--radius-md);
+}
+.sidebar-stats-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+.sidebar-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sidebar-stat { text-align: center; }
+.sidebar-stat-num { font-size: 20px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); }
+.sidebar-stat-label { font-size: 11px; color: var(--text-tertiary); }
+
+/* Sidebar Calendar */
+.sidebar-calendar {
+  padding: 16px 16px; margin: 0 12px 12px;
+  background: var(--bg); border-radius: var(--radius-md);
+}
+.sidebar-calendar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.calendar-month {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.calendar-nav-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); transition: all 0.15s;
+}
+.calendar-nav-btn:hover { background: var(--surface); }
+.calendar-nav-btn svg { width: 16px; height: 16px; }
+
+.calendar-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  text-align: center; margin-bottom: 6px;
+}
+.calendar-weekdays span {
+  font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.calendar-days {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; border-radius: 8px; cursor: pointer;
+  transition: all 0.15s; position: relative;
+  color: var(--text-secondary);
+}
+.calendar-day:hover { background: var(--surface); }
+.calendar-day.other-month { color: var(--text-tertiary); opacity: 0.4; }
+.calendar-day.today { background: var(--accent); color: #fff; font-weight: 600; }
+.calendar-day.today:hover { background: var(--accent-hover); }
+.calendar-day.selected { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+.calendar-day.has-record::after {
+  content: ''; position: absolute; bottom: 4px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+.calendar-day.today.has-record::after { background: #fff; }
+
+.calendar-legend {
+  display: flex; gap: 12px; margin-top: 10px; padding-top: 10px;
+  border-top: 0.5px solid var(--border);
+}
+.calendar-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text-tertiary);
+}
+.calendar-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.calendar-dot.has-record { background: var(--accent); }
+.calendar-dot.today { background: var(--accent); border: 2px solid var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+
+/* Calendar Full Page */
+.calendar-full {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 0.5px solid var(--border);
+}
+.calendar-full-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.calendar-full .calendar-month { font-size: 18px; font-weight: 600; }
+.calendar-full .calendar-weekdays { margin-bottom: 8px; }
+.calendar-full .calendar-weekdays span { font-size: 12px; }
+.calendar-days-full { gap: 4px; }
+.calendar-days-full .calendar-day {
+  width: 100%; aspect-ratio: 1; font-size: 14px; border-radius: 10px;
+}
+.calendar-full .calendar-legend {
+  margin-top: 16px; padding-top: 16px;
+  border-top: 0.5px solid var(--border);
+}
+
+.calendar-records-header {
+  font-size: 15px; font-weight: 600; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.calendar-records-count {
+  font-size: 13px; font-weight: 400; color: var(--text-secondary);
+}
+.calendar-records {
+  margin-top: 8px;
+}
+.calendar-record-item {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 0.5px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.calendar-record-item:active { transform: scale(0.98); }
+.calendar-record-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.calendar-record-summary { font-size: 12px; color: var(--text-secondary); }
+.calendar-record-tags { display: flex; gap: 4px; margin-top: 8px; }
+
+.sidebar-footer { padding: 16px 20px; border-top: 0.5px solid var(--border); }
+.sidebar-user { display: flex; align-items: center; gap: 10px; }
+.sidebar-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--accent); }
+.sidebar-user-name { font-size: 13px; font-weight: 500; }
+
+/* ===== Main Content ===== */
+.main-content {
+  flex: 1; position: relative; overflow: hidden; background: var(--bg);
+}
+
+.page {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--bg); overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0; transform: translateY(6px);
+  pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.page.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+.page-header {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(245,245,247,0.88);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  padding: 24px 32px 14px; border-bottom: 0.5px solid var(--border);
+}
+.page-title { font-size: 28px; font-weight: 700; letter-spacing: -0.6px; }
+.page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.page-content { padding: 16px 32px 32px; }
+
+/* ===== Bottom Nav (Mobile) ===== */
+.bottom-nav {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: calc(var(--nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid var(--border);
+  display: flex; align-items: center; justify-content: space-around;
+  z-index: 100;
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 16px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border: none; background: none; outline: none;
+}
+.nav-item svg { width: 22px; height: 22px; stroke: var(--text-tertiary); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.2s; }
+.nav-item span { font-size: 10px; font-weight: 500; color: var(--text-tertiary); transition: color 0.2s; }
+.nav-item.active svg { stroke: var(--accent); }
+.nav-item.active span { color: var(--accent); }
+.nav-item.write-btn { position: relative; margin-top: -22px; }
+.write-btn-circle { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(79,70,229,0.3); transition: transform 0.15s ease; }
+.write-btn-circle svg { stroke: #fff; width: 20px; height: 20px; }
+.write-btn:active .write-btn-circle { transform: scale(0.9); }
+
+/* ===== Record Cards ===== */
+.record-card {
+  background: var(--surface); border-radius: var(--radius-md);
+  padding: 16px 18px; margin-bottom: 10px;
+  box-shadow: var(--shadow-sm); border: 0.5px solid var(--border);
+  cursor: pointer; transition: all 0.15s ease;
+}
+.record-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.record-card.active { border-color: var(--accent); background: var(--accent-light); }
+.record-card:active { transform: scale(0.98); }
+.record-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.record-time { font-size: 12px; color: var(--text-tertiary); font-weight: 500; font-family: var(--font-mono); }
+.record-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
+.tag-type { background: var(--accent-light); color: var(--accent); }
+.tag-mood { background: var(--success-light); color: var(--success); }
+.tag-mood.anxious { background: var(--warning-light); color: var(--warning); }
+.tag-mood.sad { background: var(--danger-light); color: var(--danger); }
+.tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
+.tag-processing { background: var(--processing-light); color: var(--processing); animation: tagPulse 2s ease-in-out infinite; }
+@keyframes tagPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.record-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.record-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.record-keywords { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+.keyword { font-size: 11px; color: var(--text-tertiary); background: var(--bg); padding: 2px 8px; border-radius: var(--radius-full); }
+.date-separator { font-size: 13px; font-weight: 600; color: var(--text-tertiary); padding: 14px 0 6px; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; padding: 80px 20px; text-align: center; }
+.empty-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.empty-icon svg { width: 24px; height: 24px; stroke: var(--accent); }
+.empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.empty-desc { font-size: 13px; color: var(--text-secondary); max-width: 220px; }
+
+/* ===== Desktop Split View ===== */
+.desktop-split {
+  display: none;
+  height: 100%;
+}
+.split-list {
+  width: 380px;
+  border-right: 0.5px solid var(--border);
+  overflow-y: auto;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.split-detail {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+/* ===== Write Modal (Desktop - Full Editor) ===== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+  z-index: 200; opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+.write-modal {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: 90%; max-width: 560px; max-height: 85vh;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 210;
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.write-modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+
+.write-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 28px; border-bottom: 0.5px solid var(--border);
+}
+.write-header-title { font-size: 17px; font-weight: 600; }
+.write-cancel { font-size: 15px; color: var(--text-secondary); background: none; border: none; cursor: pointer; padding: 6px 0; font-family: var(--font); }
+.write-submit {
+  font-size: 14px; font-weight: 600; color: #fff; background: var(--accent);
+  border: none; cursor: pointer; padding: 10px 24px;
+  border-radius: var(--radius-full); opacity: 0.4; pointer-events: none;
+  transition: all 0.2s ease; font-family: var(--font);
+}
+.write-submit.enabled { opacity: 1; pointer-events: auto; }
+.write-submit.enabled:hover { background: var(--accent-hover); }
+
+.write-body { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; min-height: 320px; }
+.write-textarea {
+  flex: 1; border: none; outline: none;
+  font-size: 17px; line-height: 1.8;
+  color: var(--text-primary); resize: none;
+  font-family: var(--font); background: transparent;
+}
+.write-textarea::placeholder { color: var(--text-tertiary); }
+.write-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 0.5px solid var(--border); }
+.write-counter { font-size: 13px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.write-hint { font-size: 12px; color: var(--text-tertiary); }
+
+/* ===== Detail Page ===== */
+.detail-page {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg); z-index: 220;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.detail-page.show { transform: translateX(0); }
+
+.detail-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 32px;
+  background: rgba(245,245,247,0.92);
+  backdrop-filter: blur(20px);
+  position: sticky; top: 0; z-index: 5;
+  border-bottom: 0.5px solid var(--border);
+}
+.detail-back { display: flex; align-items: center; font-size: 15px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 0; font-family: var(--font); }
+.detail-back svg { width: 18px; height: 18px; stroke: var(--accent); }
+.detail-title { font-size: 16px; font-weight: 600; flex: 1; }
+.detail-action {
+  font-size: 14px; font-weight: 600; color: #fff; background: var(--accent);
+  border: none; cursor: pointer; padding: 8px 20px;
+  border-radius: var(--radius-full); opacity: 0; pointer-events: none;
+  transition: all 0.2s; font-family: var(--font);
+}
+.detail-action.show { opacity: 1; pointer-events: auto; }
+.detail-action.show:hover { background: var(--accent-hover); }
+.detail-content { padding: 24px 32px; max-width: 640px; }
+
+/* Processing */
+.processing-view { padding: 60px 20px; text-align: center; }
+.processing-ring { width: 64px; height: 64px; margin: 0 auto 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.processing-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.processing-desc { font-size: 14px; color: var(--text-secondary); }
+.processing-steps { margin-top: 32px; text-align: left; max-width: 200px; margin-left: auto; margin-right: auto; }
+.processing-step { display: flex; align-items: center; gap: 12px; padding: 10px 0; font-size: 14px; color: var(--text-tertiary); transition: color 0.3s; }
+.processing-step.active { color: var(--accent); }
+.processing-step.done { color: var(--success); }
+.processing-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.3s; }
+.processing-step.active .processing-step-dot { background: var(--accent); animation: dotPulse 1s ease infinite; }
+.processing-step.done .processing-step-dot { background: var(--success); }
+@keyframes dotPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+
+/* Review */
+.review-view { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.review-original { background: var(--surface); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; border: 0.5px solid var(--border); }
+.review-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.review-original-text { font-size: 14px; color: var(--text-primary); line-height: 1.7; }
+.review-card { background: var(--surface); border-radius: var(--radius-md); padding: 20px; margin-bottom: 12px; border: 0.5px solid var(--border); }
+.review-card-title { font-size: 16px; font-weight: 600; margin-bottom: 18px; }
+.review-field { margin-bottom: 18px; }
+.review-field:last-child { margin-bottom: 0; }
+.review-field-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.review-field-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.review-tag {
+  padding: 7px 16px; border-radius: var(--radius-full); font-size: 13px; font-weight: 500;
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s ease; font-family: var(--font);
+}
+.review-tag:hover { border-color: var(--text-tertiary); }
+.review-tag:active { transform: scale(0.95); }
+.review-tag.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+.review-keywords-input {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 14px; font-family: var(--font); color: var(--text-primary); outline: none; transition: border-color 0.2s;
+}
+.review-keywords-input:focus { border-color: var(--accent); }
+
+/* ===== Mirror ===== */
+.mirror-hero {
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  border-radius: 0 0 24px 24px;
+  padding: 28px 20px 24px; margin: 0 -20px 20px;
+  color: #fff; position: relative; overflow: hidden;
+}
+.mirror-hero::after { content: ''; position: absolute; top: -30%; right: -15%; width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,0.07); }
+.mirror-hero::before { content: ''; position: absolute; bottom: -25%; left: -10%; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.04); }
+.mirror-greeting { font-size: 13px; opacity: 0.75; margin-bottom: 2px; }
+.mirror-name { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 16px; }
+.mirror-stats { display: flex; gap: 20px; }
+.mirror-stat { text-align: center; }
+.mirror-stat-num { font-size: 22px; font-weight: 700; font-family: var(--font-mono); display: block; }
+.mirror-stat-label { font-size: 11px; opacity: 0.65; }
+
+.portrait-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+.portrait-section { margin-bottom: 0; }
+.portrait-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.portrait-section-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.portrait-section-icon svg { width: 14px; height: 14px; stroke: #fff; }
+.portrait-section-title { font-size: 14px; font-weight: 600; }
+.portrait-card { background: var(--surface); border-radius: var(--radius-md); padding: 16px; border: 0.5px solid var(--border); }
+.portrait-text { font-size: 13px; color: var(--text-secondary); line-height: 1.65; }
+.portrait-evidence { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid var(--border); }
+.portrait-evidence-label { font-size: 10px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.portrait-evidence-item { display: flex; align-items: flex-start; gap: 6px; padding: 4px 0; font-size: 11px; color: var(--text-secondary); }
+.evidence-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 5px; flex-shrink: 0; }
+.evidence-date { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); flex-shrink: 0; min-width: 36px; }
+
+.mood-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+.mood-bar-seg { transition: width 0.6s ease; }
+.mood-bar-seg.calm { background: var(--accent); }
+.mood-bar-seg.happy { background: var(--success); }
+.mood-bar-seg.anxious { background: var(--warning); }
+.mood-bar-seg.tired { background: #7C3AED; }
+.mood-legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.mood-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+.mood-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* Chat */
+.chat-section { margin-top: 20px; }
+.chat-section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.chat-messages { margin-bottom: 10px; max-height: 240px; overflow-y: auto; }
+.chat-msg { margin-bottom: 10px; animation: msgIn 0.25s ease; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.chat-msg-user { display: flex; justify-content: flex-end; }
+.chat-msg-bubble { max-width: 75%; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+.chat-msg-user .chat-msg-bubble { background: var(--accent); color: #fff; border-radius: 16px 16px 4px 16px; }
+.chat-msg-ai .chat-msg-bubble { background: var(--surface); color: var(--text-primary); border: 0.5px solid var(--border); border-radius: 16px 16px 16px 4px; }
+.chat-msg-sources { margin-top: 6px; padding-top: 6px; border-top: 0.5px solid var(--border); font-size: 10px; color: var(--text-tertiary); }
+.chat-source-link { color: var(--accent); cursor: pointer; }
+.chat-input-box { display: flex; gap: 8px; align-items: flex-end; }
+.chat-input {
+  flex: 1; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+  font-size: 13px; font-family: var(--font); color: var(--text-primary);
+  outline: none; resize: none; min-height: 40px; max-height: 100px; line-height: 1.5; transition: border-color 0.2s;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-send {
+  width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent);
+  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.15s; opacity: 0.3; pointer-events: none;
+}
+.chat-send.enabled { opacity: 1; pointer-events: auto; }
+.chat-send:hover { background: var(--accent-hover); }
+.chat-send:active { transform: scale(0.9); }
+.chat-send svg { width: 16px; height: 16px; stroke: #fff; }
+
+/* ===== Settings ===== */
+.settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.settings-group { margin-bottom: 0; }
+.settings-group-title { font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-left: 4px; }
+.settings-card { background: var(--surface); border-radius: var(--radius-md); border: 0.5px solid var(--border); overflow: hidden; }
+.settings-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 0.5px solid var(--border);
+  cursor: pointer; transition: background 0.15s;
+}
+.settings-item:last-child { border-bottom: none; }
+.settings-item:hover { background: var(--bg); }
+.settings-item-left { display: flex; align-items: center; gap: 12px; }
+.settings-item-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.settings-item-icon svg { width: 16px; height: 16px; stroke: #fff; }
+.settings-item-text { display: flex; flex-direction: column; }
+.settings-item-label { font-size: 14px; font-weight: 500; }
+.settings-item-desc { font-size: 12px; color: var(--text-tertiary); margin-top: 1px; }
+.settings-chevron { width: 16px; height: 16px; stroke: var(--text-tertiary); flex-shrink: 0; }
+
+.toggle { width: 44px; height: 26px; border-radius: 13px; background: var(--border); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+.toggle.on { background: var(--accent); }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.12); transition: transform 0.2s; }
+.toggle.on::after { transform: translateX(18px); }
+
+/* ===== Desktop Responsive ===== */
+@media (min-width: 900px) {
+  .sidebar { display: flex; }
+  .bottom-nav { display: none !important; }
+  .mobile-calendar { display: none !important; }
+  .page-header { padding: 28px 36px 16px; }
+  .page-title { font-size: 32px; }
+  .page-content { padding: 20px 36px 36px; }
+  .detail-header { padding: 16px 36px; }
+  .detail-content { padding: 24px 36px; max-width: 700px; }
+
+  /* Mirror Desktop */
+  .mirror-hero { margin: 0 -36px 28px; padding: 44px 36px 32px; border-radius: 0 0 28px 28px; }
+  .mirror-hero .mirror-greeting { font-size: 14px; }
+  .mirror-hero .mirror-name { font-size: 32px; margin-bottom: 24px; }
+  .mirror-hero .mirror-stats { gap: 32px; }
+  .mirror-hero .mirror-stat-num { font-size: 32px; }
+  .mirror-hero .mirror-stat-label { font-size: 12px; }
+  .portrait-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .portrait-section-header { margin-bottom: 12px; }
+  .portrait-section-icon { width: 30px; height: 30px; border-radius: 9px; }
+  .portrait-section-icon svg { width: 16px; height: 16px; }
+  .portrait-section-title { font-size: 15px; }
+  .portrait-card { padding: 18px; }
+  .portrait-text { font-size: 14px; line-height: 1.75; }
+  .portrait-evidence { margin-top: 14px; padding-top: 14px; }
+  .portrait-evidence-label { font-size: 11px; margin-bottom: 8px; }
+  .portrait-evidence-item { font-size: 12px; gap: 8px; padding: 5px 0; }
+  .evidence-date { font-size: 11px; min-width: 40px; }
+  .mood-bar { height: 10px; border-radius: 5px; margin-bottom: 12px; }
+  .mood-legend { gap: 16px; }
+  .mood-legend-item { font-size: 13px; gap: 6px; }
+  .chat-section { margin-top: 28px; }
+  .chat-section-title { font-size: 15px; margin-bottom: 14px; }
+  .chat-messages { max-height: 300px; }
+  .chat-msg-bubble { font-size: 14px; padding: 12px 16px; max-width: 70%; }
+  .chat-input { font-size: 14px; padding: 12px 16px; min-height: 44px; }
+  .chat-send { width: 44px; height: 44px; }
+  .chat-send svg { width: 18px; height: 18px; }
+
+  .settings-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .write-modal { max-width: 640px; max-height: 80vh; }
+  .write-body { min-height: 400px; padding: 28px 32px; }
+  .write-textarea { font-size: 18px; }
+  .detail-page { width: 100%; }
+  .detail-page.show { transform: translateX(0); }
+}
+@media (max-width: 899px) {
+  .sidebar-calendar { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+        </div>
+        <div class="sidebar-logo-text">Mirror</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="sidebar-nav-item active" data-page="records">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span>记录</span>
+      </button>
+      <button class="sidebar-nav-item" data-page="mirror">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+        <span>镜子</span>
+      </button>
+      <button class="sidebar-nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>设置</span>
+      </button>
+    </nav>
+    <div class="sidebar-stats">
+      <div class="sidebar-stats-title">数据概览</div>
+      <div class="sidebar-stats-grid">
+        <div class="sidebar-stat"><div class="sidebar-stat-num">5</div><div class="sidebar-stat-label">总记录</div></div>
+        <div class="sidebar-stat"><div class="sidebar-stat-num">3</div><div class="sidebar-stat-label">天数</div></div>
+        <div class="sidebar-stat"><div class="sidebar-stat-num">1.7</div><div class="sidebar-stat-label">日均</div></div>
+        <div class="sidebar-stat"><div class="sidebar-stat-num">80%</div><div class="sidebar-stat-label">完成率</div></div>
+      </div>
+    </div>
+    <div class="sidebar-calendar" id="sidebar-calendar">
+      <div class="sidebar-calendar-header">
+        <button class="calendar-nav-btn" onclick="changeMonth(-1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="calendar-month" id="calendar-month"></span>
+        <button class="calendar-nav-btn" onclick="changeMonth(1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div class="calendar-days" id="calendar-days"></div>
+      <div class="calendar-legend">
+        <div class="calendar-legend-item"><div class="calendar-dot has-record"></div><span>有记录</span></div>
+        <div class="calendar-legend-item"><div class="calendar-dot today"></div><span>今天</span></div>
+      </div>
+    </div>
+    <button class="sidebar-write" onclick="openWriteModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      写日记
+    </button>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">U</div>
+        <div class="sidebar-user-name">用户</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main Content ===== -->
+  <main class="main-content">
+
+    <!-- Records Page -->
+    <div class="page active" id="page-records">
+      <div class="page-header">
+        <div class="page-title">记录</div>
+        <div class="page-subtitle" id="records-count"></div>
+      </div>
+      <div class="page-content" id="records-content"></div>
+    </div>
+
+    <!-- Calendar Page (Mobile) -->
+    <div class="page" id="page-calendar">
+      <div class="page-header">
+        <div class="page-title">日历</div>
+        <div class="page-subtitle" id="calendar-filter-info"></div>
+      </div>
+      <div class="page-content">
+        <div class="calendar-full">
+          <div class="calendar-full-header">
+            <button class="calendar-nav-btn" onclick="changeMonth(-1)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span class="calendar-month" id="calendar-full-month"></span>
+            <button class="calendar-nav-btn" onclick="changeMonth(1)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+          <div class="calendar-weekdays">
+            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          </div>
+          <div class="calendar-days calendar-days-full" id="calendar-full-days"></div>
+          <div class="calendar-legend">
+            <div class="calendar-legend-item"><div class="calendar-dot has-record"></div><span>有记录</span></div>
+            <div class="calendar-legend-item"><div class="calendar-dot today"></div><span>今天</span></div>
+            <div class="calendar-legend-item"><div class="calendar-dot selected"></div><span>已选中</span></div>
+          </div>
+        </div>
+        <div class="calendar-records" id="calendar-records"></div>
+      </div>
+    </div>
+
+    <!-- Mirror Page -->
+    <div class="page" id="page-mirror">
+      <div class="page-header">
+        <div class="page-title">镜子</div>
+        <div class="page-subtitle">认识你自己</div>
+      </div>
+      <div class="page-content" id="mirror-content"></div>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div class="page-title">设置</div>
+      </div>
+      <div class="page-content" id="settings-content"></div>
+    </div>
+
+    <!-- Detail Page -->
+    <div class="detail-page" id="detail-page">
+      <div class="detail-header">
+        <button class="detail-back" id="detail-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          返回
+        </button>
+        <span class="detail-title" id="detail-header-title">记录详情</span>
+        <button class="detail-action" id="detail-confirm">确认</button>
+      </div>
+      <div class="detail-content" id="detail-content"></div>
+    </div>
+
+  </main>
+
+  <!-- ===== Bottom Nav (Mobile) ===== -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="nav-item active" data-page="records">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span>记录</span>
+    </button>
+    <button class="nav-item" data-page="calendar">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>日历</span>
+    </button>
+    <button class="nav-item write-btn" data-action="write">
+      <div class="write-btn-circle"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span>写日记</span>
+    </button>
+    <button class="nav-item" data-page="mirror">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+      <span>镜子</span>
+    </button>
+    <button class="nav-item" data-page="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>设置</span>
+    </button>
+  </nav>
+
+  <!-- ===== Write Modal ===== -->
+  <div class="modal-overlay" id="write-overlay"></div>
+  <div class="write-modal" id="write-modal">
+    <div class="write-header">
+      <button class="write-cancel" id="write-cancel">取消</button>
+      <span class="write-header-title">写日记</span>
+      <button class="write-submit" id="write-submit">保存</button>
+    </div>
+    <div class="write-body">
+      <textarea class="write-textarea" id="write-textarea" placeholder="今天发生了什么?" maxlength="500"></textarea>
+      <div class="write-footer">
+        <span class="write-hint">可写多个事件，AI会自动拆分</span>
+        <span class="write-counter"><span id="write-count">0</span>/500</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const store = { records: [], currentPage: 'records', currentReview: null, currentDetailId: null, selectedRecordId: null };
+const demoRecords = [
+  { id: '1', status: 'done', content: '今天学了 Spring Security 的认证流程，感觉有点难但总算搞懂了。晚上打算继续看授权部分。', title: '学习 Spring Security 认证流程', summary: '学习了认证流程，有难度但已理解，计划继续学习授权部分', content_type: 'learning', mood: ['calm', 'satisfied'], keywords: ['Spring Security', '认证', '授权'], created_at: new Date(Date.now() - 2 * 3600000).toISOString() },
+  { id: '2', status: 'done', content: '完成数据库概念设计，心情不错。', title: '完成数据库概念设计', summary: '完成了数据库的概念设计阶段', content_type: 'work', mood: ['happy'], keywords: ['数据库', '设计'], created_at: new Date(Date.now() - 5 * 3600000).toISOString() },
+  { id: '3', status: 'done', content: '晚上和朋友吃饭，聊了毕业设计，他建议我用 Vue 写前端。', title: '和朋友吃饭', summary: '和朋友吃饭聊了毕业设计，得到了前端技术选型建议', content_type: 'social', mood: ['happy'], keywords: ['朋友', '毕业设计', 'Vue'], created_at: new Date(Date.now() - 8 * 3600000).toISOString() },
+  { id: '4', status: 'done', content: '明天要开会讨论项目进度，需要准备演示文稿。', title: '明天开会', summary: '需要准备项目进度会议的演示文稿', content_type: 'todo', mood: ['anxious'], status: 'pending', keywords: ['会议', '演示文稿'], created_at: new Date(Date.now() - 26 * 3600000).toISOString() },
+  { id: '5', status: 'done', content: '最近有点累，学习节奏太快了，需要调整一下。', title: '需要调整节奏', summary: '学习节奏太快感到疲惫，需要适当调整', content_type: 'thought', mood: ['tired', 'anxious'], keywords: ['疲劳', '节奏'], created_at: new Date(Date.now() - 50 * 3600000).toISOString() },
+];
+
+function timeAgo(iso) { const diff = Date.now() - new Date(iso).getTime(); const m = Math.floor(diff / 60000); if (m < 1) return '刚刚'; if (m < 60) return m + '分钟前'; const h = Math.floor(m / 60); if (h < 24) return h + '小时前'; const d = Math.floor(h / 24); if (d === 1) return '昨天'; return d + '天前'; }
+function dateLabel(iso) { return new Date(iso).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }); }
+const moodMap = { happy: '开心', calm: '平静', anxious: '焦虑', sad: '难过', tired: '疲惫', satisfied: '满足' };
+const moodClass = { anxious: 'anxious', sad: 'sad', tired: 'tired' };
+const typeMap = { learning: '学习', work: '工作', social: '社交', todo: '待办', thought: '感想', note: '随记' };
+
+function renderRecords() {
+  const el = document.getElementById('records-content');
+  const countEl = document.getElementById('records-count');
+  const records = store.records;
+  if (records.length === 0) { countEl.textContent = ''; el.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></div><div class="empty-title">还没有记录</div><div class="empty-desc">点击写日记按钮，开始记录你的第一篇日记</div></div>'; return; }
+  countEl.textContent = records.length + ' 条记录';
+  const groups = {};
+  records.forEach(r => { const key = dateLabel(r.created_at); if (!groups[key]) groups[key] = []; groups[key].push(r); });
+  let html = '';
+  for (const [date, items] of Object.entries(groups)) {
+    html += '<div class="date-separator">' + date + '</div>';
+    items.forEach(r => {
+      const isProcessing = r.status === 'processing';
+      let tagsHtml = isProcessing ? '<span class="tag tag-processing">AI 整理中</span>' : '<span class="tag tag-type">' + (typeMap[r.content_type] || r.content_type) + '</span>' + (r.mood || []).map(m => '<span class="tag tag-mood ' + (moodClass[m] || '') + '">' + (moodMap[m] || m) + '</span>').join('');
+      const kwHtml = !isProcessing && r.keywords ? r.keywords.map(k => '<span class="keyword">#' + k + '</span>').join('') : '';
+      const isActive = store.selectedRecordId === r.id;
+      html += '<div class="record-card' + (isActive ? ' active' : '') + '" onclick="selectRecord(\'' + r.id + '\')"><div class="record-meta"><span class="record-time">' + timeAgo(r.created_at) + '</span><div class="record-tags">' + tagsHtml + '</div></div><div class="record-title">' + (isProcessing ? r.content.substring(0, 20) + '...' : r.title) + '</div>' + (!isProcessing ? '<div class="record-summary">' + r.summary + '</div>' : '') + (kwHtml ? '<div class="record-keywords">' + kwHtml + '</div>' : '') + '</div>';
+    });
+  }
+  el.innerHTML = html;
+}
+
+function selectRecord(id) {
+  store.selectedRecordId = id;
+  renderRecords();
+  document.getElementById('detail-page').classList.add('show');
+  const record = store.records.find(r => r.id === id);
+  if (!record) return;
+  const detailContent = document.getElementById('detail-content');
+  const headerTitle = document.getElementById('detail-header-title');
+  const confirmBtn = document.getElementById('detail-confirm');
+  if (record.status === 'processing') {
+    headerTitle.textContent = 'AI 整理中';
+    confirmBtn.classList.remove('show');
+    detailContent.innerHTML = '<div class="processing-view"><div class="processing-ring"></div><div class="processing-title">正在分析你的记录</div><div class="processing-desc">AI 正在理解你的内容，通常需要几秒钟</div><div class="processing-steps"><div class="processing-step active" id="step-1"><div class="processing-step-dot"></div>文本清洗</div><div class="processing-step" id="step-2"><div class="processing-step-dot"></div>内容分类</div><div class="processing-step" id="step-3"><div class="processing-step-dot"></div>生成标签</div></div></div>';
+    setTimeout(() => { document.getElementById('step-1').classList.remove('active'); document.getElementById('step-1').classList.add('done'); document.getElementById('step-2').classList.add('active'); }, 800);
+    setTimeout(() => { document.getElementById('step-2').classList.remove('active'); document.getElementById('step-2').classList.add('done'); document.getElementById('step-3').classList.add('active'); }, 1600);
+    setTimeout(() => { document.getElementById('step-3').classList.remove('active'); document.getElementById('step-3').classList.add('done'); showReview(id); }, 2200);
+  } else if (record.status === 'done') {
+    headerTitle.textContent = '记录详情';
+    confirmBtn.classList.remove('show');
+    const moodTags = (record.mood || []).map(m => '<span class="tag tag-mood ' + (moodClass[m] || '') + '">' + (moodMap[m] || m) + '</span>').join('');
+    const kwTags = (record.keywords || []).map(k => '<span class="keyword">#' + k + '</span>').join('');
+    detailContent.innerHTML = '<div class="review-original"><div class="review-label">原始内容</div><div class="review-original-text">' + record.content + '</div></div><div class="review-card"><div class="review-card-title">' + record.title + '</div><div class="review-field"><div class="review-field-label">类型</div><div class="review-field-tags"><span class="tag tag-type">' + typeMap[record.content_type] + '</span></div></div><div class="review-field"><div class="review-field-label">情绪</div><div class="review-field-tags">' + moodTags + '</div></div>' + (record.keywords ? '<div class="review-field"><div class="review-field-label">关键词</div><div class="review-field-tags">' + kwTags + '</div></div>' : '') + '</div>';
+  }
+}
+
+function showReview(id) {
+  const record = store.records.find(r => r.id === id);
+  if (!record) return;
+  const detailContent = document.getElementById('detail-content');
+  const headerTitle = document.getElementById('detail-header-title');
+  const confirmBtn = document.getElementById('detail-confirm');
+  headerTitle.textContent = '审核标签';
+  confirmBtn.classList.add('show');
+  const types = ['learning', 'work', 'social', 'todo', 'thought', 'note'];
+  const moods = ['happy', 'calm', 'anxious', 'sad', 'tired', 'satisfied'];
+  const aiResult = simulateAI(record.content);
+  store.currentReview = { ...aiResult, id };
+  detailContent.innerHTML = '<div class="review-view"><div class="review-original"><div class="review-label">原始内容</div><div class="review-original-text">' + record.content + '</div></div><div class="review-card"><div class="review-card-title">' + aiResult.title + '</div><div class="review-field"><div class="review-field-label">内容类型</div><div class="review-field-tags">' + types.map(t => '<span class="review-tag ' + (aiResult.content_type === t ? 'selected' : '') + '" onclick="selectType(this,\'' + t + '\')">' + typeMap[t] + '</span>').join('') + '</div></div><div class="review-field"><div class="review-field-label">情绪状态</div><div class="review-field-tags">' + moods.map(m => '<span class="review-tag ' + (aiResult.mood.includes(m) ? 'selected' : '') + '" onclick="toggleMood(this,\'' + m + '\')">' + moodMap[m] + '</span>').join('') + '</div></div><div class="review-field"><div class="review-field-label">关键词</div><input class="review-keywords-input" id="review-keywords" value="' + aiResult.keywords.join(', ') + '" /></div></div></div>';
+}
+
+function simulateAI(text) { const lower = text.toLowerCase(); let content_type = 'note'; let mood = ['calm']; let keywords = []; if (/学|learn|study|spring|python|课/.test(lower)) content_type = 'learning'; else if (/会|要|准备|计划|todo/.test(lower)) content_type = 'todo'; else if (/朋友|吃饭|聊天|社交/.test(lower)) content_type = 'social'; else if (/项目|设计|工作|完成|database/.test(lower)) content_type = 'work'; else if (/觉得|感觉|想|心情/.test(lower)) content_type = 'thought'; if (/开心|不错|完成|好|happy/.test(lower)) mood = ['happy']; else if (/累|疲惫/.test(lower)) mood = ['tired']; else if (/焦虑|紧张|担心/.test(lower)) mood = ['anxious']; else if (/难过/.test(lower)) mood = ['sad']; keywords = text.split(/[\s,，。.!！?？、]+/).filter(w => w.length > 1).slice(0, 3); const title = text.length > 15 ? text.substring(0, 15) + '...' : text; return { title, content_type, mood, keywords }; }
+
+function selectType(el, type) { el.closest('.review-field-tags').querySelectorAll('.review-tag').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); store.currentReview.content_type = type; }
+function toggleMood(el, mood) { el.classList.toggle('selected'); if (el.classList.contains('selected')) store.currentReview.mood.push(mood); else store.currentReview.mood = store.currentReview.mood.filter(m => m !== mood); }
+
+document.getElementById('detail-confirm').addEventListener('click', () => { const review = store.currentReview; if (!review) return; const keywords = document.getElementById('review-keywords').value.split(/[,，]/).map(k => k.trim()).filter(Boolean); const record = store.records.find(r => r.id === review.id); if (record) { record.status = 'done'; record.title = review.title; record.content_type = review.content_type; record.mood = review.mood; record.keywords = keywords; record.summary = review.title; } store.currentReview = null; renderRecords(); selectRecord(review.id); });
+document.getElementById('detail-back').addEventListener('click', () => { document.getElementById('detail-page').classList.remove('show'); store.currentReview = null; });
+
+function switchPage(page) {
+  store.currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item, .sidebar-nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+
+  // 切换到记录页面时，重置日历筛选
+  if (page === 'records') {
+    if (selectedCalendarDate) {
+      selectCalendarDate(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate());
+    }
+  }
+
+  // 切换到日历页面时，更新日历
+  if (page === 'calendar') {
+    renderCalendar();
+    if (selectedCalendarDate) {
+      updateCalendarRecords(selectedCalendarDate);
+    }
+  }
+}
+
+document.getElementById('bottom-nav').addEventListener('click', e => { const btn = e.target.closest('.nav-item'); if (!btn) return; if (btn.dataset.action === 'write') { openWriteModal(); return; } if (btn.dataset.page) switchPage(btn.dataset.page); });
+document.getElementById('sidebar').addEventListener('click', e => { const btn = e.target.closest('.sidebar-nav-item'); if (btn && btn.dataset.page) switchPage(btn.dataset.page); });
+
+function openWriteModal() { document.getElementById('write-overlay').classList.add('show'); document.getElementById('write-modal').classList.add('show'); setTimeout(() => document.getElementById('write-textarea').focus(), 350); }
+function closeWriteModal() { document.getElementById('write-overlay').classList.remove('show'); document.getElementById('write-modal').classList.remove('show'); document.getElementById('write-textarea').value = ''; document.getElementById('write-count').textContent = '0'; document.getElementById('write-submit').classList.remove('enabled'); }
+document.getElementById('write-cancel').addEventListener('click', closeWriteModal);
+document.getElementById('write-overlay').addEventListener('click', closeWriteModal);
+document.getElementById('write-textarea').addEventListener('input', e => { document.getElementById('write-count').textContent = e.target.value.length; document.getElementById('write-submit').classList.toggle('enabled', e.target.value.length > 0); });
+document.getElementById('write-submit').addEventListener('click', () => {
+  const text = document.getElementById('write-textarea').value.trim();
+  if (!text) return;
+  closeWriteModal();
+  const newId = String(Date.now());
+  store.records.unshift({ id: newId, status: 'processing', content: text, created_at: new Date().toISOString() });
+  switchPage('records');
+  renderRecords();
+  renderCalendar();
+  // 不自动打开详情页，让用户看到新记录出现在列表中
+  document.getElementById('detail-page').classList.remove('show');
+  store.selectedRecordId = null;
+  renderRecords();
+});
+
+function renderMirror() {
+  document.getElementById('mirror-content').innerHTML = '<div class="mirror-hero"><div class="mirror-greeting">这是我在你身上看到的</div><div class="mirror-name">你的镜子</div><div class="mirror-stats"><div class="mirror-stat"><div class="mirror-stat-num">5</div><div class="mirror-stat-label">条记录</div></div><div class="mirror-stat"><div class="mirror-stat-num">3</div><div class="mirror-stat-label">天</div></div><div class="mirror-stat"><div class="mirror-stat-num">1.7</div><div class="mirror-stat-label">日均</div></div></div></div><div class="portrait-grid"><div class="portrait-section"><div class="portrait-section-header"><div class="portrait-section-icon" style="background:#4F46E5"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div><div class="portrait-section-title">学习进展</div></div><div class="portrait-card"><div class="portrait-text">你最近在深入学习 Spring Security，涵盖认证和授权两个核心模块。同时完成了数据库概念设计。</div><div class="portrait-evidence"><div class="portrait-evidence-label">来源</div><div class="portrait-evidence-item"><div class="evidence-dot"></div><span class="evidence-date">2小时前</span><span>学习了 Spring Security 认证流程...</span></div></div></div></div><div class="portrait-section"><div class="portrait-section-header"><div class="portrait-section-icon" style="background:#10B981"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div><div class="portrait-section-title">情绪分布</div></div><div class="portrait-card"><div class="mood-bar"><div class="mood-bar-seg calm" style="width:30%"></div><div class="mood-bar-seg happy" style="width:40%"></div><div class="mood-bar-seg anxious" style="width:20%"></div><div class="mood-bar-seg tired" style="width:10%"></div></div><div class="mood-legend"><div class="mood-legend-item"><div class="mood-legend-dot" style="background:var(--accent)"></div>平静 30%</div><div class="mood-legend-item"><div class="mood-legend-dot" style="background:var(--success)"></div>开心 40%</div><div class="mood-legend-item"><div class="mood-legend-dot" style="background:var(--warning)"></div>焦虑 20%</div><div class="mood-legend-item"><div class="mood-legend-dot" style="background:#7C3AED"></div>疲惫 10%</div></div></div></div><div class="portrait-section"><div class="portrait-section-header"><div class="portrait-section-icon" style="background:#F59E0B"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="portrait-section-title">未完成事项</div></div><div class="portrait-card"><div class="portrait-text">你有 1 项待办未完成：准备项目进度会议的演示文稿</div></div></div><div class="portrait-section"><div class="portrait-section-header"><div class="portrait-section-icon" style="background:#7C3AED"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div><div class="portrait-section-title">个人标签</div></div><div class="portrait-card"><div class="portrait-text">后端学习者 / 注重细节 / 善于社交 / 夜间活跃 / 项目驱动</div></div></div></div><div class="chat-section"><div class="chat-section-title">向镜子提问</div><div class="chat-messages" id="chat-messages"></div><div class="chat-input-box"><textarea class="chat-input" id="chat-input" placeholder="你想了解什么?" rows="1"></textarea><button class="chat-send" id="chat-send"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div></div>';
+  const chatInput = document.getElementById('chat-input'); const chatSend = document.getElementById('chat-send');
+  chatInput.addEventListener('input', () => { chatSend.classList.toggle('enabled', chatInput.value.trim().length > 0); chatInput.style.height = 'auto'; chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px'; });
+  chatSend.addEventListener('click', handleChat);
+  chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat(); } });
+}
+const chatResponses = { '学习': '根据你的记录，你最近在学习 Spring Security（认证和授权）以及数据库概念设计。你的学习模式显示你偏好后端技术方向。', '心情': '你最近的情绪分布：40% 开心，30% 平静，20% 焦虑，10% 疲惫。完成任务后你会感到满足，但在截止日期前会有些焦虑。', '待办': '你目前有 1 项待办：准备项目进度会议的演示文稿。', '朋友': '你最近和朋友一起吃了饭，聊了毕业设计，朋友建议你用 Vue 写前端。', 'default': '这是个好问题。根据你的记录，我可以看到你在学习、情绪和日常活动方面的模式。你可以问我更具体的问题，比如"我最近学了什么"或"我的心情怎么样"。' };
+function handleChat() { const input = document.getElementById('chat-input'); const text = input.value.trim(); if (!text) return; const messagesEl = document.getElementById('chat-messages'); messagesEl.innerHTML += '<div class="chat-msg chat-msg-user"><div class="chat-msg-bubble">' + text + '</div></div>'; input.value = ''; input.style.height = 'auto'; document.getElementById('chat-send').classList.remove('enabled'); setTimeout(() => { let response = chatResponses.default; for (const [key, val] of Object.entries(chatResponses)) { if (key !== 'default' && text.includes(key)) { response = val; break; } } messagesEl.innerHTML += '<div class="chat-msg chat-msg-ai"><div class="chat-msg-bubble">' + response + '<div class="chat-msg-sources"><span class="chat-source-link">查看来源</span></div></div></div>'; messagesEl.scrollTop = messagesEl.scrollHeight; }, 800); }
+
+function renderSettings() {
+  document.getElementById('settings-content').innerHTML = '<div class="settings-grid"><div class="settings-group"><div class="settings-group-title">AI 模型</div><div class="settings-card"><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="settings-item-text"><div class="settings-item-label">API 地址</div><div class="settings-item-desc">https://api.openai.com</div></div></div><svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:#7C3AED"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div class="settings-item-text"><div class="settings-item-label">API Key</div><div class="settings-item-desc">sk-****...****</div></div></div><svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:#10B981"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div class="settings-item-text"><div class="settings-item-label">模型</div><div class="settings-item-desc">gpt-4o</div></div></div><svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div></div></div><div class="settings-group"><div class="settings-group-title">数据库</div><div class="settings-card"><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:#F59E0B"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div><div class="settings-item-text"><div class="settings-item-label">数据库地址</div><div class="settings-item-desc">postgresql://localhost:5432/mirror</div></div></div><svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div></div></div><div class="settings-group"><div class="settings-group-title">审核模式</div><div class="settings-card"><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:#EC4899"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="settings-item-text"><div class="settings-item-label">自动审核</div><div class="settings-item-desc">跳过审核，AI直接保存</div></div></div><div class="toggle" onclick="this.classList.toggle(\'on\')"></div></div></div></div><div class="settings-group"><div class="settings-group-title">关于</div><div class="settings-card"><div class="settings-item"><div class="settings-item-left"><div class="settings-item-icon" style="background:#6B7280"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div><div class="settings-item-text"><div class="settings-item-label">版本</div><div class="settings-item-desc">v0.1.0</div></div></div></div></div></div></div>';
+}
+
+// ===== Calendar =====
+let calendarDate = new Date();
+let selectedCalendarDate = null;
+
+function changeMonth(delta) {
+  calendarDate.setMonth(calendarDate.getMonth() + delta);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const today = new Date();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  // Get dates that have records
+  const recordDates = new Set();
+  store.records.forEach(r => {
+    const d = new Date(r.created_at);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      recordDates.add(d.getDate());
+    }
+  });
+
+  let html = '';
+
+  // Previous month days
+  for (let i = firstDay - 1; i >= 0; i--) {
+    html += '<div class="calendar-day other-month">' + (daysInPrevMonth - i) + '</div>';
+  }
+
+  // Current month days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+    const hasRecord = recordDates.has(day);
+    const isSelected = selectedCalendarDate && selectedCalendarDate.getFullYear() === year && selectedCalendarDate.getMonth() === month && selectedCalendarDate.getDate() === day;
+
+    let classes = 'calendar-day';
+    if (isToday) classes += ' today';
+    if (hasRecord) classes += ' has-record';
+    if (isSelected) classes += ' selected';
+
+    html += '<div class="' + classes + '" onclick="selectCalendarDate(' + year + ',' + month + ',' + day + ')">' + day + '</div>';
+  }
+
+  // Next month days
+  const totalCells = firstDay + daysInMonth;
+  const remaining = 7 - (totalCells % 7);
+  if (remaining < 7) {
+    for (let i = 1; i <= remaining; i++) {
+      html += '<div class="calendar-day other-month">' + i + '</div>';
+    }
+  }
+
+  // Update all calendars
+  const monthText = year + '年' + (month + 1) + '月';
+
+  // Desktop calendar (sidebar)
+  const desktopMonthEl = document.getElementById('calendar-month');
+  const desktopDaysEl = document.getElementById('calendar-days');
+  if (desktopMonthEl) desktopMonthEl.textContent = monthText;
+  if (desktopDaysEl) desktopDaysEl.innerHTML = html;
+
+  // Mobile calendar page
+  const fullMonthEl = document.getElementById('calendar-full-month');
+  const fullDaysEl = document.getElementById('calendar-full-days');
+  if (fullMonthEl) fullMonthEl.textContent = monthText;
+  if (fullDaysEl) fullDaysEl.innerHTML = html;
+
+  // Update calendar records if a date is selected
+  if (selectedCalendarDate) {
+    updateCalendarRecords(selectedCalendarDate);
+  }
+  if (mobileMonthEl) mobileMonthEl.textContent = monthText;
+  if (mobileDaysEl) mobileDaysEl.innerHTML = html;
+}
+
+function selectCalendarDate(year, month, day) {
+  selectedCalendarDate = new Date(year, month, day);
+  renderCalendar();
+  updateCalendarRecords(selectedCalendarDate);
+}
+
+function updateCalendarRecords(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+
+  // Filter records by selected date
+  const filtered = store.records.filter(r => {
+    const d = new Date(r.created_at);
+    return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
+  });
+
+  // Update filter info
+  const filterInfoEl = document.getElementById('calendar-filter-info');
+  const recordsEl = document.getElementById('calendar-records');
+
+  if (filterInfoEl) {
+    filterInfoEl.textContent = year + '年' + (month + 1) + '月' + day + '日';
+  }
+
+  if (recordsEl) {
+    if (filtered.length === 0) {
+      recordsEl.innerHTML = '<div class="empty-state" style="padding:40px 0"><div class="empty-title">这一天没有记录</div><div class="empty-desc">点击写日记按钮开始记录</div></div>';
+    } else {
+      let html = '<div class="calendar-records-header">当天记录<span class="calendar-records-count">' + filtered.length + '条</span></div>';
+      filtered.forEach(r => {
+        const isProcessing = r.status === 'processing';
+        let tagsHtml = isProcessing ? '<span class="tag tag-processing">AI 整理中</span>' : '<span class="tag tag-type">' + (typeMap[r.content_type] || r.content_type) + '</span>' + (r.mood || []).map(m => '<span class="tag tag-mood ' + (moodClass[m] || '') + '">' + (moodMap[m] || m) + '</span>').join('');
+        html += '<div class="calendar-record-item" onclick="openRecordFromCalendar(\'' + r.id + '\')"><div class="calendar-record-title">' + (isProcessing ? r.content.substring(0, 20) + '...' : r.title) + '</div>' + (!isProcessing ? '<div class="calendar-record-summary">' + r.summary + '</div>' : '') + '<div class="calendar-record-tags">' + tagsHtml + '</div></div>';
+      });
+      recordsEl.innerHTML = html;
+    }
+  }
+}
+
+function openRecordFromCalendar(id) {
+  // Switch to records page and open the record
+  switchPage('records');
+  setTimeout(() => selectRecord(id), 100);
+}
+
+function clearCalendarFilter() {
+  selectedCalendarDate = null;
+  renderCalendar();
+  renderRecords();
+}
+
+function renderFilteredRecords(records) {
+  const el = document.getElementById('records-content');
+  const countEl = document.getElementById('records-count');
+
+  if (records.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></div><div class="empty-title">这一天没有记录</div><div class="empty-desc">点击写日记按钮，开始记录</div></div>';
+    return;
+  }
+
+  let html = '';
+  records.forEach(r => {
+    const isProcessing = r.status === 'processing';
+    let tagsHtml = isProcessing ? '<span class="tag tag-processing">AI 整理中</span>' : '<span class="tag tag-type">' + (typeMap[r.content_type] || r.content_type) + '</span>' + (r.mood || []).map(m => '<span class="tag tag-mood ' + (moodClass[m] || '') + '">' + (moodMap[m] || m) + '</span>').join('');
+    const kwHtml = !isProcessing && r.keywords ? r.keywords.map(k => '<span class="keyword">#' + k + '</span>').join('') : '';
+    const isActive = store.selectedRecordId === r.id;
+    html += '<div class="record-card' + (isActive ? ' active' : '') + '" onclick="selectRecord(\'' + r.id + '\')"><div class="record-meta"><span class="record-time">' + timeAgo(r.created_at) + '</span><div class="record-tags">' + tagsHtml + '</div></div><div class="record-title">' + (isProcessing ? r.content.substring(0, 20) + '...' : r.title) + '</div>' + (!isProcessing ? '<div class="record-summary">' + r.summary + '</div>' : '') + (kwHtml ? '<div class="record-keywords">' + kwHtml + '</div>' : '') + '</div>';
+  });
+  el.innerHTML = html;
+}
+
+store.records = [...demoRecords];
+renderRecords();
+renderMirror();
+renderSettings();
+renderCalendar();
+</script>
+</body>
+</html>
