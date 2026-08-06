@@ -1,8 +1,22 @@
 <script setup>
+import { computed } from 'vue'
+import { useUIStore } from '@/stores/ui'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
-import WriteModal from '@/components/organisms/WriteModal.vue'
+import RecordFormModal from '@/components/organisms/RecordFormModal.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
+
+const ui = useUIStore()
+const showWriteModal = computed(() => ui.showWriteModal)
+
+function closeWriteModal() {
+  ui.closeWriteModal()
+}
+
+function onRecordCreated(record) {
+  // 记录创建成功后的回调
+  console.log('Record created:', record)
+}
 </script>
 
 <template>
@@ -13,7 +27,11 @@ import DetailPanel from '@/components/organisms/DetailPanel.vue'
       <DetailPanel />
     </main>
     <BottomNav />
-    <WriteModal />
+    <RecordFormModal
+      :show="showWriteModal"
+      @close="closeWriteModal"
+      @created="onRecordCreated"
+    />
   </div>
 </template>
 
