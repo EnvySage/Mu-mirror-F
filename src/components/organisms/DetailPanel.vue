@@ -15,25 +15,8 @@ const record = computed(() => {
 // Review state
 const reviewData = ref(null)
 const reviewKeywords = ref('')
-
-function simulateAI(text) {
-  const lower = text.toLowerCase()
-  let content_type = 'note'
-  let mood = ['calm']
-  let keywords = []
-  if (/学|learn|study|spring|python|课/.test(lower)) content_type = 'learning'
-  else if (/会|要|准备|计划|todo/.test(lower)) content_type = 'todo'
-  else if (/朋友|吃饭|聊天|社交/.test(lower)) content_type = 'social'
-  else if (/项目|设计|工作|完成|database/.test(lower)) content_type = 'work'
-  else if (/觉得|感觉|想|心情/.test(lower)) content_type = 'thought'
-  if (/开心|不错|完成|好|happy/.test(lower)) mood = ['happy']
-  else if (/累|疲惫/.test(lower)) mood = ['tired']
-  else if (/焦虑|紧张|担心/.test(lower)) mood = ['anxious']
-  else if (/难过/.test(lower)) mood = ['sad']
-  keywords = text.split(/[\s,，。.!！?？、]+/).filter(w => w.length > 1).slice(0, 3)
-  const title = text.length > 15 ? text.substring(0, 15) + '...' : text
-  return { title, content_type, mood, keywords }
-}
+const submitting = ref(false)
+const actionError = ref(null)
 
 // Processing animation
 const processingStep = ref(-1)
@@ -43,36 +26,38 @@ function startProcessing() {
   processingStep.value = 0
   processingTimer = setTimeout(() => { processingStep.value = 1 }, 800)
   setTimeout(() => { processingStep.value = 2 }, 1600)
-  setTimeout(() => {
-    processingStep.value = 3
-    // Transition to review
-    const r = record.value
-    if (r) {
-      const ai = simulateAI(r.content)
-      reviewData.value = { ...ai }
-      reviewKeywords.value = ai.keywords.join(', ')
-      ui.detailMode = 'review'
-    }
-  }, 2200)
 }
 
 watch(() => ui.selectedRecordId, (id) => {
   if (!id) return
   const r = recordsStore.getById(id)
   if (!r) return
+  actionError.value = null
+
   if (r.status === 'processing') {
     ui.detailMode = 'processing'
     startProcessing()
+  } else if (r.status === 'pending_review') {
+    // 初始化审核数据（使用后端返回的 AI 处理结果）
+    reviewData.value = {
+      title: r.title || '',
+      content_type: r.content_type || 'note',
+      mood: r.mood || ['calm'],
+    }
+    reviewKeywords.value = (r.keywords || []).join(', ')
+    ui.detailMode = 'review'
+  } else if (r.status === 'failed') {
+    ui.detailMode = 'failed'
   } else {
     ui.detailMode = 'view'
   }
-  reviewData.value = null
 })
 
 function close() {
   ui.showDetail = false
   ui.selectedRecordId = null
   reviewData.value = null
+  actionError.value = null
   if (processingTimer) clearTimeout(processingTimer)
 }
 
@@ -87,19 +72,68 @@ function toggleMood(mood) {
   else reviewData.value.mood.push(mood)
 }
 
-function confirmReview() {
-  if (!reviewData.value || !record.value) return
+async function confirmReview() {
+  if (!reviewData.value || !record.value || submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
   const keywords = reviewKeywords.value.split(/[,，]/).map(k => k.trim()).filter(Boolean)
-  recordsStore.updateRecord(record.value.id, {
-    status: 'done',
+  const modifications = {
     title: reviewData.value.title,
     content_type: reviewData.value.content_type,
     mood: reviewData.value.mood,
     keywords,
-    summary: reviewData.value.title,
-  })
-  reviewData.value = null
-  ui.detailMode = 'view'
+  }
+
+  const success = await recordsStore.approveRecord(record.value.id, modifications)
+  if (success) {
+    reviewData.value = null
+    ui.detailMode = 'view'
+  } else {
+    actionError.value = '审核失败，请重试'
+  }
+  submitting.value = false
+}
+
+async function rejectReview() {
+  if (!record.value || submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
+  const success = await recordsStore.rejectRecord(record.value.id)
+  if (success) {
+    close()
+  } else {
+    actionError.value = '操作失败，请重试'
+  }
+  submitting.value = false
+}
+
+async function retryProcessing() {
+  if (!record.value || submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
+  // 重新创建记录（后端没有 retry 接口，这里重新提交）
+  const content = record.value.content
+  await recordsStore.deleteRecord(record.value.id)
+  await recordsStore.createRecord(content)
+  close()
+  submitting.value = false
+}
+
+async function deleteRecord() {
+  if (!record.value || submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
+  const success = await recordsStore.deleteRecord(record.value.id)
+  if (success) {
+    close()
+  } else {
+    actionError.value = '删除失败，请重试'
+  }
+  submitting.value = false
 }
 </script>
 
@@ -111,15 +145,20 @@ function confirmReview() {
         返回
       </button>
       <span class="detail-title">
-        {{ ui.detailMode === 'processing' ? 'AI 整理中' : ui.detailMode === 'review' ? '审核标签' : '记录详情' }}
+        {{ ui.detailMode === 'processing' ? 'AI 整理中' : ui.detailMode === 'review' ? '审核标签' : ui.detailMode === 'failed' ? '处理失败' : '记录详情' }}
       </span>
       <button
-        :class="['detail-action', { show: ui.detailMode === 'review' }]"
+        v-if="ui.detailMode === 'review'"
+        class="detail-action show"
+        :disabled="submitting"
         @click="confirmReview"
-      >确认</button>
+      >{{ submitting ? '提交中...' : '通过' }}</button>
     </div>
 
     <div class="detail-content">
+      <!-- 错误提示 -->
+      <div v-if="actionError" class="error-banner">{{ actionError }}</div>
+
       <!-- Processing View -->
       <div v-if="ui.detailMode === 'processing'" class="processing-view">
         <div class="processing-ring" />
@@ -138,6 +177,25 @@ function confirmReview() {
         </div>
       </div>
 
+      <!-- Failed View -->
+      <div v-else-if="ui.detailMode === 'failed'" class="failed-view">
+        <div class="failed-icon">⚠️</div>
+        <div class="failed-title">处理失败</div>
+        <div class="failed-desc">AI 处理过程中出现错误，请重试或删除该记录</div>
+        <div class="review-original">
+          <div class="section-label">原始内容</div>
+          <div class="review-original-text">{{ record.content }}</div>
+        </div>
+        <div class="failed-actions">
+          <button class="btn-retry" :disabled="submitting" @click="retryProcessing">
+            {{ submitting ? '处理中...' : '重新尝试' }}
+          </button>
+          <button class="btn-delete" :disabled="submitting" @click="deleteRecord">
+            删除记录
+          </button>
+        </div>
+      </div>
+
       <!-- Review View -->
       <div v-else-if="ui.detailMode === 'review' && reviewData" class="review-view">
         <div class="review-original">
@@ -145,7 +203,10 @@ function confirmReview() {
           <div class="review-original-text">{{ record.content }}</div>
         </div>
         <div class="review-card">
-          <div class="review-card-title">{{ reviewData.title }}</div>
+          <div class="review-field">
+            <div class="section-label">标题</div>
+            <input v-model="reviewData.title" class="review-keywords-input" />
+          </div>
           <div class="review-field">
             <div class="section-label">内容类型</div>
             <div class="review-field-tags">
@@ -170,13 +231,21 @@ function confirmReview() {
           </div>
           <div class="review-field">
             <div class="section-label">关键词</div>
-            <input v-model="reviewKeywords" class="review-keywords-input" />
+            <input v-model="reviewKeywords" class="review-keywords-input" placeholder="用逗号分隔关键词" />
           </div>
+        </div>
+        <div class="review-actions">
+          <button class="btn-approve" :disabled="submitting" @click="confirmReview">
+            {{ submitting ? '提交中...' : '✅ 通过' }}
+          </button>
+          <button class="btn-reject" :disabled="submitting" @click="rejectReview">
+            ❌ 拒绝
+          </button>
         </div>
       </div>
 
       <!-- Done/View -->
-      <div v-else-if="ui.detailMode === 'view' && record.status === 'done'">
+      <div v-else-if="ui.detailMode === 'view'">
         <div class="review-original">
           <div class="section-label">原始内容</div>
           <div class="review-original-text">{{ record.content }}</div>
@@ -205,6 +274,11 @@ function confirmReview() {
               <span v-for="k in record.keywords" :key="k" class="keyword">#{{ k }}</span>
             </div>
           </div>
+        </div>
+        <div v-if="record.status === 'done'" class="view-actions">
+          <button class="btn-delete-secondary" :disabled="submitting" @click="deleteRecord">
+            删除记录
+          </button>
         </div>
       </div>
     </div>
@@ -240,11 +314,19 @@ function confirmReview() {
 }
 .detail-action.show { opacity: 1; pointer-events: auto; }
 .detail-action.show:hover { background: var(--accent-hover); }
+.detail-action:disabled { opacity: 0.5; cursor: not-allowed; }
 .detail-content { padding: 16px; max-width: 640px; }
 
 @media (min-width: 900px) {
   .detail-header { padding: 16px 36px; }
   .detail-content { padding: 24px 36px; max-width: 700px; }
+}
+
+/* Error banner */
+.error-banner {
+  padding: 12px 16px; margin-bottom: 16px;
+  background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md); color: #ef4444; font-size: 13px;
 }
 
 /* Processing */
@@ -261,6 +343,27 @@ function confirmReview() {
 .processing-step.active .processing-step-dot { background: var(--accent); animation: dotPulse 1s ease infinite; }
 .processing-step.done .processing-step-dot { background: var(--success); }
 @keyframes dotPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+
+/* Failed */
+.failed-view { text-align: center; padding: 40px 20px; }
+.failed-icon { font-size: 48px; margin-bottom: 16px; }
+.failed-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--danger); }
+.failed-desc { font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; }
+.failed-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+.btn-retry {
+  padding: 10px 24px; border-radius: var(--radius-full); font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; background: var(--accent); color: #fff;
+  transition: all 0.15s; font-family: var(--font);
+}
+.btn-retry:hover { background: var(--accent-hover); }
+.btn-retry:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-delete {
+  padding: 10px 24px; border-radius: var(--radius-full); font-size: 14px; font-weight: 600;
+  border: 1.5px solid var(--danger); cursor: pointer; background: transparent; color: var(--danger);
+  transition: all 0.15s; font-family: var(--font);
+}
+.btn-delete:hover { background: var(--danger-light); }
+.btn-delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Review */
 .review-view { animation: fadeIn 0.3s ease; }
@@ -285,6 +388,42 @@ function confirmReview() {
   font-size: 14px; font-family: var(--font); color: var(--text-primary); outline: none; transition: border-color 0.2s;
 }
 .review-keywords-input:focus { border-color: var(--accent); }
+
+/* Review actions */
+.review-actions { display: flex; gap: 12px; margin-top: 24px; }
+.btn-approve {
+  flex: 1; padding: 12px 24px; border-radius: var(--radius-full); font-size: 15px; font-weight: 600;
+  border: none; cursor: pointer; background: var(--success); color: #fff;
+  transition: all 0.15s; font-family: var(--font);
+}
+.btn-approve:hover { opacity: 0.9; }
+.btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reject {
+  flex: 1; padding: 12px 24px; border-radius: var(--radius-full); font-size: 15px; font-weight: 600;
+  border: 1.5px solid var(--danger); cursor: pointer; background: transparent; color: var(--danger);
+  transition: all 0.15s; font-family: var(--font);
+}
+.btn-reject:hover { background: var(--danger-light); }
+.btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* View actions */
+.view-actions { margin-top: 24px; text-align: center; }
+.btn-delete-secondary {
+  padding: 10px 24px; border-radius: var(--radius-full); font-size: 14px; font-weight: 500;
+  border: 1px solid var(--border); cursor: pointer; background: transparent; color: var(--text-secondary);
+  transition: all 0.15s; font-family: var(--font);
+}
+.btn-delete-secondary:hover { border-color: var(--danger); color: var(--danger); }
+.btn-delete-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Tags */
+.tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
+.tag-type { background: var(--accent-light); color: var(--accent); }
+.tag-mood { background: var(--success-light); color: var(--success); }
+.tag-mood.anxious { background: var(--warning-light); color: var(--warning); }
+.tag-mood.sad { background: var(--danger-light); color: var(--danger); }
+.tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
+.keyword { font-size: 11px; color: var(--text-tertiary); background: var(--bg); padding: 2px 8px; border-radius: var(--radius-full); }
 
 /* Section label (local override) */
 .section-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }

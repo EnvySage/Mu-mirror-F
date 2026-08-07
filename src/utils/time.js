@@ -1,10 +1,22 @@
 /**
+ * 解析日期字符串，兼容 "2026-08-07 06:22:58" 和 ISO 格式
+ * @param {string} dateStr - 日期字符串
+ * @returns {Date}
+ */
+export function parseDate(dateStr) {
+  if (!dateStr) return new Date()
+  // 将 "2026-08-07 06:22:58" 转为 ISO 格式 "2026-08-07T06:22:58"
+  const isoStr = dateStr.replace(' ', 'T')
+  return new Date(isoStr)
+}
+
+/**
  * 格式化时间为相对时间（如"刚刚"、"5分钟前"）
- * @param {string} iso - ISO 时间字符串
+ * @param {string} dateStr - 日期字符串
  * @returns {string}
  */
-export function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime()
+export function timeAgo(dateStr) {
+  const diff = Date.now() - parseDate(dateStr).getTime()
   const m = Math.floor(diff / 60000)
   if (m < 1) return '刚刚'
   if (m < 60) return m + '分钟前'
@@ -17,11 +29,11 @@ export function timeAgo(iso) {
 
 /**
  * 格式化日期为中文标签（如"7月27日"）
- * @param {string} iso - ISO 时间字符串
+ * @param {string} dateStr - 日期字符串
  * @returns {string}
  */
-export function dateLabel(iso) {
-  return new Date(iso).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
+export function dateLabel(dateStr) {
+  return parseDate(dateStr).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
 }
 
 /**

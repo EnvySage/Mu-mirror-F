@@ -11,6 +11,9 @@ const props = defineProps({
 defineEmits(['click'])
 
 const isProcessing = computed(() => props.record.status === 'processing')
+const isPendingReview = computed(() => props.record.status === 'pending_review')
+const isFailed = computed(() => props.record.status === 'failed')
+const isDone = computed(() => props.record.status === 'done')
 
 const timeText = computed(() => timeAgo(props.record.created_at))
 
@@ -18,12 +21,17 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
 </script>
 
 <template>
-  <div :class="['record-card', { active }]" @click="$emit('click')">
+  <div :class="['record-card', { active, 'is-failed': isFailed, 'is-pending': isPendingReview }]" @click="$emit('click')">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <div class="record-tags">
+        <!-- 状态标签 -->
         <span v-if="isProcessing" class="tag tag-processing">AI 整理中</span>
-        <template v-else>
+        <span v-else-if="isPendingReview" class="tag tag-pending">待审核</span>
+        <span v-else-if="isFailed" class="tag tag-failed">处理失败</span>
+
+        <!-- 内容标签（仅完成和待审核状态显示） -->
+        <template v-if="isDone || isPendingReview">
           <span class="tag tag-type">{{ typeLabel }}</span>
           <span
             v-for="m in (record.mood || [])"
@@ -34,12 +42,12 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
       </div>
     </div>
     <div class="record-title">
-      {{ isProcessing ? record.content.substring(0, 20) + '...' : record.title }}
+      {{ isProcessing || isFailed ? record.content.substring(0, 30) + '...' : record.title }}
     </div>
-    <div v-if="!isProcessing && record.summary" class="record-summary">
+    <div v-if="isDone || isPendingReview" class="record-summary">
       {{ record.summary }}
     </div>
-    <div v-if="!isProcessing && record.keywords && record.keywords.length" class="record-keywords">
+    <div v-if="(isDone || isPendingReview) && record.keywords && record.keywords.length" class="record-keywords">
       <span v-for="k in record.keywords" :key="k" class="keyword">#{{ k }}</span>
     </div>
   </div>
@@ -54,6 +62,8 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
 }
 .record-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .record-card.active { border-color: var(--accent); background: var(--accent-light); }
+.record-card.is-failed { border-color: var(--danger); background: var(--danger-light); }
+.record-card.is-pending { border-color: var(--warning); }
 .record-card:active { transform: scale(0.98); }
 .record-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .record-time { font-size: 12px; color: var(--text-tertiary); font-weight: 500; font-family: var(--font-mono); }
@@ -65,6 +75,8 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
 .tag-mood.sad { background: var(--danger-light); color: var(--danger); }
 .tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
 .tag-processing { background: var(--processing-light); color: var(--processing); animation: tagPulse 2s ease-in-out infinite; }
+.tag-pending { background: var(--warning-light); color: var(--warning); }
+.tag-failed { background: var(--danger-light); color: var(--danger); }
 @keyframes tagPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .record-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 .record-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

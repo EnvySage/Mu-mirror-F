@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { createRecord } from '@/api/records'
+import { useRecordsStore } from '@/stores/records'
 
 const props = defineProps({
   show: Boolean,
 })
 
 const emit = defineEmits(['close', 'created'])
+
+const recordsStore = useRecordsStore()
 
 // 表单数据 - 用户只需输入内容
 const content = ref('')
@@ -29,13 +31,8 @@ async function handleSubmit() {
   error.value = ''
 
   try {
-    const data = {
-      content: content.value.trim(),
-      status: 'processing', // 提交后由 AI 处理
-    }
-
-    const res = await createRecord(data)
-    emit('created', res.data)
+    const newRecord = await recordsStore.createRecord(content.value.trim())
+    emit('created', newRecord)
     handleClose()
   } catch (err) {
     error.value = err.message || '创建失败，请重试'

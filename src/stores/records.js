@@ -1,70 +1,37 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { dateLabel } from '@/utils/time'
+import {
+  getRecords as apiGetRecords,
+  getRecord as apiGetRecord,
+  createRecord as apiCreateRecord,
+  deleteRecord as apiDeleteRecord,
+  approveRecord as apiApproveRecord,
+  rejectRecord as apiRejectRecord,
+} from '@/api/records'
 
-/** @typedef {'processing' | 'done' | 'failed'} ProcessingStatus */
+/** @typedef {'processing' | 'pending_review' | 'done' | 'failed' | 'rejected'} RecordStatus */
 
 /**
  * @typedef {Object} Record
- * @property {string} id
+ * @property {string|number} id
  * @property {string} content
  * @property {string} [title]
  * @property {string} [summary]
  * @property {string} [content_type]
  * @property {string[]} [mood]
  * @property {string[]} [keywords]
- * @property {ProcessingStatus} status
+ * @property {RecordStatus} status
  * @property {string} created_at
+ * @property {string} [updated_at]
  */
-
-const demoRecords = [
-  {
-    id: '1', status: 'done',
-    content: '今天学了 Spring Security 的认证流程，感觉有点难但总算搞懂了。晚上打算继续看授权部分。',
-    title: '学习 Spring Security 认证流程',
-    summary: '学习了认证流程，有难度但已理解，计划继续学习授权部分',
-    content_type: 'learning', mood: ['calm', 'satisfied'], keywords: ['Spring Security', '认证', '授权'],
-    created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-  },
-  {
-    id: '2', status: 'done',
-    content: '完成数据库概念设计，心情不错。',
-    title: '完成数据库概念设计',
-    summary: '完成了数据库的概念设计阶段',
-    content_type: 'work', mood: ['happy'], keywords: ['数据库', '设计'],
-    created_at: new Date(Date.now() - 5 * 3600000).toISOString(),
-  },
-  {
-    id: '3', status: 'done',
-    content: '晚上和朋友吃饭，聊了毕业设计，他建议我用 Vue 写前端。',
-    title: '和朋友吃饭',
-    summary: '和朋友吃饭聊了毕业设计，得到了前端技术选型建议',
-    content_type: 'social', mood: ['happy'], keywords: ['朋友', '毕业设计', 'Vue'],
-    created_at: new Date(Date.now() - 8 * 3600000).toISOString(),
-  },
-  {
-    id: '4', status: 'done',
-    content: '明天要开会讨论项目进度，需要准备演示文稿。',
-    title: '明天开会',
-    summary: '需要准备项目进度会议的演示文稿',
-    content_type: 'todo', mood: ['anxious'], keywords: ['会议', '演示文稿'],
-    created_at: new Date(Date.now() - 26 * 3600000).toISOString(),
-  },
-  {
-    id: '5', status: 'done',
-    content: '最近有点累，学习节奏太快了，需要调整一下。',
-    title: '需要调整节奏',
-    summary: '学习节奏太快感到疲惫，需要适当调整',
-    content_type: 'thought', mood: ['tired', 'anxious'], keywords: ['疲劳', '节奏'],
-    created_at: new Date(Date.now() - 50 * 3600000).toISOString(),
-  },
-]
 
 export const useRecordsStore = defineStore('records', () => {
   /** @type {import('vue').Ref<Record[]>} */
-  const records = ref([...demoRecords])
+  const records = ref([])
 
   const loading = ref(false)
+  const error = ref(null)
 
   const totalCount = computed(() => records.value.length)
 
@@ -79,41 +46,135 @@ export const useRecordsStore = defineStore('records', () => {
     return Object.entries(groups).map(([date, items]) => ({ date, items }))
   })
 
+  /** 待审核记录 */
+  const pendingRecords = computed(() =>
+    records.value.filter(r => r.status === 'pending_review')
+  )
+
+  /** 处理中的记录 */
+  const processingRecords = computed(() =>
+    records.value.filter(r => r.status === 'processing')
+  )
+
+  /** 已完成的记录 */
+  const doneRecords = computed(() =>
+    records.value.filter(r => r.status === 'done')
+  )
+
   /**
-   * 根据 ID 获取记录
-   * @param {string} id
-   * @returns {Record | undefined}
+   * 从后端获取记录列表
+   * @param {Object} [params] - 可选查询参数
+   * @returns {Promise<void>}
    */
-  function getById(id) {
-    return records.value.find(r => r.id === id)
+  async function fetchRecords(params) {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await apiGetRecords(params)
+      records.value = res.data || []
+    } catch (err) {
+      error.value = err.message || '获取记录失败'
+      console.error('Failed to fetch records:', err)
+    } finally {
+      loading.value = false
+    }
   }
 
   /**
-   * 创建新记录（demo 模拟）
-   * @param {string} content
-   * @returns {Record}
+   * 根据 ID 获取记录详情
+   * @param {string|number} id
+   * @returns {Promise<Record|null>}
    */
-  function createRecord(content) {
-    const newRecord = {
-      id: String(Date.now()),
-      status: 'processing',
-      content,
-      created_at: new Date().toISOString(),
+  async function fetchRecord(id) {
+    try {
+      const res = await apiGetRecord(id)
+      // 更新本地缓存
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1) {
+        records.value[index] = res.data
+      }
+      return res.data
+    } catch (err) {
+      console.error('Failed to fetch record:', err)
+      return null
     }
+  }
+
+  /**
+   * 创建新记录
+   * @param {string} content
+   * @returns {Promise<Record>}
+   */
+  async function createRecord(content) {
+    const res = await apiCreateRecord({ content })
+    const newRecord = res.data
+    // 添加到本地列表开头
     records.value.unshift(newRecord)
     return newRecord
   }
 
   /**
-   * 模拟 AI 处理完成后更新记录
-   * @param {string} id
-   * @param {Partial<Record>} data
+   * 删除记录（软删除）
+   * @param {string|number} id
+   * @returns {Promise<boolean>}
    */
-  function updateRecord(id, data) {
-    const record = records.value.find(r => r.id === id)
-    if (record) {
-      Object.assign(record, data)
+  async function deleteRecord(id) {
+    try {
+      await apiDeleteRecord(id)
+      // 从本地列表移除
+      records.value = records.value.filter(r => r.id !== id)
+      return true
+    } catch (err) {
+      console.error('Failed to delete record:', err)
+      return false
     }
+  }
+
+  /**
+   * 审核通过
+   * @param {string|number} id
+   * @param {Object} [modifications] - 用户修改的标签
+   * @returns {Promise<boolean>}
+   */
+  async function approveRecord(id, modifications) {
+    try {
+      const res = await apiApproveRecord(id, modifications)
+      // 更新本地记录
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1) {
+        records.value[index] = res.data
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to approve record:', err)
+      return false
+    }
+  }
+
+  /**
+   * 审核拒绝（软删除）
+   * @param {string|number} id
+   * @returns {Promise<boolean>}
+   */
+  async function rejectRecord(id) {
+    try {
+      await apiRejectRecord(id)
+      // 从本地列表移除
+      records.value = records.value.filter(r => r.id !== id)
+      return true
+    } catch (err) {
+      console.error('Failed to reject record:', err)
+      return false
+    }
+  }
+
+  /**
+   * 根据 ID 获取本地记录
+   * @param {string|number} id
+   * @returns {Record|undefined}
+   */
+  function getById(id) {
+    return records.value.find(r => r.id === id)
   }
 
   /**
@@ -150,11 +211,19 @@ export const useRecordsStore = defineStore('records', () => {
   return {
     records,
     loading,
+    error,
     totalCount,
     groupedRecords,
-    getById,
+    pendingRecords,
+    processingRecords,
+    doneRecords,
+    fetchRecords,
+    fetchRecord,
     createRecord,
-    updateRecord,
+    deleteRecord,
+    approveRecord,
+    rejectRecord,
+    getById,
     getByDate,
     getRecordDates,
   }

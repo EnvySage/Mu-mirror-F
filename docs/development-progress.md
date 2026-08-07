@@ -1,6 +1,6 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-06
+> 最后更新：2026-08-07
 
 ## 项目概述
 
@@ -26,37 +26,32 @@
 | ✅ | Bearer 认证 | 请求头 `Authorization: Bearer <token>` |
 | ✅ | 路由守卫 | 未登录自动跳转登录页 |
 | ✅ | 退出登录 | 设置页面添加退出按钮 |
-| ✅ | 401 处理 | Token 无效时自动清除并跳转登录 |
+| ✅ | 401 处理 | Token 无效时自动清除并跳转 |
 | ⚠️ | 后端 403 | 后端安全配置问题，需后端修复 |
 
-**新增文件：**
-- `src/api/request.js` - axios 实例 + 拦截器
-- `src/api/auth.js` - 认证 API 封装
-
-**修改文件：**
-- `src/stores/auth.js` - 重写为后端 API 认证 + Token 过期验证
-- `src/views/auth/WelcomeView.vue` - 统一登录/注册页面
-- `src/router/index.js` - 更新路由配置
-- `src/views/SettingsView.vue` - 添加退出登录按钮
-- `vite.config.js` - 添加 API 代理配置
-
-**删除文件：**
-- `src/views/auth/UnlockView.vue` - 移除旧的本地密码解锁
-
-### 2. 记录模块（2026-08-05）
+### 2. 记录模块 CRUD（2026-08-07）
 
 | 状态 | 功能 | 说明 |
 |------|------|------|
-| ✅ | 创建记录 | 调用 `POST /records`，用户只需输入内容 |
-| ✅ | 记录表单 | 简洁弹窗，只包含内容输入框 |
-| ✅ | AI 处理 | 提交后由 AI 自动生成标题/摘要/类型/心情/关键词 |
-
-**新增文件：**
-- `src/api/records.js` - 记录 API 封装
-- `src/components/organisms/RecordFormModal.vue` - 记录表单弹窗
+| ✅ | 创建记录 | `POST /records`，用户只需输入内容 |
+| ✅ | 获取记录列表 | `GET /records`，返回所有未删除记录 |
+| ✅ | 获取记录详情 | `GET /records/{id}` |
+| ✅ | 删除记录 | `DELETE /records/{id}`，软删除 |
+| ✅ | 审核通过 | `POST /records/{id}/approve`，可修改标签 |
+| ✅ | 审核拒绝 | `POST /records/{id}/reject`，软删除不入 RAG |
+| ✅ | 记录状态展示 | processing/pending_review/done/failed 状态区分 |
+| ✅ | 审核界面 | 待审核记录可修改标题/类型/情绪/关键词 |
+| ✅ | 失败重试 | 失败记录可重新尝试或删除 |
 
 **修改文件：**
-- `src/components/templates/MainLayout.vue` - 集成新表单组件
+- `src/api/records.js` - 更新 API 接口，移除 updateRecord，添加 approveRecord/rejectRecord
+- `src/stores/records.js` - 对接真实 API，支持 CRUD 和审核操作
+- `src/views/RecordsView.vue` - 添加加载状态，onMounted 获取数据
+- `src/views/CalendarView.vue` - onMounted 获取数据
+- `src/views/MirrorView.vue` - onMounted 获取数据
+- `src/components/molecules/RecordCard.vue` - 支持 pending_review/failed 状态展示
+- `src/components/organisms/DetailPanel.vue` - 完整审核流程（通过/拒绝）和失败处理
+- `src/components/organisms/RecordFormModal.vue` - 使用 store 创建记录
 
 ---
 
@@ -74,7 +69,7 @@
 |------|------|------|
 | ⏳ | Token 刷新机制 | 当前过期需重登，后续可加 Refresh Token |
 | ⏳ | 用户信息展示 | 显示当前登录用户名 |
-| ⏳ | 记录列表 | 对接 `GET /records` 获取记录列表 |
+| ⏳ | 记录轮询更新 | processing 状态记录需要轮询获取最新状态 |
 
 ### 低优先级
 
@@ -100,19 +95,22 @@
 
 | 接口 | 方法 | 状态 | 前端调用位置 |
 |------|------|------|-------------|
-| `/records` | POST | ✅ 已对接 | `src/api/records.js` |
-| `/records` | GET | ⏳ 未使用 | - |
-| `/records/{id}` | GET | ⏳ 未使用 | - |
-| `/records/{id}` | PUT | ⏳ 未使用 | - |
-| `/records/{id}` | DELETE | ⏳ 未使用 | - |
+| `/records` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}` | DELETE | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}/approve` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}/reject` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+
+> **设计说明**：根据系统设计，没有通用的 `PUT /records/{id}` 更新接口。记录审核通过后即锁定不可修改，审核阶段是唯一的修改窗口，通过 `/approve` 接口提交修改后的标签。
 
 ### 其他模块
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| 记录模块 | ✅ 已对接创建接口 | 创建记录表单已完成 |
-| 日历模块 | ⏳ 待开发 | 日历视图 |
-| AI 镜像 | ⏳ 待开发 | AI 对话功能 |
+| 记录模块 | ✅ CRUD + 审核完成 | 增删改查 + 审核流程 |
+| 日历模块 | ⏳ 待开发 | 日历视图（UI 已有） |
+| AI 镜像 | ⏳ 待开发 | AI 对话功能（UI 已有） |
 | 设置模块 | ⏳ 待开发 | 用户设置 |
 
 ---
@@ -181,9 +179,35 @@ http.cors(cors -> cors.configurationSource(...));
 - 当前 Token 过期必须重新登录
 - 后续如需支持，需后端新增 `/api/auth/refresh` 接口
 
+### 记录状态流转（2026-08-07）
+
+**状态定义**：
+- `processing` - AI 正在处理
+- `pending_review` - 等待用户审核
+- `done` - 审核通过，记录锁定
+- `failed` - 处理失败
+- `rejected` - 审核拒绝（软删除）
+
+**审核流程**：
+1. 用户提交 → status=processing
+2. AI 处理完成 → status=pending_review
+3. 用户审核：
+   - 通过 → Embedding → status=done（锁定）
+   - 拒绝 → 软删除（不入 RAG）
+
 ---
 
 ## 变更日志
+
+### 2026-08-07
+
+- ✅ 更新 records API 接口，移除 updateRecord，添加 approveRecord/rejectRecord
+- ✅ 更新 records store 对接真实 API
+- ✅ 更新 RecordsView/CalendarView/MirrorView 页面 onMounted 获取数据
+- ✅ 更新 RecordCard 组件支持 pending_review/failed 状态展示
+- ✅ 更新 DetailPanel 组件实现完整审核流程
+- ✅ 更新 RecordFormModal 使用 store 创建记录
+- ✅ 更新开发进度文档
 
 ### 2026-08-06
 

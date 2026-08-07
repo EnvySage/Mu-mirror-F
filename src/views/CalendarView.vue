@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
 import { useUIStore } from '@/stores/ui'
@@ -18,6 +18,13 @@ const filterInfo = ref('')
 const filteredRecords = computed(() => {
   if (!selectedDate.value) return []
   return recordsStore.getByDate(selectedDate.value)
+})
+
+onMounted(() => {
+  // 如果还没有记录数据，先获取
+  if (recordsStore.records.length === 0) {
+    recordsStore.fetchRecords()
+  }
 })
 
 function onDateSelect(date) {

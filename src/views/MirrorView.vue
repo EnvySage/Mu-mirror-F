@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
 import { useChatStore } from '@/stores/chat'
 import { useRecordsStore } from '@/stores/records'
@@ -17,6 +17,13 @@ const chatInput = ref('')
 const chatMessagesEl = ref(null)
 
 const canSend = ref(false)
+
+onMounted(() => {
+  // 如果还没有记录数据，先获取
+  if (records.records.length === 0) {
+    records.fetchRecords()
+  }
+})
 
 function onChatInput() {
   canSend.value = chatInput.value.trim().length > 0

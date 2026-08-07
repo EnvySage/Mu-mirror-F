@@ -1,6 +1,35 @@
 import axios from 'axios'
 import { getStorage, removeStorage } from '@/utils/storage'
 
+/**
+ * 将 camelCase 转为 snake_case
+ * @param {string} str
+ * @returns {string}
+ */
+function toSnakeCase(str) {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+}
+
+/**
+ * 递归转换对象的 key 从 camelCase 到 snake_case
+ * @param {any} data
+ * @returns {any}
+ */
+function convertKeys(data) {
+  if (Array.isArray(data)) {
+    return data.map(item => convertKeys(item))
+  }
+  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const converted = {}
+    for (const [key, value] of Object.entries(data)) {
+      const snakeKey = toSnakeCase(key)
+      converted[snakeKey] = convertKeys(value)
+    }
+    return converted
+  }
+  return data
+}
+
 const request = axios.create({
   baseURL: '/api',
   timeout: 15000,
@@ -21,7 +50,7 @@ request.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
-// 响应拦截器：统一处理错误
+// 响应拦截器：统一处理错误 + 字段名转换
 request.interceptors.response.use(
   (response) => {
     const res = response.data
@@ -30,6 +59,10 @@ request.interceptors.response.use(
       const err = new Error(res.message || '请求失败')
       err.code = res.code
       return Promise.reject(err)
+    }
+    // 转换 data 中的 camelCase 为 snake_case
+    if (res.data !== undefined) {
+      res.data = convertKeys(res.data)
     }
     return res
   },
