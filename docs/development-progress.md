@@ -7,6 +7,7 @@
 - **项目名称**：Mu-mirror-F（AI 日记前端）
 - **技术栈**：Vue 3 + Vite + Pinia + Vue Router
 - **后端地址**：localhost:9005
+- **接口文档**：http://localhost:9005/api/swagger-ui/index.html
 - **GitHub**：https://github.com/EnvySage/Mu-mirror-F.git
 
 ---
