@@ -1,6 +1,6 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-05（更新：添加记录创建功能）
+> 最后更新：2026-08-06
 
 ## 项目概述
 
@@ -20,9 +20,12 @@
 | ✅ | 登录页面 | 统一登录/注册页面，Tab 切换 |
 | ✅ | 注册功能 | 调用 `POST /api/auth/register` |
 | ✅ | 登录功能 | 调用 `POST /api/auth/login`，获取 JWT Token |
-| ✅ | Token 存储 | localStorage 存储 Token 和用户信息 |
+| ✅ | Token 存储 | localStorage 存储 Token + 过期时间 |
+| ✅ | Token 过期验证 | 刷新页面时检查 Token 是否过期 |
+| ✅ | Bearer 认证 | 请求头 `Authorization: Bearer <token>` |
 | ✅ | 路由守卫 | 未登录自动跳转登录页 |
 | ✅ | 退出登录 | 设置页面添加退出按钮 |
+| ✅ | 401 处理 | Token 无效时自动清除并跳转登录 |
 | ⚠️ | 后端 403 | 后端安全配置问题，需后端修复 |
 
 **新增文件：**
@@ -30,7 +33,7 @@
 - `src/api/auth.js` - 认证 API 封装
 
 **修改文件：**
-- `src/stores/auth.js` - 重写为后端 API 认证
+- `src/stores/auth.js` - 重写为后端 API 认证 + Token 过期验证
 - `src/views/auth/WelcomeView.vue` - 统一登录/注册页面
 - `src/router/index.js` - 更新路由配置
 - `src/views/SettingsView.vue` - 添加退出登录按钮
@@ -63,20 +66,20 @@
 | 状态 | 任务 | 说明 |
 |------|------|------|
 | ⏳ | 修复后端 403 | 后端需配置 CSRF/CORS/Security |
-| ⏳ | Token 过期处理 | 401 时自动跳转登录 |
 
 ### 中优先级
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
+| ⏳ | Token 刷新机制 | 当前过期需重登，后续可加 Refresh Token |
 | ⏳ | 用户信息展示 | 显示当前登录用户名 |
-| ⏳ | 修改密码 | 用户设置中添加修改密码功能 |
+| ⏳ | 记录列表 | 对接 `GET /records` 获取记录列表 |
 
 ### 低优先级
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
-| ⏳ | 记住我功能 | 长期 Token 存储 |
+| ⏳ | 修改密码 | 用户设置中添加修改密码功能 |
 | ⏳ | 第三方登录 | 微信/GitHub OAuth |
 
 ---
@@ -163,15 +166,33 @@ http.cors(cors -> cors.configurationSource(...));
 
 ---
 
+## 设计决策记录
+
+### Token 管理策略（2026-08-06）
+
+**当前方案**：Access Token + 过期时间存储
+- 登录后存储 `token` 和 `token_expires` 到 localStorage
+- 每次刷新页面检查是否过期
+- 过期后清除状态，跳转登录页
+- 401 错误时自动清除并跳转
+
+**未实现**：Refresh Token 机制
+- 当前 Token 过期必须重新登录
+- 后续如需支持，需后端新增 `/api/auth/refresh` 接口
+
+---
+
 ## 变更日志
+
+### 2026-08-06
+
+- ✅ 添加 Token 过期验证逻辑
+- ✅ 请求头添加 Bearer 前缀
+- ✅ 更新开发进度文档
 
 ### 2026-08-05
 
 - ✅ 安装 axios
-- ✅ 创建记录 API 封装（records.js）
-- ✅ 创建记录表单弹窗组件（RecordFormModal.vue）
-- ✅ 集成表单到主布局
-- ✅ 用户只需输入内容，AI 自动生成标题/摘要/标签
 - ✅ 创建 API 服务层（request.js + auth.js）
 - ✅ 重写 auth store 使用后端 JWT 认证
 - ✅ 创建统一登录/注册页面
@@ -179,6 +200,10 @@ http.cors(cors -> cors.configurationSource(...));
 - ✅ 更新路由配置
 - ✅ 添加设置页退出登录按钮
 - ✅ 配置 Vite 代理和 nginx 转发
+- ✅ 创建记录 API 封装（records.js）
+- ✅ 创建记录表单弹窗组件（RecordFormModal.vue）
+- ✅ 集成表单到主布局
+- ✅ 用户只需输入内容，AI 自动生成标题/摘要/标签
 - ✅ 推送到 GitHub
 
 ---
@@ -186,4 +211,5 @@ http.cors(cors -> cors.configurationSource(...));
 ## 相关文档
 
 - [前端框架规范](./2026-07-27-frontend-framework-spec.md)
+- [AI 日记镜子设计文档](./2026-07-23-ai-diary-mirror-design.md)
 - [AI 服务设计](../Mu-mirror-B/docs/2026-08-04-ai-service-design.md)（后端项目）
