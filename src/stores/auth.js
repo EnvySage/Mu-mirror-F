@@ -6,9 +6,18 @@ import { login as apiLogin, register as apiRegister } from '@/api/auth'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const token = ref(getStorage('token') || '')
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const tokenExpires = ref(getStorage('token_expires') || '')
+  const isAuthenticated = computed(() => !!token.value && !!user.value && !isTokenExpired())
   const loading = ref(false)
   const _initialized = ref(false)
+
+  /**
+   * 检查 Token 是否已过期
+   */
+  function isTokenExpired() {
+    if (!tokenExpires.value) return false
+    return Date.now() >= parseInt(tokenExpires.value)
+  }
 
   /**
    * 初始化：从本地存储恢复登录状态
@@ -16,9 +25,19 @@ export const useAuthStore = defineStore('auth', () => {
   function init() {
     const savedToken = getStorage('token')
     const savedUser = getStorage('user')
+    const savedExpires = getStorage('token_expires')
 
     if (savedToken && savedUser) {
+      // 检查 Token 是否已过期
+      if (savedExpires && Date.now() >= parseInt(savedExpires)) {
+        // Token 已过期，清除登录状态
+        logout()
+        _initialized.value = true
+        return
+      }
+
       token.value = savedToken
+      tokenExpires.value = savedExpires
       try {
         user.value = JSON.parse(savedUser)
       } catch {
@@ -38,10 +57,17 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       const res = await apiLogin({ username, password })
-      const { token: newToken, user: userData } = res.data
+      const { token: newToken, user: userData, expiresIn } = res.data
 
       token.value = newToken
       user.value = userData
+
+      // 计算过期时间
+      if (expiresIn) {
+        const expiresAt = Date.now() + expiresIn * 1000
+        tokenExpires.value = expiresAt.toString()
+        setStorage('token_expires', expiresAt.toString())
+      }
 
       setStorage('token', newToken)
       setStorage('user', JSON.stringify(userData))
@@ -72,17 +98,21 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function logout() {
     token.value = ''
+    tokenExpires.value = ''
     user.value = null
     removeStorage('token')
     removeStorage('user')
+    removeStorage('token_expires')
   }
 
   return {
     user,
     token,
+    tokenExpires,
     isAuthenticated,
     loading,
     _initialized,
+    isTokenExpired,
     init,
     login,
     register,

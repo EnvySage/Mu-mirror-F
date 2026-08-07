@@ -38,6 +38,7 @@ request.interceptors.response.use(
     if (error.response?.status === 401) {
       removeStorage('token')
       removeStorage('user')
+      removeStorage('token_expires')
       window.location.href = '/auth/login'
     }
     const msg = error.response?.data?.message || error.message || '网络错误'
