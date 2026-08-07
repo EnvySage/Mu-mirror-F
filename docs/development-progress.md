@@ -1,6 +1,7 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-07
+> 最后更新：2026-08-07（下午）
+> 最新提交：`8b7e46c` feat: 完成记录模块 CRUD 接口对接
 
 ## 项目概述
 
@@ -45,7 +46,9 @@
 
 **修改文件：**
 - `src/api/records.js` - 更新 API 接口，移除 updateRecord，添加 approveRecord/rejectRecord
+- `src/api/request.js` - 添加 camelCase → snake_case 字段名自动转换
 - `src/stores/records.js` - 对接真实 API，支持 CRUD 和审核操作
+- `src/utils/time.js` - 修复日期解析，兼容后端 `"2026-08-07 06:22:58"` 格式
 - `src/views/RecordsView.vue` - 添加加载状态，onMounted 获取数据
 - `src/views/CalendarView.vue` - onMounted 获取数据
 - `src/views/MirrorView.vue` - onMounted 获取数据
@@ -163,6 +166,18 @@ http.cors(cors -> cors.configurationSource(...));
 
 **解决方案**：Nginx 配置使用 `http://[::1]:5173`
 
+### 3. 后端返回 camelCase 字段名（2026-08-07）✅ 已解决
+
+**现象**：后端返回 `createdAt`、`contentType`，前端期望 `created_at`、`content_type`
+
+**解决方案**：在 `src/api/request.js` 响应拦截器中自动转换
+
+### 4. 日期格式不兼容（2026-08-07）✅ 已解决
+
+**现象**：后端返回 `"2026-08-07 06:22:58"`，`new Date()` 解析为 Invalid Date
+
+**解决方案**：在 `src/utils/time.js` 中添加 `parseDate()` 函数，将空格替换为 `T`
+
 ---
 
 ## 设计决策记录
@@ -195,6 +210,18 @@ http.cors(cors -> cors.configurationSource(...));
    - 通过 → Embedding → status=done（锁定）
    - 拒绝 → 软删除（不入 RAG）
 
+### 后端兼容性处理（2026-08-07）
+
+**问题 1：字段命名风格**
+- 后端返回 camelCase：`createdAt`、`contentType`、`userReviewed`
+- 前端使用 snake_case：`created_at`、`content_type`、`user_reviewed`
+- **解决方案**：在 `request.js` 响应拦截器中自动转换
+
+**问题 2：日期格式**
+- 后端返回：`"2026-08-07 06:22:58"`（空格分隔）
+- `new Date()` 无法解析（需要 `T` 分隔符）
+- **解决方案**：在 `time.js` 中添加 `parseDate()` 函数，将空格替换为 `T`
+
 ---
 
 ## 变更日志
@@ -207,7 +234,10 @@ http.cors(cors -> cors.configurationSource(...));
 - ✅ 更新 RecordCard 组件支持 pending_review/failed 状态展示
 - ✅ 更新 DetailPanel 组件实现完整审核流程
 - ✅ 更新 RecordFormModal 使用 store 创建记录
+- ✅ 修复日期解析问题，兼容后端 `"2026-08-07 06:22:58"` 格式
+- ✅ 添加响应拦截器自动转换 camelCase 为 snake_case
 - ✅ 更新开发进度文档
+- ✅ 提交并推送到 GitHub（commit `8b7e46c`）
 
 ### 2026-08-06
 
