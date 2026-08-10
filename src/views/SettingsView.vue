@@ -1,4 +1,5 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
@@ -6,8 +7,50 @@ import PageHeader from '@/components/organisms/PageHeader.vue'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 
 const router = useRouter()
-const settings = useSettingsStore()
+const settingsStore = useSettingsStore()
 const auth = useAuthStore()
+
+const showEditModal = ref(false)
+const editField = ref('')
+const editLabel = ref('')
+const editValue = ref('')
+const editPlaceholder = ref('')
+const testResult = ref(null)
+
+onMounted(() => {
+  settingsStore.fetchSettings()
+})
+
+function openEdit(field, currentValue, label, placeholder) {
+  editField.value = field
+  editValue.value = currentValue || ''
+  editLabel.value = label || field
+  editPlaceholder.value = placeholder || ''
+  showEditModal.value = true
+}
+
+async function saveEdit() {
+  const data = {}
+  data[editField.value] = editValue.value
+  const success = await settingsStore.updateSettings(data)
+  if (success) {
+    showEditModal.value = false
+  }
+}
+
+async function handleTestAi() {
+  testResult.value = null
+  const result = await settingsStore.testAiConnection()
+  testResult.value = result
+  setTimeout(() => { testResult.value = null }, 3000)
+}
+
+async function handleTestDb() {
+  testResult.value = null
+  const result = await settingsStore.testDbConnection()
+  testResult.value = result
+  setTimeout(() => { testResult.value = null }, 3000)
+}
 
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) {
@@ -21,41 +64,88 @@ function handleLogout() {
   <div class="page settings-page">
     <PageHeader title="设置" />
     <div class="page-content">
+      <!-- 测试结果提示 -->
+      <div v-if="testResult" :class="['test-result', testResult.success ? 'success' : 'error']">
+        {{ testResult.message }}
+      </div>
+
       <div class="settings-grid">
-        <!-- AI 模型 -->
+        <!-- AI 模型配置 -->
         <div class="settings-group">
           <div class="settings-group-title">AI 模型</div>
           <div class="settings-card">
             <SettingsItem
-              icon="chat"
+              icon="zap"
               icon-bg="var(--accent)"
-              label="API 地址"
-              :description="settings.settings.apiUrl"
+              label="AI 提供商"
+              :description="settingsStore.settings.ai_provider || '未配置'"
+              action="edit"
+              @click="openEdit('ai_provider', settingsStore.settings.ai_provider, 'AI 提供商', 'openai / zhipu / qwen')"
             />
             <SettingsItem
               icon="lock"
               icon-bg="#7C3AED"
               label="API Key"
-              :description="settings.settings.apiKey"
+              :description="settingsStore.settings.ai_api_key || '未配置'"
+              action="edit"
+              @click="openEdit('ai_api_key', '', 'API Key', '输入 API Key')"
             />
             <SettingsItem
-              icon="zap"
+              icon="chat"
               icon-bg="#10B981"
               label="模型"
-              :description="settings.settings.model"
+              :description="settingsStore.settings.ai_model || '未配置'"
+              action="edit"
+              @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'gpt-4o / glm-4 / qwen-turbo')"
             />
+            <SettingsItem
+              icon="link"
+              icon-bg="#6B7280"
+              label="API 地址"
+              :description="settingsStore.settings.ai_base_url || '使用默认'"
+              action="edit"
+              @click="openEdit('ai_base_url', settingsStore.settings.ai_base_url, 'API 地址', 'https://api.openai.com/v1')"
+            />
+            <div class="settings-action">
+              <button
+                class="btn-test"
+                :disabled="settingsStore.testLoading"
+                @click="handleTestAi"
+              >
+                {{ settingsStore.testLoading ? '测试中...' : '测试 AI 连接' }}
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- 数据库 -->
+        <!-- Embedding 配置 -->
         <div class="settings-group">
-          <div class="settings-group-title">数据库</div>
+          <div class="settings-group-title">Embedding 模型</div>
           <div class="settings-card">
             <SettingsItem
               icon="database"
               icon-bg="#F59E0B"
-              label="数据库地址"
-              :description="settings.settings.dbUrl"
+              label="Embedding 来源"
+              :description="settingsStore.settings.embedding_source || 'local'"
+              action="edit"
+              @click="openEdit('embedding_source', settingsStore.settings.embedding_source, 'Embedding 来源', 'local / api')"
+            />
+            <SettingsItem
+              icon="cpu"
+              icon-bg="#EC4899"
+              label="Embedding 模型"
+              :description="settingsStore.settings.embedding_model || '未配置'"
+              action="edit"
+              @click="openEdit('embedding_model', settingsStore.settings.embedding_model, 'Embedding 模型', 'BAAI/bge-m3')"
+            />
+            <SettingsItem
+              v-if="settingsStore.settings.embedding_source === 'api'"
+              icon="lock"
+              icon-bg="#7C3AED"
+              label="Embedding API Key"
+              :description="settingsStore.settings.embedding_api_key || '未配置'"
+              action="edit"
+              @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 API Key')"
             />
           </div>
         </div>
@@ -67,12 +157,34 @@ function handleLogout() {
             <SettingsItem
               icon="eye"
               icon-bg="#EC4899"
-              label="自动审核"
-              description="跳过审核，AI直接保存"
-              action="toggle"
-              :toggle-value="settings.autoReview"
-              @toggle="settings.toggleAutoReview()"
+              label="审核模式"
+              :description="settingsStore.settings.review_mode === 'auto' ? '自动审核' : '手动审核'"
+              action="edit"
+              @click="openEdit('review_mode', settingsStore.settings.review_mode, '审核模式', 'manual / auto')"
             />
+          </div>
+        </div>
+
+        <!-- 数据库 -->
+        <div class="settings-group">
+          <div class="settings-group-title">数据库</div>
+          <div class="settings-card">
+            <SettingsItem
+              icon="database"
+              icon-bg="#F59E0B"
+              label="数据库连接"
+              description="点击测试连接"
+              action="none"
+            />
+            <div class="settings-action">
+              <button
+                class="btn-test"
+                :disabled="settingsStore.testLoading"
+                @click="handleTestDb"
+              >
+                {{ settingsStore.testLoading ? '测试中...' : '测试数据库连接' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -108,6 +220,33 @@ function handleLogout() {
           </div>
         </div>
       </div>
+
+      <!-- 编辑弹窗 -->
+      <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>{{ editLabel }}</h3>
+            <button class="modal-close" @click="showEditModal = false">×</button>
+          </div>
+
+          <div class="modal-body">
+            <input
+              v-model="editValue"
+              :type="editField.includes('api_key') ? 'password' : 'text'"
+              class="modal-input"
+              :placeholder="editPlaceholder"
+              @keyup.enter="saveEdit"
+            />
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showEditModal = false">取消</button>
+            <button class="btn-save" @click="saveEdit" :disabled="settingsStore.loading">
+              {{ settingsStore.loading ? '保存中...' : '保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -120,6 +259,19 @@ function handleLogout() {
 }
 .page-content { padding: 12px 16px 32px; }
 
+.test-result {
+  padding: 12px 16px; margin-bottom: 16px;
+  border-radius: var(--radius-md); font-size: 14px;
+}
+.test-result.success {
+  background: rgba(16, 185, 129, 0.1); color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.test-result.error {
+  background: rgba(239, 68, 68, 0.1); color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
 .settings-grid { display: flex; flex-direction: column; gap: 16px; }
 .settings-group { margin-bottom: 0; }
 .settings-group-title {
@@ -130,6 +282,18 @@ function handleLogout() {
   background: var(--surface); border-radius: var(--radius-md);
   border: 0.5px solid var(--border); overflow: hidden;
 }
+
+.settings-action {
+  padding: 12px 16px; border-top: 0.5px solid var(--border);
+}
+.btn-test {
+  width: 100%; padding: 10px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text-primary); cursor: pointer;
+  transition: all 0.2s; font-family: var(--font);
+}
+.btn-test:hover { border-color: var(--accent); color: var(--accent); }
+.btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (min-width: 900px) {
   .page-content { padding: 20px 36px 36px; }
@@ -143,12 +307,52 @@ function handleLogout() {
   transition: background 0.2s ease;
   border-top: 0.5px solid var(--border);
 }
-.logout-btn:hover {
-  background: var(--bg-secondary);
+.logout-btn:hover { background: var(--bg-secondary); }
+.logout-text { color: var(--error); font-size: 14px; font-weight: 500; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; backdrop-filter: blur(4px);
 }
-.logout-text {
-  color: var(--error);
-  font-size: 14px;
-  font-weight: 500;
+.modal-content {
+  background: var(--surface); border-radius: var(--radius-lg);
+  width: 90%; max-width: 400px; max-height: 80vh;
+  display: flex; flex-direction: column;
 }
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 0.5px solid var(--border);
+}
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-close {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: var(--bg); font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.modal-body { padding: 20px; overflow-y: auto; }
+.modal-footer {
+  display: flex; gap: 12px; padding: 16px 20px;
+  border-top: 0.5px solid var(--border);
+}
+.btn-cancel {
+  flex: 1; padding: 10px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500; border: 1px solid var(--border);
+  background: var(--bg); cursor: pointer; font-family: var(--font);
+}
+.btn-save {
+  flex: 1; padding: 10px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500; border: none;
+  background: var(--accent); color: #fff; cursor: pointer;
+  font-family: var(--font);
+}
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.modal-input {
+  width: 100%; padding: 12px; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 14px;
+  font-family: var(--font); outline: none;
+}
+.modal-input:focus { border-color: var(--accent); }
 </style>

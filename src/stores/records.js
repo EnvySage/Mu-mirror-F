@@ -5,12 +5,12 @@ import {
   getRecords as apiGetRecords,
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
+  updateRecord as apiUpdateRecord,
   deleteRecord as apiDeleteRecord,
-  approveRecord as apiApproveRecord,
-  rejectRecord as apiRejectRecord,
+  confirmReview as apiConfirmReview,
 } from '@/api/records'
 
-/** @typedef {'processing' | 'pending_review' | 'done' | 'failed' | 'rejected'} RecordStatus */
+/** @typedef {'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
 
 /**
  * @typedef {Object} Record
@@ -22,6 +22,7 @@ import {
  * @property {string[]} [mood]
  * @property {string[]} [keywords]
  * @property {RecordStatus} status
+ * @property {boolean} [user_reviewed]
  * @property {string} created_at
  * @property {string} [updated_at]
  */
@@ -48,7 +49,7 @@ export const useRecordsStore = defineStore('records', () => {
 
   /** 待审核记录 */
   const pendingRecords = computed(() =>
-    records.value.filter(r => r.status === 'pending_review')
+    records.value.filter(r => r.status === 'reviewing')
   )
 
   /** 处理中的记录 */
@@ -114,6 +115,27 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
+   * 更新记录（仅审查状态下）
+   * @param {string|number} id
+   * @param {Object} data - 更新数据（title, summary, contentType, mood, keywords）
+   * @returns {Promise<boolean>}
+   */
+  async function updateRecord(id, data) {
+    try {
+      const res = await apiUpdateRecord(id, data)
+      // 更新本地记录
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1) {
+        records.value[index] = res.data
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to update record:', err)
+      return false
+    }
+  }
+
+  /**
    * 删除记录（软删除）
    * @param {string|number} id
    * @returns {Promise<boolean>}
@@ -131,14 +153,13 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
-   * 审核通过
+   * 确认审查完成
    * @param {string|number} id
-   * @param {Object} [modifications] - 用户修改的标签
    * @returns {Promise<boolean>}
    */
-  async function approveRecord(id, modifications) {
+  async function confirmReview(id) {
     try {
-      const res = await apiApproveRecord(id, modifications)
+      const res = await apiConfirmReview(id)
       // 更新本地记录
       const index = records.value.findIndex(r => r.id === id)
       if (index !== -1) {
@@ -146,24 +167,7 @@ export const useRecordsStore = defineStore('records', () => {
       }
       return true
     } catch (err) {
-      console.error('Failed to approve record:', err)
-      return false
-    }
-  }
-
-  /**
-   * 审核拒绝（软删除）
-   * @param {string|number} id
-   * @returns {Promise<boolean>}
-   */
-  async function rejectRecord(id) {
-    try {
-      await apiRejectRecord(id)
-      // 从本地列表移除
-      records.value = records.value.filter(r => r.id !== id)
-      return true
-    } catch (err) {
-      console.error('Failed to reject record:', err)
+      console.error('Failed to confirm review:', err)
       return false
     }
   }
@@ -220,9 +224,9 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecords,
     fetchRecord,
     createRecord,
+    updateRecord,
     deleteRecord,
-    approveRecord,
-    rejectRecord,
+    confirmReview,
     getById,
     getByDate,
     getRecordDates,

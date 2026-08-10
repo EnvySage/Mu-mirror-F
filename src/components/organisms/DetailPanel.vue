@@ -37,7 +37,7 @@ watch(() => ui.selectedRecordId, (id) => {
   if (r.status === 'processing') {
     ui.detailMode = 'processing'
     startProcessing()
-  } else if (r.status === 'pending_review') {
+  } else if (r.status === 'reviewing') {
     // 初始化审核数据（使用后端返回的 AI 处理结果）
     reviewData.value = {
       title: r.title || '',
@@ -80,17 +80,26 @@ async function confirmReview() {
   const keywords = reviewKeywords.value.split(/[,，]/).map(k => k.trim()).filter(Boolean)
   const modifications = {
     title: reviewData.value.title,
-    content_type: reviewData.value.content_type,
+    contentType: reviewData.value.content_type,
     mood: reviewData.value.mood,
     keywords,
   }
 
-  const success = await recordsStore.approveRecord(record.value.id, modifications)
-  if (success) {
+  // 先更新标签
+  const updateSuccess = await recordsStore.updateRecord(record.value.id, modifications)
+  if (!updateSuccess) {
+    actionError.value = '更新失败，请重试'
+    submitting.value = false
+    return
+  }
+
+  // 再确认审查完成
+  const confirmSuccess = await recordsStore.confirmReview(record.value.id)
+  if (confirmSuccess) {
     reviewData.value = null
     ui.detailMode = 'view'
   } else {
-    actionError.value = '审核失败，请重试'
+    actionError.value = '确认失败，请重试'
   }
   submitting.value = false
 }
@@ -100,7 +109,8 @@ async function rejectReview() {
   submitting.value = true
   actionError.value = null
 
-  const success = await recordsStore.rejectRecord(record.value.id)
+  // 拒绝等同于删除
+  const success = await recordsStore.deleteRecord(record.value.id)
   if (success) {
     close()
   } else {

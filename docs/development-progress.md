@@ -1,7 +1,7 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-07（下午）
-> 最新提交：`8b7e46c` feat: 完成记录模块 CRUD 接口对接
+> 最后更新：2026-08-10（下午）
+> 最新提交：待提交
 
 ## 项目概述
 
@@ -35,26 +35,34 @@
 | 状态 | 功能 | 说明 |
 |------|------|------|
 | ✅ | 创建记录 | `POST /records`，用户只需输入内容 |
-| ✅ | 获取记录列表 | `GET /records`，返回所有未删除记录 |
+| ✅ | 获取记录列表 | `GET /records`，支持分页和筛选 |
 | ✅ | 获取记录详情 | `GET /records/{id}` |
+| ✅ | 更新记录 | `PUT /records/{id}`，审查状态下修改标签 |
 | ✅ | 删除记录 | `DELETE /records/{id}`，软删除 |
-| ✅ | 审核通过 | `POST /records/{id}/approve`，可修改标签 |
-| ✅ | 审核拒绝 | `POST /records/{id}/reject`，软删除不入 RAG |
-| ✅ | 记录状态展示 | processing/pending_review/done/failed 状态区分 |
-| ✅ | 审核界面 | 待审核记录可修改标题/类型/情绪/关键词 |
+| ✅ | 确认审查完成 | `PUT /records/{id}/confirm`，状态改为 done |
+| ✅ | 记录状态展示 | processing/reviewing/done/failed 状态区分 |
+| ✅ | 审核界面 | 审查记录可修改标题/类型/情绪/关键词 |
 | ✅ | 失败重试 | 失败记录可重新尝试或删除 |
 
-**修改文件：**
-- `src/api/records.js` - 更新 API 接口，移除 updateRecord，添加 approveRecord/rejectRecord
-- `src/api/request.js` - 添加 camelCase → snake_case 字段名自动转换
-- `src/stores/records.js` - 对接真实 API，支持 CRUD 和审核操作
-- `src/utils/time.js` - 修复日期解析，兼容后端 `"2026-08-07 06:22:58"` 格式
-- `src/views/RecordsView.vue` - 添加加载状态，onMounted 获取数据
-- `src/views/CalendarView.vue` - onMounted 获取数据
-- `src/views/MirrorView.vue` - onMounted 获取数据
-- `src/components/molecules/RecordCard.vue` - 支持 pending_review/failed 状态展示
-- `src/components/organisms/DetailPanel.vue` - 完整审核流程（通过/拒绝）和失败处理
-- `src/components/organisms/RecordFormModal.vue` - 使用 store 创建记录
+### 3. 模型配置模块（2026-08-10）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | 获取用户配置 | `GET /settings`，API Key 脱敏返回 |
+| ✅ | 更新用户配置 | `PUT /settings`，部分更新 |
+| ✅ | 测试 AI 连接 | `POST /settings/test-ai` |
+| ✅ | 测试数据库连接 | `POST /settings/test-db` |
+| ✅ | 配置页面 | 支持编辑提供商/API Key/模型/地址 |
+| ✅ | Embedding 配置 | 支持本地/API 模式切换 |
+
+**修改文件（2026-08-10）：**
+- `src/api/settings.js` - 新增设置 API 封装
+- `src/api/records.js` - 更新接口：approveRecord→updateRecord+confirmReview，状态名改为 reviewing
+- `src/stores/settings.js` - 对接真实 API，支持获取/更新/测试
+- `src/stores/records.js` - 更新状态名和方法，适配新接口
+- `src/views/SettingsView.vue` - 重写设置页面，支持编辑配置和测试连接
+- `src/components/molecules/RecordCard.vue` - 状态名更新为 reviewing
+- `src/components/organisms/DetailPanel.vue` - 审核流程改为 update+confirm
 
 ---
 
@@ -64,15 +72,14 @@
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
-| ⏳ | 修复后端 403 | 后端需配置 CSRF/CORS/Security |
+| ⏳ | 记录轮询更新 | processing 状态记录需要轮询获取最新状态 |
 
 ### 中优先级
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
 | ⏳ | Token 刷新机制 | 当前过期需重登，后续可加 Refresh Token |
-| ⏳ | 用户信息展示 | 显示当前登录用户名 |
-| ⏳ | 记录轮询更新 | processing 状态记录需要轮询获取最新状态 |
+| ⏳ | 记录查询优化 | 对接分页参数，支持日期筛选 |
 
 ### 低优先级
 
@@ -101,20 +108,33 @@
 | `/records` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}` | DELETE | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
-| `/records/{id}/approve` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
-| `/records/{id}/reject` | POST | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/{id}/confirm` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 
-> **设计说明**：根据系统设计，没有通用的 `PUT /records/{id}` 更新接口。记录审核通过后即锁定不可修改，审核阶段是唯一的修改窗口，通过 `/approve` 接口提交修改后的标签。
+> **设计说明**：
+> - `PUT /records/{id}` 用于在审查状态下更新标签（标题/摘要/类型/情绪/关键词）
+> - `PUT /records/{id}/confirm` 用于确认审查完成，状态改为 done 并锁定
+> - 审核流程：update（修改标签）→ confirm（确认完成）
+> - 拒绝等同于删除（软删除）
+
+### 用户配置模块 (`/settings`)
+
+| 接口 | 方法 | 状态 | 前端调用位置 |
+|------|------|------|-------------|
+| `/settings` | GET | ✅ 已对接 | `src/api/settings.js` → `src/stores/settings.js` |
+| `/settings` | PUT | ✅ 已对接 | `src/api/settings.js` → `src/stores/settings.js` |
+| `/settings/test-ai` | POST | ✅ 已对接 | `src/api/settings.js` → `src/stores/settings.js` |
+| `/settings/test-db` | POST | ✅ 已对接 | `src/api/settings.js` → `src/stores/settings.js` |
 
 ### 其他模块
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | 记录模块 | ✅ CRUD + 审核完成 | 增删改查 + 审核流程 |
+| 设置模块 | ✅ 配置管理完成 | AI 模型/Embedding/审核模式配置 |
 | 日历模块 | ⏳ 待开发 | 日历视图（UI 已有） |
 | AI 镜像 | ⏳ 待开发 | AI 对话功能（UI 已有） |
-| 设置模块 | ⏳ 待开发 | 用户设置 |
 
 ---
 
@@ -194,21 +214,38 @@ http.cors(cors -> cors.configurationSource(...));
 - 当前 Token 过期必须重新登录
 - 后续如需支持，需后端新增 `/api/auth/refresh` 接口
 
-### 记录状态流转（2026-08-07）
+### 记录状态流转（2026-08-10 更新）
 
 **状态定义**：
 - `processing` - AI 正在处理
-- `pending_review` - 等待用户审核
+- `reviewing` - 等待用户审核（原 pending_review）
 - `done` - 审核通过，记录锁定
 - `failed` - 处理失败
-- `rejected` - 审核拒绝（软删除）
 
 **审核流程**：
 1. 用户提交 → status=processing
-2. AI 处理完成 → status=pending_review
+2. AI 处理完成 → status=reviewing
 3. 用户审核：
-   - 通过 → Embedding → status=done（锁定）
-   - 拒绝 → 软删除（不入 RAG）
+   - 修改标签（PUT /records/{id}）
+   - 确认完成（PUT /records/{id}/confirm）→ Embedding → status=done（锁定）
+   - 拒绝（DELETE /records/{id}）→ 软删除（不入 RAG）
+
+### 模型配置管理（2026-08-10）
+
+**接口设计**：
+- `GET /settings` - 获取配置，API Key 脱敏返回
+- `PUT /settings` - 部分更新，只传需要修改的字段
+- `POST /settings/test-ai` - 测试 AI 连接
+- `POST /settings/test-db` - 测试数据库连接
+
+**配置字段**：
+- ai_provider: openai/zhipu/qwen
+- ai_api_key: 明文传入，后端加密存储
+- ai_base_url: 可选，留空使用默认
+- ai_model: 模型名称
+- embedding_source: local/api
+- embedding_model: Embedding 模型名
+- review_mode: manual/auto
 
 ### 后端兼容性处理（2026-08-07）
 
@@ -226,9 +263,20 @@ http.cors(cors -> cors.configurationSource(...));
 
 ## 变更日志
 
+### 2026-08-10
+
+- ✅ 创建 settings API 封装（`src/api/settings.js`）
+- ✅ 更新 records API，接口改为 updateRecord + confirmReview，状态名改为 reviewing
+- ✅ 更新 settings store 对接真实 API，支持获取/更新/测试连接
+- ✅ 更新 records store 适配新接口
+- ✅ 重写 SettingsView 页面，支持编辑 AI 配置和测试连接
+- ✅ 更新 RecordCard 状态名 pending_review → reviewing
+- ✅ 更新 DetailPanel 审核流程：update（修改标签）→ confirm（确认完成）
+- ✅ 更新开发进度文档
+
 ### 2026-08-07
 
-- ✅ 更新 records API 接口，移除 updateRecord，添加 approveRecord/rejectRecord
+- ✅ 更新 records API 接口，添加 approveRecord/rejectRecord
 - ✅ 更新 records store 对接真实 API
 - ✅ 更新 RecordsView/CalendarView/MirrorView 页面 onMounted 获取数据
 - ✅ 更新 RecordCard 组件支持 pending_review/failed 状态展示

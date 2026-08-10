@@ -11,7 +11,7 @@ const props = defineProps({
 defineEmits(['click'])
 
 const isProcessing = computed(() => props.record.status === 'processing')
-const isPendingReview = computed(() => props.record.status === 'pending_review')
+const isPendingReview = computed(() => props.record.status === 'reviewing')
 const isFailed = computed(() => props.record.status === 'failed')
 const isDone = computed(() => props.record.status === 'done')
 

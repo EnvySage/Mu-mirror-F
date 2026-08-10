@@ -4,7 +4,7 @@ defineProps({
   iconBg: { type: String, default: 'var(--accent)' },
   label: { type: String, required: true },
   description: { type: String, default: '' },
-  action: { type: String, default: 'chevron' }, // chevron | toggle | none
+  action: { type: String, default: 'chevron' }, // chevron | toggle | edit | none
   toggleValue: { type: Boolean, default: false },
 })
 
@@ -12,7 +12,7 @@ defineEmits(['click', 'toggle'])
 </script>
 
 <template>
-  <div class="settings-item" @click="action === 'chevron' ? $emit('click') : null">
+  <div class="settings-item" @click="(action === 'chevron' || action === 'edit') ? $emit('click') : null">
     <div class="settings-item-left">
       <div class="settings-item-icon" :style="{ background: iconBg }">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
@@ -41,6 +41,9 @@ defineEmits(['click', 'toggle'])
     </div>
     <template v-if="action === 'chevron'">
       <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </template>
+    <template v-else-if="action === 'edit'">
+      <svg class="settings-chevron" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     </template>
     <template v-else-if="action === 'toggle'">
       <div :class="['toggle', { on: toggleValue }]" @click.stop="$emit('toggle')" />
