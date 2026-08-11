@@ -15,17 +15,19 @@ const editField = ref('')
 const editLabel = ref('')
 const editValue = ref('')
 const editPlaceholder = ref('')
+const editOptions = ref(null)
 const testResult = ref(null)
 
 onMounted(() => {
   settingsStore.fetchSettings()
 })
 
-function openEdit(field, currentValue, label, placeholder) {
+function openEdit(field, currentValue, label, placeholder, options = null) {
   editField.value = field
   editValue.value = currentValue || ''
   editLabel.value = label || field
   editPlaceholder.value = placeholder || ''
+  editOptions.value = options
   showEditModal.value = true
 }
 
@@ -36,6 +38,10 @@ async function saveEdit() {
   if (success) {
     showEditModal.value = false
   }
+}
+
+function selectOption(value) {
+  editValue.value = value
 }
 
 async function handleTestAi() {
@@ -77,6 +83,17 @@ function handleLogout() {
             <SettingsItem
               icon="zap"
               icon-bg="var(--accent)"
+              label="模型协议"
+              :description="settingsStore.settings.ai_protocol === 'anthropic' ? 'Anthropic 协议' : 'OpenAI 协议'"
+              action="edit"
+              @click="openEdit('ai_protocol', settingsStore.settings.ai_protocol, '模型协议', '', [
+                { value: 'openai', label: 'OpenAI 协议', desc: '适用于 OpenAI、Deepseek、通义千问等' },
+                { value: 'anthropic', label: 'Anthropic 协议', desc: '适用于 Claude 系列模型' },
+              ])"
+            />
+            <SettingsItem
+              icon="info"
+              icon-bg="#8B5CF6"
               label="AI 提供商"
               :description="settingsStore.settings.ai_provider || '未配置'"
               action="edit"
@@ -96,7 +113,7 @@ function handleLogout() {
               label="模型"
               :description="settingsStore.settings.ai_model || '未配置'"
               action="edit"
-              @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'gpt-4o / glm-4 / qwen-turbo')"
+              @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'gpt-4o / claude-3-5-sonnet')"
             />
             <SettingsItem
               icon="link"
@@ -230,7 +247,27 @@ function handleLogout() {
           </div>
 
           <div class="modal-body">
+            <!-- 选项模式 -->
+            <div v-if="editOptions" class="option-list">
+              <div
+                v-for="opt in editOptions"
+                :key="opt.value"
+                :class="['option-item', { active: editValue === opt.value }]"
+                @click="selectOption(opt.value)"
+              >
+                <div class="option-radio">
+                  <div v-if="editValue === opt.value" class="option-radio-checked" />
+                </div>
+                <div class="option-content">
+                  <div class="option-label">{{ opt.label }}</div>
+                  <div v-if="opt.desc" class="option-desc">{{ opt.desc }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入模式 -->
             <input
+              v-else
               v-model="editValue"
               :type="editField.includes('api_key') ? 'password' : 'text'"
               class="modal-input"
@@ -355,4 +392,73 @@ function handleLogout() {
   font-family: var(--font); outline: none;
 }
 .modal-input:focus { border-color: var(--accent); }
+
+/* 选项列表 */
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-item:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.02);
+}
+
+.option-item.active {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.option-radio {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  transition: border-color 0.2s;
+}
+
+.option-item.active .option-radio {
+  border-color: var(--accent);
+}
+
+.option-radio-checked {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.option-content {
+  flex: 1;
+}
+
+.option-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
 </style>

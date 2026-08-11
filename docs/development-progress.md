@@ -1,6 +1,6 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-10（下午）
+> 最后更新：2026-08-11
 > 最新提交：待提交
 
 ## 项目概述
@@ -54,6 +54,31 @@
 | ✅ | 测试数据库连接 | `POST /settings/test-db` |
 | ✅ | 配置页面 | 支持编辑提供商/API Key/模型/地址 |
 | ✅ | Embedding 配置 | 支持本地/API 模式切换 |
+
+### 4. Toast 提示系统（2026-08-11）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | Toast Store | 全局 toast 状态管理，支持 info/success/warning/error |
+| ✅ | ToastContainer 组件 | 顶部居中显示，动画流畅，移动端适配 |
+| ✅ | 写日记拦截 | 模型配置不完整时显示 warning toast 并跳转设置页 |
+
+### 5. 模型协议选择（2026-08-11）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | 协议选择器 | 支持 OpenAI / Anthropic 两种协议 |
+| ✅ | AI 提供商字段 | 保留 ai_provider 字段的 UI |
+| ✅ | 配置完整性检查 | 写日记前检查 ai_protocol、ai_api_key、ai_model |
+
+**修改文件（2026-08-11）：**
+- `src/stores/toast.js` - 新增 toast store
+- `src/components/organisms/ToastContainer.vue` - 新增 toast 容器组件
+- `src/stores/settings.js` - 添加 ai_protocol 字段和 isModelConfigComplete 计算属性
+- `src/views/SettingsView.vue` - 添加模型协议选择器和 AI 提供商 UI
+- `src/components/organisms/WriteModal.vue` - 替换 confirm 为 toast 提示
+- `src/components/organisms/RecordFormModal.vue` - 替换 confirm 为 toast 提示
+- `src/components/templates/MainLayout.vue` - 集成 ToastContainer，启动时获取配置
 
 **修改文件（2026-08-10）：**
 - `src/api/settings.js` - 新增设置 API 封装
@@ -239,7 +264,8 @@ http.cors(cors -> cors.configurationSource(...));
 - `POST /settings/test-db` - 测试数据库连接
 
 **配置字段**：
-- ai_provider: openai/zhipu/qwen
+- ai_protocol: openai/anthropic（模型协议，默认 anthropic）
+- ai_provider: openai/zhipu/qwen（AI 提供商）
 - ai_api_key: 明文传入，后端加密存储
 - ai_base_url: 可选，留空使用默认
 - ai_model: 模型名称
@@ -262,6 +288,15 @@ http.cors(cors -> cors.configurationSource(...));
 ---
 
 ## 变更日志
+
+### 2026-08-11
+
+- ✅ 创建 Toast 提示系统（toast store + ToastContainer 组件）
+- ✅ 添加模型协议选择功能（OpenAI / Anthropic）
+- ✅ 添加 AI 提供商字段 UI
+- ✅ 写日记前检查模型配置完整性，不完整时显示 toast 提示
+- ✅ 替换丑陋的 confirm 弹窗为优雅的 toast 提示
+- ✅ 更新开发进度文档
 
 ### 2026-08-10
 

@@ -1,13 +1,20 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useUIStore } from '@/stores/ui'
+import { useSettingsStore } from '@/stores/settings'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
 import RecordFormModal from '@/components/organisms/RecordFormModal.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
+import ToastContainer from '@/components/organisms/ToastContainer.vue'
 
 const ui = useUIStore()
+const settingsStore = useSettingsStore()
 const showWriteModal = computed(() => ui.showWriteModal)
+
+onMounted(() => {
+  settingsStore.fetchSettings()
+})
 
 function closeWriteModal() {
   ui.closeWriteModal()
@@ -32,6 +39,7 @@ function onRecordCreated(record) {
       @close="closeWriteModal"
       @created="onRecordCreated"
     />
+    <ToastContainer />
   </div>
 </template>
 

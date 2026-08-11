@@ -3,10 +3,14 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { useSettingsStore } from '@/stores/settings'
+import { useToastStore } from '@/stores/toast'
 
 const router = useRouter()
 const ui = useUIStore()
 const records = useRecordsStore()
+const settings = useSettingsStore()
+const toast = useToastStore()
 
 const content = ref('')
 const charCount = computed(() => content.value.length)
@@ -19,6 +23,17 @@ function close() {
 
 function submit() {
   if (!canSubmit.value) return
+
+  // 检查模型配置是否完整
+  if (!settings.isModelConfigComplete) {
+    toast.warning('请先完成 AI 模型配置后再写日记')
+    close()
+    setTimeout(() => {
+      router.push({ name: 'settings' })
+    }, 300)
+    return
+  }
+
   records.createRecord(content.value.trim())
   close()
   router.push({ name: 'records' })

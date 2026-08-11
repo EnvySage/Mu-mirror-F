@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getSettings as apiGetSettings,
@@ -11,7 +11,8 @@ import {
  * @typedef {Object} Settings
  * @property {string} [id]
  * @property {string} [user_id]
- * @property {string} ai_provider - AI 提供商
+ * @property {string} [ai_provider] - AI 提供商（旧字段）
+ * @property {string} ai_protocol - 模型协议（openai / anthropic）
  * @property {string} ai_api_key - API Key（脱敏）
  * @property {string} [ai_base_url] - API 地址
  * @property {string} ai_model - 模型名称
@@ -26,7 +27,8 @@ import {
 export const useSettingsStore = defineStore('settings', () => {
   /** @type {import('vue').Ref<Settings>} */
   const settings = ref({
-    ai_provider: 'openai',
+    ai_provider: '',
+    ai_protocol: 'anthropic',
     ai_api_key: '',
     ai_base_url: '',
     ai_model: '',
@@ -119,11 +121,20 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  /**
+   * 检查模型配置是否完整（模型协议、API Key、模型名称）
+   * @returns {boolean}
+   */
+  const isModelConfigComplete = computed(() => {
+    return !!(settings.value.ai_protocol && settings.value.ai_api_key && settings.value.ai_model)
+  })
+
   return {
     settings,
     loading,
     error,
     testLoading,
+    isModelConfigComplete,
     fetchSettings,
     updateSettings,
     testAiConnection,

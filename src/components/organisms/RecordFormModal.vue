@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
+import { useSettingsStore } from '@/stores/settings'
+import { useToastStore } from '@/stores/toast'
 
 const props = defineProps({
   show: Boolean,
@@ -8,7 +11,10 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'created'])
 
+const router = useRouter()
 const recordsStore = useRecordsStore()
+const settingsStore = useSettingsStore()
+const toast = useToastStore()
 
 // 表单数据 - 用户只需输入内容
 const content = ref('')
@@ -26,6 +32,16 @@ const isValid = computed(() => {
 // 提交表单
 async function handleSubmit() {
   if (!isValid.value || loading.value) return
+
+  // 检查模型配置是否完整
+  if (!settingsStore.isModelConfigComplete) {
+    toast.warning('请先完成 AI 模型配置后再写日记')
+    handleClose()
+    setTimeout(() => {
+      router.push({ name: 'settings' })
+    }, 300)
+    return
+  }
 
   loading.value = true
   error.value = ''
