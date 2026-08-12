@@ -1,7 +1,7 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-11
-> 最新提交：待提交
+> 最后更新：2026-08-12
+> 最新提交：`9b8099e`
 
 ## 项目概述
 
@@ -103,6 +103,7 @@
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
+| ⏳ | 日历导航功能 | 按月加载记录，日历标记有记录日期，点击筛选列表 |
 | ⏳ | Token 刷新机制 | 当前过期需重登，后续可加 Refresh Token |
 | ⏳ | 记录查询优化 | 对接分页参数，支持日期筛选 |
 
@@ -136,6 +137,8 @@
 | `/records/{id}` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}` | DELETE | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}/confirm` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+
+> **日历功能待办**：`GET /records` 需要支持 `start` 和 `end` 查询参数，用于按月加载记录。
 
 > **设计说明**：
 > - `PUT /records/{id}` 用于在审查状态下更新标签（标题/摘要/类型/情绪/关键词）
@@ -288,6 +291,13 @@ http.cors(cors -> cors.configurationSource(...));
 ---
 
 ## 变更日志
+
+### 2026-08-12
+
+- ✅ 修复情绪标签 key 与后端不一致问题（exhausted/tired, expecting/anticipation, stressed/pressure）
+- ✅ 移除已完成记录的删除按钮（只有审核阶段才能删除）
+- ✅ 设计日历导航功能（按月加载、视觉标记、交互逻辑）
+- ✅ 更新设计文档：新增 2.2.7 日历导航章节、API 查询参数说明
 
 ### 2026-08-11
 

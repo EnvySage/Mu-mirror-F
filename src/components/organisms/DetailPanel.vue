@@ -285,11 +285,6 @@ async function deleteRecord() {
             </div>
           </div>
         </div>
-        <div v-if="record.status === 'done'" class="view-actions">
-          <button class="btn-delete-secondary" :disabled="submitting" @click="deleteRecord">
-            删除记录
-          </button>
-        </div>
       </div>
     </div>
   </div>
@@ -416,15 +411,6 @@ async function deleteRecord() {
 .btn-reject:hover { background: var(--danger-light); }
 .btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* View actions */
-.view-actions { margin-top: 24px; text-align: center; }
-.btn-delete-secondary {
-  padding: 10px 24px; border-radius: var(--radius-full); font-size: 14px; font-weight: 500;
-  border: 1px solid var(--border); cursor: pointer; background: transparent; color: var(--text-secondary);
-  transition: all 0.15s; font-family: var(--font);
-}
-.btn-delete-secondary:hover { border-color: var(--danger); color: var(--danger); }
-.btn-delete-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Tags */
 .tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }

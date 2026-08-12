@@ -19,7 +19,7 @@ export const MOOD_GROUPS = {
     { key: 'excited', label: '兴奋' },
     { key: 'satisfied', label: '满足' },
     { key: 'grateful', label: '感恩' },
-    { key: 'anticipation', label: '期待' },
+    { key: 'expecting', label: '期待' },
   ],
   neutral: [
     { key: 'calm', label: '平静' },
@@ -30,8 +30,8 @@ export const MOOD_GROUPS = {
     { key: 'anxious', label: '焦虑' },
     { key: 'sad', label: '难过' },
     { key: 'angry', label: '愤怒' },
-    { key: 'tired', label: '疲惫' },
-    { key: 'pressure', label: '压力' },
+    { key: 'exhausted', label: '疲惫' },
+    { key: 'stressed', label: '压力' },
   ],
 }
 
@@ -46,12 +46,12 @@ export const moodMap = Object.fromEntries(ALL_MOODS.map(m => [m.key, m.label]))
 // 情绪 → 标签颜色 class 映射
 export const MOOD_COLOR_MAP = {
   happy: '', satisfied: '', grateful: '',
-  excited: '', anticipation: '', calm: '',
+  excited: '', expecting: '', calm: '',
   bored: '', confused: '',
   anxious: 'anxious',
   sad: 'sad', angry: 'sad',
-  tired: 'tired',
-  pressure: 'anxious',
+  exhausted: 'tired',
+  stressed: 'anxious',
 }
 
 // 处理状态

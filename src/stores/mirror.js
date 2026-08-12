@@ -15,7 +15,7 @@ export const useMirrorStore = defineStore('mirror', () => {
         { key: 'calm', label: '平静', percentage: 30, color: 'var(--accent)' },
         { key: 'happy', label: '开心', percentage: 40, color: 'var(--success)' },
         { key: 'anxious', label: '焦虑', percentage: 20, color: 'var(--warning)' },
-        { key: 'tired', label: '疲惫', percentage: 10, color: '#7C3AED' },
+        { key: 'exhausted', label: '疲惫', percentage: 10, color: '#7C3AED' },
       ],
     },
     todos: '你有 1 项待办未完成：准备项目进度会议的演示文稿',
