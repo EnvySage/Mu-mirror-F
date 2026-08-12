@@ -68,3 +68,14 @@ export function deleteRecord(id) {
 export function confirmReview(id) {
   return request.put(`/records/${id}/confirm`)
 }
+
+/**
+ * 获取日历标记数据
+ * 返回指定月份内每天的有效记录数，用于日历组件标记有记录的日期
+ * 只统计未删除且非失败状态的记录
+ * @param {string} month - 月份，格式 2026-08
+ * @returns {Promise<{ code: number, data: Record<string, number> }>}
+ */
+export function getCalendarMarks(month) {
+  return request.get('/records/calendar', { params: { month } })
+}

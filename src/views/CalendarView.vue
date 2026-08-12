@@ -1,12 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
 import { useUIStore } from '@/stores/ui'
 import { formatFullDate } from '@/utils/time'
-import { typeMap, moodMap, MOOD_COLOR_MAP } from '@/constants/tags'
 import PageHeader from '@/components/organisms/PageHeader.vue'
 import CalendarWidget from '@/components/molecules/CalendarWidget.vue'
+import RecordCard from '@/components/molecules/RecordCard.vue'
 
 const router = useRouter()
 const recordsStore = useRecordsStore()
@@ -15,30 +15,48 @@ const ui = useUIStore()
 const selectedDate = ref(null)
 const filterInfo = ref('')
 
+/** 只显示已完成和待审核的记录 */
 const filteredRecords = computed(() => {
   if (!selectedDate.value) return []
-  return recordsStore.getByDate(selectedDate.value)
+  return recordsStore.getByDate(selectedDate.value).filter(
+    r => r.status === 'done' || r.status === 'reviewing'
+  )
 })
 
-onMounted(() => {
-  // 如果还没有记录数据，先获取
-  if (recordsStore.records.length === 0) {
-    recordsStore.fetchRecords()
-  }
-})
-
+/**
+ * 日期选择：首次点击选中并加载预览，再次点击同一日期跳转到记录页
+ */
 function onDateSelect(date) {
+  const isSameDate = selectedDate.value &&
+    date.getFullYear() === selectedDate.value.getFullYear() &&
+    date.getMonth() === selectedDate.value.getMonth() &&
+    date.getDate() === selectedDate.value.getDate()
+
+  if (isSameDate) {
+    // 二次点击 → 跳转记录页并按日期筛选
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    router.push({ name: 'records', params: { date: `${y}-${m}-${d}` } })
+    return
+  }
+
   selectedDate.value = date
   filterInfo.value = formatFullDate(date)
+  // 加载当天的记录数据
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  recordsStore.fetchRecords({
+    startDate: `${year}-${month}-${day}`,
+    endDate: `${year}-${month}-${day}`
+  })
 }
 
+/** 直接打开详情面板，不跳转路由 */
 function openRecord(id) {
-  router.push({ name: 'records' }).then(() => {
-    setTimeout(() => {
-      ui.selectedRecordId = id
-      ui.showDetail = true
-    }, 100)
-  })
+  ui.selectedRecordId = id
+  ui.showDetail = true
 }
 </script>
 
@@ -60,30 +78,13 @@ function openRecord(id) {
             当天记录
             <span class="calendar-records-count">{{ filteredRecords.length }}条</span>
           </div>
-          <div
+          <RecordCard
             v-for="r in filteredRecords"
             :key="r.id"
-            class="calendar-record-item"
+            :record="r"
+            :active="ui.selectedRecordId === r.id"
             @click="openRecord(r.id)"
-          >
-            <div class="calendar-record-title">
-              {{ r.status === 'processing' ? r.content.substring(0, 20) + '...' : r.title }}
-            </div>
-            <div v-if="r.status !== 'processing'" class="calendar-record-summary">
-              {{ r.summary }}
-            </div>
-            <div class="calendar-record-tags">
-              <span v-if="r.status === 'processing'" class="tag tag-processing">AI 整理中</span>
-              <template v-else>
-                <span class="tag tag-type">{{ typeMap[r.content_type] || r.content_type }}</span>
-                <span
-                  v-for="m in (r.mood || [])"
-                  :key="m"
-                  :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
-                >{{ moodMap[m] || m }}</span>
-              </template>
-            </div>
-          </div>
+          />
         </template>
       </div>
     </div>
@@ -108,22 +109,4 @@ function openRecord(id) {
   display: flex; align-items: center; justify-content: space-between;
 }
 .calendar-records-count { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
-.calendar-record-item {
-  background: var(--surface); border-radius: var(--radius-md);
-  padding: 14px 16px; margin-bottom: 8px;
-  border: 0.5px solid var(--border); cursor: pointer; transition: all 0.15s;
-}
-.calendar-record-item:active { transform: scale(0.98); }
-.calendar-record-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-.calendar-record-summary { font-size: 12px; color: var(--text-secondary); }
-.calendar-record-tags { display: flex; gap: 4px; margin-top: 8px; }
-
-.tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
-.tag-type { background: var(--accent-light); color: var(--accent); }
-.tag-mood { background: var(--success-light); color: var(--success); }
-.tag-mood.anxious { background: var(--warning-light); color: var(--warning); }
-.tag-mood.sad { background: var(--danger-light); color: var(--danger); }
-.tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
-.tag-processing { background: var(--processing-light); color: var(--processing); animation: tagPulse 2s ease-in-out infinite; }
-@keyframes tagPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 </style>

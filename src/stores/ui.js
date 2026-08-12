@@ -9,6 +9,9 @@ export const useUIStore = defineStore('ui', () => {
 
   const showWriteModal = ref(false)
 
+  /** 侧边栏日历选中的日期（桌面端用） @type {import('vue').Ref<Date | null>} */
+  const sidebarSelectedDate = ref(null)
+
   /** @type {import('vue').Ref<string | null>} */
   const selectedRecordId = ref(null)
 
@@ -42,6 +45,7 @@ export const useUIStore = defineStore('ui', () => {
     currentPage,
     isMobile,
     showWriteModal,
+    sidebarSelectedDate,
     selectedRecordId,
     detailMode,
     showDetail,

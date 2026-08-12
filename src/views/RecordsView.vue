@@ -1,10 +1,15 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { formatFullDate } from '@/utils/time'
 import PageHeader from '@/components/organisms/PageHeader.vue'
 import RecordCard from '@/components/molecules/RecordCard.vue'
 import MEmptyState from '@/components/atoms/MEmptyState.vue'
+
+const props = defineProps({
+  date: { type: String, default: null },
+})
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
@@ -13,8 +18,46 @@ const grouped = computed(() => recordsStore.groupedRecords)
 const countText = computed(() => recordsStore.totalCount > 0 ? recordsStore.totalCount + ' 条记录' : '')
 const loading = computed(() => recordsStore.loading)
 
-onMounted(() => {
+/** 将 Date 对象格式化为 YYYY-MM-DD */
+function formatDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** 当前生效的筛选日期字符串（直接依赖 props 和 store） */
+const filterDate = computed(() => props.date || (ui.sidebarSelectedDate ? formatDateStr(ui.sidebarSelectedDate) : null))
+
+/** 页面副标题 */
+const subtitle = computed(() => {
+  if (filterDate.value) return formatFullDate(new Date(filterDate.value + 'T00:00:00'))
+  return countText.value
+})
+
+/** 按日期加载记录 */
+function loadByDate(dateStr) {
+  recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr })
+}
+
+/** 加载全部记录 */
+function loadAll() {
   recordsStore.fetchRecords()
+}
+
+onMounted(() => {
+  filterDate.value ? loadByDate(filterDate.value) : loadAll()
+})
+
+// 直接 watch 路由参数
+watch(() => props.date, (d) => {
+  d ? loadByDate(d) : loadAll()
+})
+
+// 直接 watch 侧边栏选中日期（关键：不经过 computed）
+watch(() => ui.sidebarSelectedDate, (newDate) => {
+  if (newDate) {
+    loadByDate(formatDateStr(newDate))
+  } else {
+    loadAll()
+  }
 })
 
 function selectRecord(id) {
@@ -25,7 +68,7 @@ function selectRecord(id) {
 
 <template>
   <div class="page records-page">
-    <PageHeader title="记录" :subtitle="countText" />
+    <PageHeader title="记录" :subtitle="subtitle" />
     <div class="page-content">
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-state">

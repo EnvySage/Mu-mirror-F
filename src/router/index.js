@@ -11,9 +11,10 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/records' },
         {
-          path: 'records',
+          path: 'records/:date?',
           name: 'records',
           component: () => import('@/views/RecordsView.vue'),
+          props: true,
         },
         {
           path: 'calendar',

@@ -58,6 +58,18 @@ async function handleTestDb() {
   setTimeout(() => { testResult.value = null }, 3000)
 }
 
+/** 切换审核模式 */
+async function toggleReviewMode() {
+  const newVal = settingsStore.settings.review_mode === 'auto' ? 'manual' : 'auto'
+  await settingsStore.updateSettings({ review_mode: newVal })
+}
+
+/** 切换 Embedding 来源 */
+async function toggleEmbeddingSource() {
+  const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
+  await settingsStore.updateSettings({ embedding_source: newVal })
+}
+
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) {
     auth.logout()
@@ -143,9 +155,10 @@ function handleLogout() {
               icon="database"
               icon-bg="#F59E0B"
               label="Embedding 来源"
-              :description="settingsStore.settings.embedding_source || 'local'"
-              action="edit"
-              @click="openEdit('embedding_source', settingsStore.settings.embedding_source, 'Embedding 来源', 'local / api')"
+              :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地服务'"
+              action="toggle"
+              :toggle-value="settingsStore.settings.embedding_source === 'api'"
+              @toggle="toggleEmbeddingSource"
             />
             <SettingsItem
               icon="cpu"
@@ -155,15 +168,24 @@ function handleLogout() {
               action="edit"
               @click="openEdit('embedding_model', settingsStore.settings.embedding_model, 'Embedding 模型', 'BAAI/bge-m3')"
             />
-            <SettingsItem
-              v-if="settingsStore.settings.embedding_source === 'api'"
-              icon="lock"
-              icon-bg="#7C3AED"
-              label="Embedding API Key"
-              :description="settingsStore.settings.embedding_api_key || '未配置'"
-              action="edit"
-              @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 API Key')"
-            />
+            <template v-if="settingsStore.settings.embedding_source === 'api'">
+              <SettingsItem
+                icon="link"
+                icon-bg="#6B7280"
+                label="Embedding API 地址"
+                :description="settingsStore.settings.embedding_base_url || '使用默认'"
+                action="edit"
+                @click="openEdit('embedding_base_url', settingsStore.settings.embedding_base_url, 'Embedding API 地址', 'https://api.example.com/v1')"
+              />
+              <SettingsItem
+                icon="lock"
+                icon-bg="#7C3AED"
+                label="Embedding API Key"
+                :description="settingsStore.settings.embedding_api_key || '未配置'"
+                action="edit"
+                @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 API Key')"
+              />
+            </template>
           </div>
         </div>
 
@@ -174,10 +196,11 @@ function handleLogout() {
             <SettingsItem
               icon="eye"
               icon-bg="#EC4899"
-              label="审核模式"
-              :description="settingsStore.settings.review_mode === 'auto' ? '自动审核' : '手动审核'"
-              action="edit"
-              @click="openEdit('review_mode', settingsStore.settings.review_mode, '审核模式', 'manual / auto')"
+              label="自动审核"
+              :description="settingsStore.settings.review_mode === 'auto' ? 'AI 处理后自动保存' : 'AI 处理后需手动确认'"
+              action="toggle"
+              :toggle-value="settingsStore.settings.review_mode === 'auto'"
+              @toggle="toggleReviewMode"
             />
           </div>
         </div>

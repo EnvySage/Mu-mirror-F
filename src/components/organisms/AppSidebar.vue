@@ -12,6 +12,7 @@ const records = useRecordsStore()
 
 const navItems = [
   { page: 'records', icon: 'list', label: '记录' },
+  { page: 'calendar', icon: 'calendar', label: '日历' },
   { page: 'mirror', icon: 'mirror', label: '镜子' },
   { page: 'settings', icon: 'settings', label: '设置' },
 ]
@@ -19,7 +20,19 @@ const navItems = [
 const activePage = computed(() => route.name)
 
 function switchPage(page) {
+  // 点"记录"时清除侧边栏日期筛选，回到全部记录
+  if (page === 'records') {
+    ui.sidebarSelectedDate = null
+  }
   router.push({ name: page })
+}
+
+/** 侧边栏 mini 日历点击日期 → 联动记录页 */
+function onSidebarDateSelect(date) {
+  ui.sidebarSelectedDate = date
+  if (route.name !== 'records') {
+    router.push({ name: 'records' })
+  }
 }
 
 function openWrite() {
@@ -47,6 +60,9 @@ function openWrite() {
       >
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path v-if="item.icon === 'list'" d="M4 6h16M4 12h16M4 18h10" />
+          <template v-else-if="item.icon === 'calendar'">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+          </template>
           <template v-else-if="item.icon === 'mirror'">
             <circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2.5" />
           </template>
@@ -69,7 +85,11 @@ function openWrite() {
     </div>
 
     <div class="sidebar-calendar">
-      <CalendarWidget mode="mini" />
+      <CalendarWidget
+        mode="mini"
+        :model-value="ui.sidebarSelectedDate"
+        @select-date="onSidebarDateSelect"
+      />
     </div>
 
     <button class="sidebar-write" @click="openWrite">

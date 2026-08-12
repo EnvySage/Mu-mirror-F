@@ -1,7 +1,7 @@
 # Mu-mirror-F 开发进度跟踪
 
 > 最后更新：2026-08-12
-> 最新提交：`9b8099e`
+> 最新提交：`f2050c7`
 
 ## 项目概述
 
@@ -71,6 +71,27 @@
 | ✅ | AI 提供商字段 | 保留 ai_provider 字段的 UI |
 | ✅ | 配置完整性检查 | 写日记前检查 ai_protocol、ai_api_key、ai_model |
 
+### 6. 日历导航功能（2026-08-12）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | 日历标记 API | `GET /records/calendar?month=2026-08`，返回每天记录数 |
+| ✅ | 日历组件标记 | CalendarWidget 读取标记数据，有记录的日期显示小圆点 |
+| ✅ | 日期筛选记录 | 点击日期加载当天记录，只显示 done 和 reviewing 状态 |
+| ✅ | 桌面端侧边栏联动 | 侧边栏 mini 日历点击 → 主内容区显示当天记录 |
+| ✅ | 记录详情面板 | 日历页点击记录直接打开 DetailPanel，不跳转路由 |
+| ✅ | 二次点击跳转 | 日历页再次点击同一日期 → 跳转记录页并按日期筛选 |
+| ✅ | RecordCard 复用 | 日历记录列表统一使用 RecordCard 组件 |
+
+### 7. 设置页面优化（2026-08-12）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | 审核模式开关 | 手动/自动审核一键切换，替换弹窗选择 |
+| ✅ | Embedding 来源开关 | 本地/API 模式一键切换 |
+| ✅ | Embedding API 地址 | 新增 embedding_base_url 字段，api 模式时显示 |
+| ✅ | SVG 图标补全 | 补全 link、cpu、user 图标 |
+
 **修改文件（2026-08-11）：**
 - `src/stores/toast.js` - 新增 toast store
 - `src/components/organisms/ToastContainer.vue` - 新增 toast 容器组件
@@ -103,7 +124,7 @@
 
 | 状态 | 任务 | 说明 |
 |------|------|------|
-| ⏳ | 日历导航功能 | 按月加载记录，日历标记有记录日期，点击筛选列表 |
+| ✅ | 日历导航功能 | 按月加载记录，日历标记有记录日期，点击筛选列表 |
 | ⏳ | Token 刷新机制 | 当前过期需重登，后续可加 Refresh Token |
 | ⏳ | 记录查询优化 | 对接分页参数，支持日期筛选 |
 
@@ -137,6 +158,7 @@
 | `/records/{id}` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}` | DELETE | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}/confirm` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+| `/records/calendar` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 
 > **日历功能待办**：`GET /records` 需要支持 `start` 和 `end` 查询参数，用于按月加载记录。
 
@@ -161,7 +183,7 @@
 |------|------|------|
 | 记录模块 | ✅ CRUD + 审核完成 | 增删改查 + 审核流程 |
 | 设置模块 | ✅ 配置管理完成 | AI 模型/Embedding/审核模式配置 |
-| 日历模块 | ⏳ 待开发 | 日历视图（UI 已有） |
+| 日历模块 | ✅ 导航功能完成 | 日历标记 + 日期筛选 + 侧边栏联动 |
 | AI 镜像 | ⏳ 待开发 | AI 对话功能（UI 已有） |
 
 ---
@@ -273,6 +295,7 @@ http.cors(cors -> cors.configurationSource(...));
 - ai_base_url: 可选，留空使用默认
 - ai_model: 模型名称
 - embedding_source: local/api
+- embedding_base_url: Embedding API 地址（api 模式时使用）
 - embedding_model: Embedding 模型名
 - review_mode: manual/auto
 
@@ -298,6 +321,18 @@ http.cors(cors -> cors.configurationSource(...));
 - ✅ 移除已完成记录的删除按钮（只有审核阶段才能删除）
 - ✅ 设计日历导航功能（按月加载、视觉标记、交互逻辑）
 - ✅ 更新设计文档：新增 2.2.7 日历导航章节、API 查询参数说明
+- ✅ 日历 API 对接：`GET /records/calendar?month=2026-08`
+- ✅ 日历页点击记录打开 DetailPanel（不跳转路由）
+- ✅ 日历页筛选只显示 done 和 reviewing 状态记录
+- ✅ 日历页二次点击同一日期跳转记录页并按日期筛选
+- ✅ 桌面端侧边栏 mini 日历联动主内容区（点击日期显示当天记录）
+- ✅ CalendarWidget 支持 modelValue 外部控制选中日期
+- ✅ RecordsView 支持路由参数 date 和侧边栏日期筛选
+- ✅ 路由 records/:date? 支持可选日期参数
+- ✅ 设置页审核模式改为 toggle 开关（替换弹窗选择）
+- ✅ 设置页 Embedding 来源改为 toggle 开关
+- ✅ 新增 embedding_base_url 字段（api 模式时显示）
+- ✅ 补全 SettingsItem 缺失的 SVG 图标（link、cpu、user）
 
 ### 2026-08-11
 

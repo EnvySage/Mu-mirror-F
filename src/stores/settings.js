@@ -17,6 +17,7 @@ import {
  * @property {string} [ai_base_url] - API 地址
  * @property {string} ai_model - 模型名称
  * @property {string} embedding_source - Embedding 来源
+ * @property {string} [embedding_base_url] - Embedding API 地址
  * @property {string} [embedding_api_key] - Embedding API Key（脱敏）
  * @property {string} embedding_model - Embedding 模型名
  * @property {string} review_mode - 审核模式
@@ -33,6 +34,7 @@ export const useSettingsStore = defineStore('settings', () => {
     ai_base_url: '',
     ai_model: '',
     embedding_source: 'local',
+    embedding_base_url: '',
     embedding_api_key: '',
     embedding_model: 'BAAI/bge-m3',
     review_mode: 'manual',

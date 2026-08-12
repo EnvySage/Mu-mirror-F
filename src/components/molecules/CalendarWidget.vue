@@ -1,18 +1,23 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRecordsStore } from '@/stores/records'
 import { formatFullDate } from '@/utils/time'
 
 const props = defineProps({
   mode: { type: String, default: 'mini' }, // mini | full
+  /** 外部控制的选中日期（侧边栏联动用） */
+  modelValue: { type: Date, default: null },
 })
 
-const emit = defineEmits(['selectDate'])
+const emit = defineEmits(['selectDate', 'update:modelValue'])
 
 const recordsStore = useRecordsStore()
 
 const calendarDate = ref(new Date())
 const selectedDate = ref(null)
+
+/** 优先用外部传入的选中日期 */
+const effectiveSelected = computed(() => props.modelValue || selectedDate.value)
 
 const year = computed(() => calendarDate.value.getFullYear())
 const month = computed(() => calendarDate.value.getMonth())
@@ -39,10 +44,10 @@ const calendarDays = computed(() => {
   for (let day = 1; day <= daysInMonth; day++) {
     const isToday = today.getFullYear() === year.value && today.getMonth() === month.value && today.getDate() === day
     const hasRecord = recordDates.value.has(day)
-    const isSelected = selectedDate.value &&
-      selectedDate.value.getFullYear() === year.value &&
-      selectedDate.value.getMonth() === month.value &&
-      selectedDate.value.getDate() === day
+    const isSelected = effectiveSelected.value &&
+      effectiveSelected.value.getFullYear() === year.value &&
+      effectiveSelected.value.getMonth() === month.value &&
+      effectiveSelected.value.getDate() === day
     days.push({ day, isToday, hasRecord, isSelected, otherMonth: false })
   }
 
@@ -58,6 +63,21 @@ const calendarDays = computed(() => {
   return days
 })
 
+// 加载日历标记数据
+async function loadCalendarMarks() {
+  await recordsStore.fetchCalendarMarks(year.value, month.value)
+}
+
+// 监听月份变化，重新加载标记数据
+watch([year, month], () => {
+  loadCalendarMarks()
+})
+
+// 初始加载
+onMounted(() => {
+  loadCalendarMarks()
+})
+
 function changeMonth(delta) {
   const d = new Date(calendarDate.value)
   d.setMonth(d.getMonth() + delta)
@@ -66,8 +86,10 @@ function changeMonth(delta) {
 
 function selectDay(dayObj) {
   if (dayObj.otherMonth) return
-  selectedDate.value = new Date(year.value, month.value, dayObj.day)
-  emit('selectDate', selectedDate.value)
+  const date = new Date(year.value, month.value, dayObj.day)
+  selectedDate.value = date
+  emit('selectDate', date)
+  emit('update:modelValue', date)
 }
 </script>
 

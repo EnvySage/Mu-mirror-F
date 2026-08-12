@@ -8,6 +8,7 @@ import {
   updateRecord as apiUpdateRecord,
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
+  getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
 
 /** @typedef {'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
@@ -33,6 +34,12 @@ export const useRecordsStore = defineStore('records', () => {
 
   const loading = ref(false)
   const error = ref(null)
+
+  /**
+   * 日历标记数据 { "2026-08": { "1": 2, "5": 1, ... } }
+   * @type {import('vue').Ref<Record<string, Record<string, number>>>}
+   */
+  const calendarMarks = ref({})
 
   const totalCount = computed(() => records.value.length)
 
@@ -196,12 +203,43 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
+   * 从后端获取日历标记数据
+   * @param {number} year
+   * @param {number} month - 月份（0-11）
+   * @returns {Promise<void>}
+   */
+  async function fetchCalendarMarks(year, month) {
+    const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+    try {
+      const res = await apiGetCalendarMarks(monthStr)
+      calendarMarks.value[monthStr] = res.data || {}
+    } catch (err) {
+      console.error('Failed to fetch calendar marks:', err)
+      calendarMarks.value[monthStr] = {}
+    }
+  }
+
+  /**
    * 获取有记录的日期集合（用于日历标记）
+   * 优先使用后端日历标记数据，回退到本地记录
    * @param {number} year
    * @param {number} month
    * @returns {Set<number>}
    */
   function getRecordDates(year, month) {
+    const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+    const marks = calendarMarks.value[monthStr]
+
+    // 如果有后端数据，使用后端数据
+    if (marks) {
+      const dates = new Set()
+      Object.entries(marks).forEach(([day, count]) => {
+        if (count > 0) dates.add(Number(day))
+      })
+      return dates
+    }
+
+    // 回退到本地记录
     const dates = new Set()
     records.value.forEach(r => {
       const d = new Date(r.created_at)
@@ -221,12 +259,14 @@ export const useRecordsStore = defineStore('records', () => {
     pendingRecords,
     processingRecords,
     doneRecords,
+    calendarMarks,
     fetchRecords,
     fetchRecord,
     createRecord,
     updateRecord,
     deleteRecord,
     confirmReview,
+    fetchCalendarMarks,
     getById,
     getByDate,
     getRecordDates,
