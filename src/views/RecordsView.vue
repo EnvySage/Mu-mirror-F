@@ -5,6 +5,7 @@ import { useRecordsStore } from '@/stores/records'
 import { formatFullDate } from '@/utils/time'
 import PageHeader from '@/components/organisms/PageHeader.vue'
 import RecordCard from '@/components/molecules/RecordCard.vue'
+import SplitGroupCard from '@/components/molecules/SplitGroupCard.vue'
 import MEmptyState from '@/components/atoms/MEmptyState.vue'
 
 const props = defineProps({
@@ -14,7 +15,7 @@ const props = defineProps({
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
 
-const grouped = computed(() => recordsStore.groupedRecords)
+const grouped = computed(() => recordsStore.groupedRecordsWithSplit)
 const countText = computed(() => recordsStore.totalCount > 0 ? recordsStore.totalCount + ' 条记录' : '')
 const loading = computed(() => recordsStore.loading)
 
@@ -64,6 +65,15 @@ function selectRecord(id) {
   ui.selectedRecordId = id
   ui.showDetail = true
 }
+
+// 选择拆分组（传入根记录 ID）
+function selectSplitGroup(records) {
+  if (records && records.length > 0) {
+    // 传入根记录的 ID
+    ui.selectedRecordId = records[0].id
+    ui.showDetail = true
+  }
+}
 </script>
 
 <template>
@@ -88,13 +98,22 @@ function selectRecord(id) {
       <template v-else>
         <div v-for="group in grouped" :key="group.date">
           <div class="date-separator">{{ group.date }}</div>
-          <RecordCard
-            v-for="record in group.items"
-            :key="record.id"
-            :record="record"
-            :active="ui.selectedRecordId === record.id"
-            @click="selectRecord(record.id)"
-          />
+          <template v-for="item in group.items" :key="item.id || item[0]?.id">
+            <!-- 拆分组 -->
+            <SplitGroupCard
+              v-if="Array.isArray(item)"
+              :records="item"
+              :active="ui.selectedRecordId === item[0]?.id"
+              @click="selectSplitGroup(item)"
+            />
+            <!-- 普通记录 -->
+            <RecordCard
+              v-else
+              :record="item"
+              :active="ui.selectedRecordId === item.id"
+              @click="selectRecord(item.id)"
+            />
+          </template>
         </div>
       </template>
     </div>

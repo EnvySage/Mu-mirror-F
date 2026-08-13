@@ -1,6 +1,6 @@
 # Mu-mirror-F 开发进度跟踪
 
-> 最后更新：2026-08-12
+> 最后更新：2026-08-13
 > 最新提交：`f2050c7`
 
 ## 项目概述
@@ -92,6 +92,31 @@
 | ✅ | Embedding API 地址 | 新增 embedding_base_url 字段，api 模式时显示 |
 | ✅ | SVG 图标补全 | 补全 link、cpu、user 图标 |
 
+### 8. 拆分记录功能（2026-08-13）
+
+| 状态 | 功能 | 说明 |
+|------|------|------|
+| ✅ | 拆分数据处理 | `original_record_id` 字段支持，拆分组识别和分组 |
+| ✅ | 列表合并显示 | 拆分组在列表中显示为一条卡片，展示拆分数量和标题预览 |
+| ✅ | 详情面板-序号切换 | ① ② ③ 序号按钮切换显示不同拆分记录 |
+| ✅ | 详情面板-摘要显示 | 显示每条拆分记录的 summary 内容（只读） |
+| ✅ | 详情面板-编辑调整 | 可修改每条记录的标题、类型、情绪、关键词 |
+| ✅ | 批量审核 | "全部通过"按钮批量更新标签并确认审核 |
+| ✅ | 批量拒绝 | "全部拒绝"按钮批量删除所有拆分记录 |
+| ✅ | 模型配置检查优化 | 新增 `settingsLoaded` 标记，避免初始空值误判 |
+| ✅ | 配置缺失提示 | 具体提示未填写的字段（API Key、模型名称等） |
+
+**修改文件（2026-08-13）：**
+- `src/stores/records.js` - 添加拆分数据处理逻辑（isSplitRecord, getSplitGroup, groupedRecordsWithSplit）
+- `src/stores/settings.js` - 添加 settingsLoaded 标记和 getModelConfigMissingMessage 方法
+- `src/stores/ui.js` - 更新 detailMode 类型定义，添加 'split' 模式
+- `src/views/RecordsView.vue` - 集成 SplitGroupCard 组件
+- `src/components/molecules/SplitGroupCard.vue` - 新建拆分组卡片组件
+- `src/components/molecules/RecordCard.vue` - 添加拆分序号支持
+- `src/components/organisms/DetailPanel.vue` - 添加拆分组视图和批量审核功能
+- `src/components/organisms/WriteModal.vue` - 使用具体配置缺失提示
+- `src/components/organisms/RecordFormModal.vue` - 使用具体配置缺失提示
+
 **修改文件（2026-08-11）：**
 - `src/stores/toast.js` - 新增 toast store
 - `src/components/organisms/ToastContainer.vue` - 新增 toast 容器组件
@@ -159,6 +184,11 @@
 | `/records/{id}` | DELETE | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/{id}/confirm` | PUT | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
 | `/records/calendar` | GET | ✅ 已对接 | `src/api/records.js` → `src/stores/records.js` |
+
+> **拆分功能说明**：
+> - 拆分记录通过 `originalRecordId` 字段关联到原记录
+> - 响应拦截器会将 camelCase 转为 snake_case，前端使用 `original_record_id`
+> - 拆分组在列表中合并显示，点击后进入详情面板可切换查看和批量审核
 
 > **日历功能待办**：`GET /records` 需要支持 `start` 和 `end` 查询参数，用于按月加载记录。
 
@@ -314,6 +344,19 @@ http.cors(cors -> cors.configurationSource(...));
 ---
 
 ## 变更日志
+
+### 2026-08-13
+
+- ✅ 实现拆分记录功能的数据层（records store）
+- ✅ 创建 SplitGroupCard 组件，列表中合并显示拆分组
+- ✅ 更新 DetailPanel，添加拆分组视图模式
+- ✅ 实现序号切换栏，可切换查看不同拆分记录
+- ✅ 显示每条拆分记录的摘要内容（只读）
+- ✅ 实现批量审核功能（全部通过/全部拒绝）
+- ✅ 修复模型配置检查的竞态条件问题
+- ✅ 优化配置缺失提示，具体显示未填写的字段
+- ✅ 修复 DetailPanel 关闭和返回功能
+- ✅ 更新开发进度文档
 
 ### 2026-08-12
 

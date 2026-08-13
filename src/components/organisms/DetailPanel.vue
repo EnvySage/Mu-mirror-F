@@ -12,6 +12,22 @@ const record = computed(() => {
   return recordsStore.getById(ui.selectedRecordId)
 })
 
+// 拆分相关
+const isSplit = computed(() => record.value && recordsStore.isSplitRecord(record.value))
+const splitGroup = computed(() => {
+  if (!record.value) return []
+  const rootId = recordsStore.getSplitRootId(record.value)
+  return recordsStore.getSplitGroup(rootId)
+})
+const isSplitRoot = computed(() => record.value && recordsStore.isSplitRoot(record.value))
+
+// 当前选中的拆分记录索引
+const activeSplitIndex = ref(0)
+const activeSplitRecord = computed(() => splitGroup.value[activeSplitIndex.value] || null)
+
+// 拆分组的编辑数据
+const splitEditData = ref([])
+
 // Review state
 const reviewData = ref(null)
 const reviewKeywords = ref('')
@@ -28,17 +44,41 @@ function startProcessing() {
   setTimeout(() => { processingStep.value = 2 }, 1600)
 }
 
+// 初始化拆分组编辑数据
+function initSplitEditData() {
+  splitEditData.value = splitGroup.value.map(r => ({
+    id: r.id,
+    title: r.title || '',
+    content_type: r.content_type || 'note',
+    mood: r.mood || ['calm'],
+    keywords: (r.keywords || []).join(', '),
+  }))
+}
+
 watch(() => ui.selectedRecordId, (id) => {
   if (!id) return
   const r = recordsStore.getById(id)
   if (!r) return
   actionError.value = null
+  activeSplitIndex.value = 0
 
-  if (r.status === 'processing') {
+  // 判断是否为拆分组（原记录或子记录）
+  const isSplit = recordsStore.isSplitRecord(r)
+  const isRoot = recordsStore.isSplitRoot(id)
+
+  if (isRoot || isSplit) {
+    // 如果是子记录，需要切换到原记录
+    if (isSplit) {
+      const rootId = recordsStore.getSplitRootId(r)
+      ui.selectedRecordId = rootId
+      return
+    }
+    ui.detailMode = 'split'
+    initSplitEditData()
+  } else if (r.status === 'processing') {
     ui.detailMode = 'processing'
     startProcessing()
   } else if (r.status === 'reviewing') {
-    // 初始化审核数据（使用后端返回的 AI 处理结果）
     reviewData.value = {
       title: r.title || '',
       content_type: r.content_type || 'note',
@@ -58,9 +98,90 @@ function close() {
   ui.selectedRecordId = null
   reviewData.value = null
   actionError.value = null
+  splitEditData.value = []
   if (processingTimer) clearTimeout(processingTimer)
 }
 
+// 切换拆分记录
+function switchSplitRecord(index) {
+  activeSplitIndex.value = index
+}
+
+// 获取当前编辑数据
+const currentEditData = computed(() => splitEditData.value[activeSplitIndex.value] || null)
+
+// 切换情绪
+function toggleSplitMood(mood) {
+  if (!currentEditData.value) return
+  const idx = currentEditData.value.mood.indexOf(mood)
+  if (idx >= 0) currentEditData.value.mood.splice(idx, 1)
+  else currentEditData.value.mood.push(mood)
+}
+
+// 批量确认所有拆分记录
+async function confirmAllSplit() {
+  if (submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
+  try {
+    // 先更新每条记录的标签
+    for (const editData of splitEditData.value) {
+      const keywords = editData.keywords.split(/[,，]/).map(k => k.trim()).filter(Boolean)
+      const modifications = {
+        title: editData.title,
+        contentType: editData.content_type,
+        mood: editData.mood,
+        keywords,
+      }
+      const updateSuccess = await recordsStore.updateRecord(editData.id, modifications)
+      if (!updateSuccess) {
+        actionError.value = '更新失败，请重试'
+        submitting.value = false
+        return
+      }
+    }
+
+    // 再批量确认
+    for (const editData of splitEditData.value) {
+      const confirmSuccess = await recordsStore.confirmReview(editData.id)
+      if (!confirmSuccess) {
+        actionError.value = '确认失败，请重试'
+        submitting.value = false
+        return
+      }
+    }
+
+    close()
+  } catch (err) {
+    actionError.value = '操作失败，请重试'
+  }
+  submitting.value = false
+}
+
+// 批量拒绝所有拆分记录
+async function rejectAllSplit() {
+  if (submitting.value) return
+  submitting.value = true
+  actionError.value = null
+
+  try {
+    for (const editData of splitEditData.value) {
+      const success = await recordsStore.deleteRecord(editData.id)
+      if (!success) {
+        actionError.value = '删除失败，请重试'
+        submitting.value = false
+        return
+      }
+    }
+    close()
+  } catch (err) {
+    actionError.value = '操作失败，请重试'
+  }
+  submitting.value = false
+}
+
+// 单条记录审核相关
 function selectType(type) {
   if (reviewData.value) reviewData.value.content_type = type
 }
@@ -85,7 +206,6 @@ async function confirmReview() {
     keywords,
   }
 
-  // 先更新标签
   const updateSuccess = await recordsStore.updateRecord(record.value.id, modifications)
   if (!updateSuccess) {
     actionError.value = '更新失败，请重试'
@@ -93,7 +213,6 @@ async function confirmReview() {
     return
   }
 
-  // 再确认审查完成
   const confirmSuccess = await recordsStore.confirmReview(record.value.id)
   if (confirmSuccess) {
     reviewData.value = null
@@ -109,7 +228,6 @@ async function rejectReview() {
   submitting.value = true
   actionError.value = null
 
-  // 拒绝等同于删除
   const success = await recordsStore.deleteRecord(record.value.id)
   if (success) {
     close()
@@ -124,7 +242,6 @@ async function retryProcessing() {
   submitting.value = true
   actionError.value = null
 
-  // 重新创建记录（后端没有 retry 接口，这里重新提交）
   const content = record.value.content
   await recordsStore.deleteRecord(record.value.id)
   await recordsStore.createRecord(content)
@@ -155,7 +272,7 @@ async function deleteRecord() {
         返回
       </button>
       <span class="detail-title">
-        {{ ui.detailMode === 'processing' ? 'AI 整理中' : ui.detailMode === 'review' ? '审核标签' : ui.detailMode === 'failed' ? '处理失败' : '记录详情' }}
+        {{ ui.detailMode === 'split' ? '拆分记录' : ui.detailMode === 'processing' ? 'AI 整理中' : ui.detailMode === 'review' ? '审核标签' : ui.detailMode === 'failed' ? '处理失败' : '记录详情' }}
       </span>
       <button
         v-if="ui.detailMode === 'review'"
@@ -169,8 +286,80 @@ async function deleteRecord() {
       <!-- 错误提示 -->
       <div v-if="actionError" class="error-banner">{{ actionError }}</div>
 
+      <!-- Split View - 拆分组 -->
+      <div v-if="ui.detailMode === 'split'" class="split-view">
+        <!-- 原始内容 -->
+        <div class="review-original">
+          <div class="section-label">原始内容</div>
+          <div class="review-original-text">{{ record.content }}</div>
+        </div>
+
+        <!-- 序号切换栏 -->
+        <div v-if="splitGroup.length > 0" class="split-tabs">
+          <button
+            v-for="(r, i) in splitGroup"
+            :key="r.id"
+            :class="['split-tab', { active: i === activeSplitIndex }]"
+            @click="switchSplitRecord(i)"
+          >
+            <span class="split-tab-index">{{ i + 1 }}</span>
+            <span class="split-tab-title">{{ splitEditData[i]?.title || '未生成标题' }}</span>
+          </button>
+        </div>
+
+        <!-- 当前记录编辑区 -->
+        <div v-if="currentEditData" class="split-edit-card">
+          <!-- 摘要内容（只读） -->
+          <div class="review-field">
+            <div class="section-label">摘要</div>
+            <div class="split-content-preview">{{ activeSplitRecord?.summary || '暂无摘要' }}</div>
+          </div>
+
+          <div class="review-field">
+            <div class="section-label">标题</div>
+            <input v-model="currentEditData.title" class="review-keywords-input" />
+          </div>
+          <div class="review-field">
+            <div class="section-label">内容类型</div>
+            <div class="review-field-tags">
+              <span
+                v-for="t in CONTENT_TYPES"
+                :key="t.key"
+                :class="['review-tag', { selected: currentEditData.content_type === t.key }]"
+                @click="currentEditData.content_type = t.key"
+              >{{ t.label }}</span>
+            </div>
+          </div>
+          <div class="review-field">
+            <div class="section-label">情绪状态</div>
+            <div class="review-field-tags">
+              <span
+                v-for="m in ALL_MOODS"
+                :key="m.key"
+                :class="['review-tag', { selected: currentEditData.mood.includes(m.key) }]"
+                @click="toggleSplitMood(m.key)"
+              >{{ m.label }}</span>
+            </div>
+          </div>
+          <div class="review-field">
+            <div class="section-label">关键词</div>
+            <input v-model="currentEditData.keywords" class="review-keywords-input" placeholder="用逗号分隔关键词" />
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="split-actions">
+          <button class="btn-approve" :disabled="submitting" @click="confirmAllSplit">
+            {{ submitting ? '提交中...' : '✅ 全部通过' }}
+          </button>
+          <button class="btn-reject" :disabled="submitting" @click="rejectAllSplit">
+            ❌ 全部拒绝
+          </button>
+        </div>
+      </div>
+
       <!-- Processing View -->
-      <div v-if="ui.detailMode === 'processing'" class="processing-view">
+      <div v-else-if="ui.detailMode === 'processing'" class="processing-view">
         <div class="processing-ring" />
         <div class="processing-title">正在分析你的记录</div>
         <div class="processing-desc">AI 正在理解你的内容，通常需要几秒钟</div>
@@ -334,6 +523,108 @@ async function deleteRecord() {
   border-radius: var(--radius-md); color: #ef4444; font-size: 13px;
 }
 
+/* Split View */
+.split-view {
+  animation: fadeIn 0.3s ease;
+}
+
+/* 序号切换栏 */
+.split-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.split-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: var(--font);
+  box-shadow: var(--shadow-sm);
+}
+
+.split-tab:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.split-tab.active {
+  background: linear-gradient(135deg, var(--accent), #6366f1);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.split-tab-index {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.split-tab.active .split-tab-index {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.split-tab-title {
+  font-size: 14px;
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 原文内容预览 */
+.split-content-preview {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.7;
+  padding: 14px 16px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 编辑卡片 */
+.split-edit-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 0.5px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  animation: fadeIn 0.25s ease;
+}
+
+/* 操作按钮 */
+.split-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 /* Processing */
 .processing-view { padding: 60px 20px; text-align: center; }
 .processing-ring { width: 64px; height: 64px; margin: 0 auto 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
@@ -411,7 +702,6 @@ async function deleteRecord() {
 .btn-reject:hover { background: var(--danger-light); }
 .btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
 
-
 /* Tags */
 .tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
 .tag-type { background: var(--accent-light); color: var(--accent); }
@@ -421,6 +711,6 @@ async function deleteRecord() {
 .tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
 .keyword { font-size: 11px; color: var(--text-tertiary); background: var(--bg); padding: 2px 8px; border-radius: var(--radius-full); }
 
-/* Section label (local override) */
+/* Section label */
 .section-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
 </style>

@@ -35,7 +35,8 @@ async function handleSubmit() {
 
   // 检查模型配置是否完整
   if (!settingsStore.isModelConfigComplete) {
-    toast.warning('请先完成 AI 模型配置后再写日记')
+    const msg = settingsStore.getModelConfigMissingMessage()
+    toast.warning(msg || '请先完成 AI 模型配置后再写日记')
     handleClose()
     setTimeout(() => {
       router.push({ name: 'settings' })

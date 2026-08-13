@@ -6,6 +6,8 @@ import { typeMap, moodMap, MOOD_COLOR_MAP } from '@/constants/tags'
 const props = defineProps({
   record: { type: Object, required: true },
   active: { type: Boolean, default: false },
+  splitIndex: { type: Number, default: 0 },
+  isSplitChild: { type: Boolean, default: false },
 })
 
 defineEmits(['click'])
@@ -21,7 +23,9 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
 </script>
 
 <template>
-  <div :class="['record-card', { active, 'is-failed': isFailed, 'is-pending': isPendingReview }]" @click="$emit('click')">
+  <div :class="['record-card', { active, 'is-failed': isFailed, 'is-pending': isPendingReview, 'is-split-child': isSplitChild }]" @click="$emit('click')">
+    <!-- 拆分序号 -->
+    <div v-if="isSplitChild" class="split-index">{{ splitIndex }}</div>
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <div class="record-tags">
@@ -59,12 +63,32 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
   padding: 16px 18px; margin-bottom: 10px;
   box-shadow: var(--shadow-sm); border: 0.5px solid var(--border);
   cursor: pointer; transition: all 0.15s ease;
+  position: relative;
 }
 .record-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .record-card.active { border-color: var(--accent); background: var(--accent-light); }
 .record-card.is-failed { border-color: var(--danger); background: var(--danger-light); }
 .record-card.is-pending { border-color: var(--warning); }
+.record-card.is-split-child { margin-left: 8px; }
 .record-card:active { transform: scale(0.98); }
+
+/* 拆分序号 */
+.split-index {
+  position: absolute;
+  top: 14px;
+  left: -4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+}
 .record-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .record-time { font-size: 12px; color: var(--text-tertiary); font-weight: 500; font-family: var(--font-mono); }
 .record-tags { display: flex; gap: 5px; flex-wrap: wrap; }

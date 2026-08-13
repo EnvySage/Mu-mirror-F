@@ -54,6 +54,7 @@ export const useSettingsStore = defineStore('settings', () => {
       const res = await apiGetSettings()
       if (res.data) {
         settings.value = res.data
+        settingsLoaded.value = true
       }
     } catch (err) {
       error.value = err.message || '获取配置失败'
@@ -124,12 +125,34 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /**
+   * 标记是否已从后端加载过配置
+   */
+  const settingsLoaded = ref(false)
+
+  /**
    * 检查模型配置是否完整（模型协议、API Key、模型名称）
+   * 只有在配置加载完成后才进行检查，避免初始空值误判
    * @returns {boolean}
    */
   const isModelConfigComplete = computed(() => {
+    // 配置还没加载完，暂时认为是完整的（避免阻塞用户操作）
+    if (!settingsLoaded.value) return true
     return !!(settings.value.ai_protocol && settings.value.ai_api_key && settings.value.ai_model)
   })
+
+  /**
+   * 获取模型配置缺失项的提示信息
+   * @returns {string} 缺失项描述，如 "请先填写 API Key 和模型名称"
+   */
+  function getModelConfigMissingMessage() {
+    const missing = []
+    if (!settings.value.ai_protocol) missing.push('模型协议')
+    if (!settings.value.ai_api_key) missing.push('API Key')
+    if (!settings.value.ai_model) missing.push('模型名称')
+
+    if (missing.length === 0) return ''
+    return `请先填写${missing.join('、')}`
+  }
 
   return {
     settings,
@@ -137,6 +160,7 @@ export const useSettingsStore = defineStore('settings', () => {
     error,
     testLoading,
     isModelConfigComplete,
+    getModelConfigMissingMessage,
     fetchSettings,
     updateSettings,
     testAiConnection,

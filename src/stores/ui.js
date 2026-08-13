@@ -15,7 +15,7 @@ export const useUIStore = defineStore('ui', () => {
   /** @type {import('vue').Ref<string | null>} */
   const selectedRecordId = ref(null)
 
-  /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed'>} */
+  /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed' | 'split'>} */
   const detailMode = ref('view')
 
   const showDetail = ref(false)

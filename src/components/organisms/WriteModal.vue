@@ -26,7 +26,8 @@ function submit() {
 
   // 检查模型配置是否完整
   if (!settings.isModelConfigComplete) {
-    toast.warning('请先完成 AI 模型配置后再写日记')
+    const msg = settings.getModelConfigMissingMessage()
+    toast.warning(msg || '请先完成 AI 模型配置后再写日记')
     close()
     setTimeout(() => {
       router.push({ name: 'settings' })

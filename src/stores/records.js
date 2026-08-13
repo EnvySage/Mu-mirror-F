@@ -189,6 +189,90 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
+   * 判断是否为拆分记录
+   * @param {Record} record
+   * @returns {boolean}
+   */
+  function isSplitRecord(record) {
+    return record.original_record_id !== null && record.original_record_id !== undefined
+  }
+
+  /**
+   * 获取拆分组的根 ID
+   * @param {Record} record
+   * @returns {string|number}
+   */
+  function getSplitRootId(record) {
+    return record.original_record_id || record.id
+  }
+
+  /**
+   * 获取同一拆分组的所有记录
+   * @param {string|number} rootId
+   * @returns {Record[]}
+   */
+  function getSplitGroup(rootId) {
+    return records.value.filter(r =>
+      r.id === rootId || r.original_record_id === rootId
+    )
+  }
+
+  /**
+   * 判断记录是否为拆分组的原记录（有子记录）
+   * @param {string|number} id
+   * @returns {boolean}
+   */
+  function isSplitRoot(id) {
+    return records.value.some(r => r.original_record_id === id)
+  }
+
+  /**
+   * 按日期分组，拆分记录合并展示
+   * 返回格式：[{ date, items: [Record | Record[]] }]
+   */
+  const groupedRecordsWithSplit = computed(() => {
+    const groups = {}
+    const processedIds = new Set()
+
+    records.value.forEach(r => {
+      if (processedIds.has(r.id)) return
+
+      const key = dateLabel(r.created_at)
+      if (!groups[key]) groups[key] = []
+
+      // 如果是拆分记录（子记录）
+      if (isSplitRecord(r)) {
+        const rootId = getSplitRootId(r)
+        const rootRecord = records.value.find(rec => rec.id === rootId)
+
+        // 如果原记录存在且未处理，将整组添加
+        if (rootRecord && !processedIds.has(rootId)) {
+          const group = getSplitGroup(rootId)
+          groups[key].push(group)
+          group.forEach(item => processedIds.add(item.id))
+        } else if (!rootRecord) {
+          // 原记录不存在（可能被删除），单独显示
+          groups[key].push(r)
+          processedIds.add(r.id)
+        }
+      }
+      // 如果是原记录（有子记录）
+      else if (isSplitRoot(r.id)) {
+        const group = getSplitGroup(r.id)
+        groups[key].push(group)
+        group.forEach(item => processedIds.add(item.id))
+      }
+      // 普通记录
+      else {
+        groups[key].push(r)
+        processedIds.add(r.id)
+      }
+    })
+
+    return Object.entries(groups).map(([date, items]) => ({ date, items }))
+  })
+
+  /**
    * 根据日期过滤记录
    * @param {Date} date
    * @returns {Record[]}
@@ -256,6 +340,7 @@ export const useRecordsStore = defineStore('records', () => {
     error,
     totalCount,
     groupedRecords,
+    groupedRecordsWithSplit,
     pendingRecords,
     processingRecords,
     doneRecords,
@@ -270,5 +355,9 @@ export const useRecordsStore = defineStore('records', () => {
     getById,
     getByDate,
     getRecordDates,
+    isSplitRecord,
+    getSplitRootId,
+    getSplitGroup,
+    isSplitRoot,
   }
 })
