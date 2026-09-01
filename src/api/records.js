@@ -35,19 +35,21 @@ export function getRecord(id) {
 }
 
 /**
- * 更新记录（仅在审查状态下允许）
- * 可以修改标题、摘要、内容类型、情绪标签、关键词等 AI 生成的字段
- * @param {number|string} id - 记录ID
+ * 更新 Chunk（仅在审查状态下允许）
+ * 可以修改 segment 和 metadata 中的字段
+ * @param {number|string} chunkId - Chunk ID
  * @param {Object} data - 更新数据
- * @param {string} [data.title] - 标题
- * @param {string} [data.summary] - 摘要
- * @param {string} [data.contentType] - 内容类型
- * @param {string[]} [data.mood] - 情绪标签
- * @param {string[]} [data.keywords] - 关键词
- * @returns {Promise<{ code: number, data: RecordVO }>}
+ * @param {string} [data.segment] - 主题片段
+ * @param {Object} [data.metadata] - 元数据
+ * @param {string} [data.metadata.title] - 标题
+ * @param {string} [data.metadata.summary] - 摘要
+ * @param {string} [data.metadata.contentType] - 内容类型
+ * @param {string[]} [data.metadata.mood] - 情绪标签
+ * @param {string[]} [data.metadata.keywords] - 关键词
+ * @returns {Promise<{ code: number, data: ChunkVO }>}
  */
-export function updateRecord(id, data) {
-  return request.put(`/records/${id}`, data)
+export function updateChunk(chunkId, data) {
+  return request.put(`/chunks/${chunkId}`, data)
 }
 
 /**

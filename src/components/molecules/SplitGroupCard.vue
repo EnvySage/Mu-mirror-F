@@ -14,21 +14,34 @@ const rootRecord = computed(() => props.records[0])
 const timeText = computed(() => timeAgo(rootRecord.value.created_at))
 const totalCount = computed(() => props.records.length)
 
-// 显示所有记录的类型标签（去重）
+// 从第一条记录的 chunks 获取所有标题
+const chunkTitles = computed(() => {
+  const record = rootRecord.value
+  if (!record.chunks) return []
+  return record.chunks.map(chunk => chunk.metadata?.title || '未生成标题')
+})
+
+// 显示所有 chunk 的类型标签（去重）
 const allTypes = computed(() => {
   const types = new Set()
-  props.records.forEach(r => {
-    if (r.content_type) types.add(r.content_type)
-  })
+  const record = rootRecord.value
+  if (record.chunks) {
+    record.chunks.forEach(chunk => {
+      if (chunk.metadata?.contentType) types.add(chunk.metadata.contentType)
+    })
+  }
   return Array.from(types)
 })
 
-// 显示所有记录的情绪标签（去错）
+// 显示所有 chunk 的情绪标签（去重）
 const allMoods = computed(() => {
   const moods = new Set()
-  props.records.forEach(r => {
-    (r.mood || []).forEach(m => moods.add(m))
-  })
+  const record = rootRecord.value
+  if (record.chunks) {
+    record.chunks.forEach(chunk => {
+      (chunk.metadata?.mood || []).forEach(m => moods.add(m))
+    })
+  }
   return Array.from(moods)
 })
 
@@ -57,14 +70,14 @@ const hasProcessing = computed(() =>
 
     <!-- 原始内容摘要 -->
     <div class="record-content">
-      {{ rootRecord.content.substring(0, 60) }}{{ rootRecord.content.length > 60 ? '...' : '' }}
+      {{ rootRecord.segment?.[0]?.substring(0, 60) || rootRecord.content.substring(0, 60) }}{{ (rootRecord.segment?.[0] || rootRecord.content).length > 60 ? '...' : '' }}
     </div>
 
     <!-- 拆分后的标题预览 -->
     <div class="split-titles">
-      <span v-for="(r, i) in records" :key="r.id" class="split-title-item">
+      <span v-for="(title, i) in chunkTitles" :key="i" class="split-title-item">
         <span class="split-index">{{ i + 1 }}</span>
-        {{ r.title || r.content.substring(0, 20) + '...' }}
+        {{ title }}
       </span>
     </div>
 

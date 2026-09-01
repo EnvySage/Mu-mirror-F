@@ -19,7 +19,15 @@ const isDone = computed(() => props.record.status === 'done')
 
 const timeText = computed(() => timeAgo(props.record.created_at))
 
-const typeLabel = computed(() => typeMap[props.record.content_type] || props.record.content_type)
+// 从第一个 chunk 获取元数据
+const firstChunk = computed(() => props.record.chunks?.[0])
+const typeLabel = computed(() => typeMap[firstChunk.value?.metadata?.contentType] || firstChunk.value?.metadata?.contentType || '')
+const displayContent = computed(() => {
+  if (props.record.segment && props.record.segment.length > 0) {
+    return props.record.segment[0]
+  }
+  return props.record.content
+})
 </script>
 
 <template>
@@ -36,9 +44,9 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
 
         <!-- 内容标签（仅完成和待审核状态显示） -->
         <template v-if="isDone || isPendingReview">
-          <span class="tag tag-type">{{ typeLabel }}</span>
+          <span v-if="typeLabel" class="tag tag-type">{{ typeLabel }}</span>
           <span
-            v-for="m in (record.mood || [])"
+            v-for="m in (firstChunk?.metadata?.mood || [])"
             :key="m"
             :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
           >{{ moodMap[m] || m }}</span>
@@ -46,13 +54,13 @@ const typeLabel = computed(() => typeMap[props.record.content_type] || props.rec
       </div>
     </div>
     <div class="record-title">
-      {{ isProcessing || isFailed ? record.content.substring(0, 30) + '...' : record.title }}
+      {{ isProcessing || isFailed ? displayContent.substring(0, 30) + '...' : firstChunk?.metadata?.title || '未生成标题' }}
     </div>
     <div v-if="isDone || isPendingReview" class="record-summary">
-      {{ record.summary }}
+      {{ firstChunk?.metadata?.summary }}
     </div>
-    <div v-if="(isDone || isPendingReview) && record.keywords && record.keywords.length" class="record-keywords">
-      <span v-for="k in record.keywords" :key="k" class="keyword">#{{ k }}</span>
+    <div v-if="(isDone || isPendingReview) && firstChunk?.metadata?.keywords?.length" class="record-keywords">
+      <span v-for="k in firstChunk.metadata.keywords" :key="k" class="keyword">#{{ k }}</span>
     </div>
   </div>
 </template>

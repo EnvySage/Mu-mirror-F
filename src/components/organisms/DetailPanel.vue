@@ -12,27 +12,19 @@ const record = computed(() => {
   return recordsStore.getById(ui.selectedRecordId)
 })
 
-// 拆分相关
+// 拆分相关（使用 chunks 判断）
 const isSplit = computed(() => record.value && recordsStore.isSplitRecord(record.value))
-const splitGroup = computed(() => {
-  if (!record.value) return []
-  const rootId = recordsStore.getSplitRootId(record.value)
-  return recordsStore.getSplitGroup(rootId)
-})
-const isSplitRoot = computed(() => record.value && recordsStore.isSplitRoot(record.value))
+const displayContent = computed(() => record.value ? recordsStore.getDisplayContent(record.value) : '')
 
-// 当前选中的拆分记录索引
-const activeSplitIndex = ref(0)
-const activeSplitRecord = computed(() => splitGroup.value[activeSplitIndex.value] || null)
-
-// 拆分组的编辑数据
-const splitEditData = ref([])
-
-// Review state
+// Review state - 单条记录审核时使用
 const reviewData = ref(null)
 const reviewKeywords = ref('')
 const submitting = ref(false)
 const actionError = ref(null)
+
+// 拆分审核相关
+const activeSplitIndex = ref(0)
+const splitEditData = ref([])
 
 // Processing animation
 const processingStep = ref(-1)
@@ -44,52 +36,68 @@ function startProcessing() {
   setTimeout(() => { processingStep.value = 2 }, 1600)
 }
 
-// 初始化拆分组编辑数据
-function initSplitEditData() {
-  splitEditData.value = splitGroup.value.map(r => ({
-    id: r.id,
-    title: r.title || '',
-    content_type: r.content_type || 'note',
-    mood: r.mood || ['calm'],
-    keywords: (r.keywords || []).join(', '),
-  }))
+// 初始化拆分编辑数据
+function initSplitEditData(r) {
+  if (r.chunks && r.chunks.length > 0) {
+    splitEditData.value = r.chunks.map(chunk => ({
+      id: chunk.id,
+      segment: chunk.segment || '',
+      title: chunk.metadata?.title || '',
+      summary: chunk.metadata?.summary || '',
+      content_type: chunk.metadata?.contentType || 'note',
+      mood: chunk.metadata?.mood || ['calm'],
+      keywords: (chunk.metadata?.keywords || []).join(', '),
+    }))
+    activeSplitIndex.value = 0
+  }
 }
 
-watch(() => ui.selectedRecordId, (id) => {
-  if (!id) return
-  const r = recordsStore.getById(id)
+// 根据记录状态设置详情模式
+function updateDetailMode(r) {
   if (!r) return
-  actionError.value = null
-  activeSplitIndex.value = 0
 
-  // 判断是否为拆分组（原记录或子记录）
-  const isSplit = recordsStore.isSplitRecord(r)
-  const isRoot = recordsStore.isSplitRoot(id)
-
-  if (isRoot || isSplit) {
-    // 如果是子记录，需要切换到原记录
-    if (isSplit) {
-      const rootId = recordsStore.getSplitRootId(r)
-      ui.selectedRecordId = rootId
-      return
-    }
-    ui.detailMode = 'split'
-    initSplitEditData()
-  } else if (r.status === 'processing') {
+  if (r.status === 'processing') {
     ui.detailMode = 'processing'
     startProcessing()
   } else if (r.status === 'reviewing') {
-    reviewData.value = {
-      title: r.title || '',
-      content_type: r.content_type || 'note',
-      mood: r.mood || ['calm'],
+    if (recordsStore.isSplitRecord(r)) {
+      // 拆分记录：初始化拆分编辑数据
+      initSplitEditData(r)
+      ui.detailMode = 'split'
+    } else {
+      // 单条记录：初始化审核数据
+      const chunk = r.chunks?.[0]
+      reviewData.value = {
+        segment: r.segment?.[0] || '',
+        title: chunk?.metadata?.title || '',
+        content_type: chunk?.metadata?.contentType || 'note',
+        mood: chunk?.metadata?.mood || ['calm'],
+      }
+      reviewKeywords.value = (chunk?.metadata?.keywords || []).join(', ')
+      ui.detailMode = 'review'
     }
-    reviewKeywords.value = (r.keywords || []).join(', ')
-    ui.detailMode = 'review'
   } else if (r.status === 'failed') {
     ui.detailMode = 'failed'
   } else {
     ui.detailMode = 'view'
+  }
+}
+
+watch(() => ui.selectedRecordId, async (id) => {
+  if (!id) return
+  actionError.value = null
+  activeSplitIndex.value = 0
+
+  // 从后端获取最新数据，确保状态同步
+  const r = await recordsStore.fetchRecord(id)
+  if (!r) return
+  updateDetailMode(r)
+})
+
+// 监听记录数据变化，同步更新详情模式
+watch(record, (newRecord) => {
+  if (newRecord && ui.selectedRecordId) {
+    updateDetailMode(newRecord)
   }
 })
 
@@ -110,6 +118,12 @@ function switchSplitRecord(index) {
 // 获取当前编辑数据
 const currentEditData = computed(() => splitEditData.value[activeSplitIndex.value] || null)
 
+// 获取当前活跃的 chunk
+const activeChunk = computed(() => {
+  if (!record.value?.chunks) return null
+  return record.value.chunks[activeSplitIndex.value] || null
+})
+
 // 切换情绪
 function toggleSplitMood(mood) {
   if (!currentEditData.value) return
@@ -125,16 +139,20 @@ async function confirmAllSplit() {
   actionError.value = null
 
   try {
-    // 先更新每条记录的标签
+    // 先更新每个 chunk
     for (const editData of splitEditData.value) {
       const keywords = editData.keywords.split(/[,，]/).map(k => k.trim()).filter(Boolean)
       const modifications = {
-        title: editData.title,
-        contentType: editData.content_type,
-        mood: editData.mood,
-        keywords,
+        segment: editData.segment,
+        metadata: {
+          title: editData.title,
+          summary: editData.summary,
+          contentType: editData.content_type,
+          mood: editData.mood,
+          keywords,
+        }
       }
-      const updateSuccess = await recordsStore.updateRecord(editData.id, modifications)
+      const updateSuccess = await recordsStore.updateChunk(editData.id, modifications)
       if (!updateSuccess) {
         actionError.value = '更新失败，请重试'
         submitting.value = false
@@ -142,17 +160,13 @@ async function confirmAllSplit() {
       }
     }
 
-    // 再批量确认
-    for (const editData of splitEditData.value) {
-      const confirmSuccess = await recordsStore.confirmReview(editData.id)
-      if (!confirmSuccess) {
-        actionError.value = '确认失败，请重试'
-        submitting.value = false
-        return
-      }
+    // 再确认记录
+    const confirmSuccess = await recordsStore.confirmReview(record.value.id)
+    if (confirmSuccess) {
+      close()
+    } else {
+      actionError.value = '确认失败，请重试'
     }
-
-    close()
   } catch (err) {
     actionError.value = '操作失败，请重试'
   }
@@ -166,15 +180,12 @@ async function rejectAllSplit() {
   actionError.value = null
 
   try {
-    for (const editData of splitEditData.value) {
-      const success = await recordsStore.deleteRecord(editData.id)
-      if (!success) {
-        actionError.value = '删除失败，请重试'
-        submitting.value = false
-        return
-      }
+    const success = await recordsStore.deleteRecord(record.value.id)
+    if (success) {
+      close()
+    } else {
+      actionError.value = '删除失败，请重试'
     }
-    close()
   } catch (err) {
     actionError.value = '操作失败，请重试'
   }
@@ -199,14 +210,24 @@ async function confirmReview() {
   actionError.value = null
 
   const keywords = reviewKeywords.value.split(/[,，]/).map(k => k.trim()).filter(Boolean)
-  const modifications = {
-    title: reviewData.value.title,
-    contentType: reviewData.value.content_type,
-    mood: reviewData.value.mood,
-    keywords,
+  const chunk = record.value.chunks?.[0]
+  if (!chunk) {
+    actionError.value = '数据异常，请重试'
+    submitting.value = false
+    return
   }
 
-  const updateSuccess = await recordsStore.updateRecord(record.value.id, modifications)
+  const modifications = {
+    segment: reviewData.value.segment,
+    metadata: {
+      title: reviewData.value.title,
+      contentType: reviewData.value.content_type,
+      mood: reviewData.value.mood,
+      keywords,
+    }
+  }
+
+  const updateSuccess = await recordsStore.updateChunk(chunk.id, modifications)
   if (!updateSuccess) {
     actionError.value = '更新失败，请重试'
     submitting.value = false
@@ -294,11 +315,11 @@ async function deleteRecord() {
           <div class="review-original-text">{{ record.content }}</div>
         </div>
 
-        <!-- 序号切换栏 -->
-        <div v-if="splitGroup.length > 0" class="split-tabs">
+        <!-- 片段切换栏 -->
+        <div v-if="record.chunks && record.chunks.length > 0" class="split-tabs">
           <button
-            v-for="(r, i) in splitGroup"
-            :key="r.id"
+            v-for="(chunk, i) in record.chunks"
+            :key="chunk.id"
             :class="['split-tab', { active: i === activeSplitIndex }]"
             @click="switchSplitRecord(i)"
           >
@@ -307,12 +328,18 @@ async function deleteRecord() {
           </button>
         </div>
 
-        <!-- 当前记录编辑区 -->
+        <!-- 当前 chunk 编辑区 -->
         <div v-if="currentEditData" class="split-edit-card">
+          <!-- 片段内容（可编辑） -->
+          <div class="review-field">
+            <div class="section-label">主题片段</div>
+            <textarea v-model="currentEditData.segment" class="review-textarea" rows="3" />
+          </div>
+
           <!-- 摘要内容（只读） -->
           <div class="review-field">
             <div class="section-label">摘要</div>
-            <div class="split-content-preview">{{ activeSplitRecord?.summary || '暂无摘要' }}</div>
+            <div class="split-content-preview">{{ currentEditData.summary || '暂无摘要' }}</div>
           </div>
 
           <div class="review-field">
@@ -383,7 +410,7 @@ async function deleteRecord() {
         <div class="failed-desc">AI 处理过程中出现错误，请重试或删除该记录</div>
         <div class="review-original">
           <div class="section-label">原始内容</div>
-          <div class="review-original-text">{{ record.content }}</div>
+          <div class="review-original-text">{{ displayContent }}</div>
         </div>
         <div class="failed-actions">
           <button class="btn-retry" :disabled="submitting" @click="retryProcessing">
@@ -399,9 +426,13 @@ async function deleteRecord() {
       <div v-else-if="ui.detailMode === 'review' && reviewData" class="review-view">
         <div class="review-original">
           <div class="section-label">原始内容</div>
-          <div class="review-original-text">{{ record.content }}</div>
+          <div class="review-original-text">{{ displayContent }}</div>
         </div>
         <div class="review-card">
+          <div class="review-field">
+            <div class="section-label">主题片段</div>
+            <textarea v-model="reviewData.segment" class="review-textarea" rows="3" />
+          </div>
           <div class="review-field">
             <div class="section-label">标题</div>
             <input v-model="reviewData.title" class="review-keywords-input" />
@@ -447,33 +478,83 @@ async function deleteRecord() {
       <div v-else-if="ui.detailMode === 'view'">
         <div class="review-original">
           <div class="section-label">原始内容</div>
-          <div class="review-original-text">{{ record.content }}</div>
+          <div class="review-original-text">{{ displayContent }}</div>
         </div>
-        <div class="review-card">
-          <div class="review-card-title">{{ record.title }}</div>
-          <div class="review-field">
-            <div class="section-label">类型</div>
-            <div class="review-field-tags">
-              <span class="tag tag-type">{{ typeMap[record.content_type] || record.content_type }}</span>
+        <!-- 拆分记录显示多个 chunk -->
+        <template v-if="isSplit">
+          <div v-for="(chunk, i) in record.chunks" :key="chunk.id" class="review-card">
+            <div class="review-card-header">
+              <span class="chunk-index">{{ i + 1 }}</span>
+              <div class="review-card-title">{{ chunk.metadata?.title || '未生成标题' }}</div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">主题片段</div>
+              <div class="split-content-preview">{{ chunk.segment }}</div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">摘要</div>
+              <div class="review-original-text">{{ chunk.metadata?.summary || '暂无摘要' }}</div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">类型</div>
+              <div class="review-field-tags">
+                <span class="tag tag-type">{{ typeMap[chunk.metadata?.contentType] || chunk.metadata?.contentType }}</span>
+              </div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">情绪</div>
+              <div class="review-field-tags">
+                <span
+                  v-for="m in (chunk.metadata?.mood || [])"
+                  :key="m"
+                  :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
+                >{{ moodMap[m] || m }}</span>
+              </div>
+            </div>
+            <div v-if="chunk.metadata?.keywords?.length" class="review-field">
+              <div class="section-label">关键词</div>
+              <div class="review-field-tags">
+                <span v-for="k in chunk.metadata.keywords" :key="k" class="keyword">#{{ k }}</span>
+              </div>
             </div>
           </div>
-          <div class="review-field">
-            <div class="section-label">情绪</div>
-            <div class="review-field-tags">
-              <span
-                v-for="m in (record.mood || [])"
-                :key="m"
-                :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
-              >{{ moodMap[m] || m }}</span>
+        </template>
+        <!-- 单条记录显示单个 chunk -->
+        <template v-else>
+          <div class="review-card">
+            <div class="review-card-title">{{ record.chunks?.[0]?.metadata?.title || '未生成标题' }}</div>
+            <div v-if="record.chunks?.[0]?.segment" class="review-field">
+              <div class="section-label">主题片段</div>
+              <div class="split-content-preview">{{ record.chunks[0].segment }}</div>
+            </div>
+            <div v-if="record.chunks?.[0]?.metadata?.summary" class="review-field">
+              <div class="section-label">摘要</div>
+              <div class="review-original-text">{{ record.chunks[0].metadata.summary }}</div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">类型</div>
+              <div class="review-field-tags">
+                <span class="tag tag-type">{{ typeMap[record.chunks?.[0]?.metadata?.contentType] || record.chunks?.[0]?.metadata?.contentType }}</span>
+              </div>
+            </div>
+            <div class="review-field">
+              <div class="section-label">情绪</div>
+              <div class="review-field-tags">
+                <span
+                  v-for="m in (record.chunks?.[0]?.metadata?.mood || [])"
+                  :key="m"
+                  :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
+                >{{ moodMap[m] || m }}</span>
+              </div>
+            </div>
+            <div v-if="record.chunks?.[0]?.metadata?.keywords?.length" class="review-field">
+              <div class="section-label">关键词</div>
+              <div class="review-field-tags">
+                <span v-for="k in record.chunks[0].metadata.keywords" :key="k" class="keyword">#{{ k }}</span>
+              </div>
             </div>
           </div>
-          <div v-if="record.keywords && record.keywords.length" class="review-field">
-            <div class="section-label">关键词</div>
-            <div class="review-field-tags">
-              <span v-for="k in record.keywords" :key="k" class="keyword">#{{ k }}</span>
-            </div>
-          </div>
-        </div>
+        </template>
       </div>
     </div>
   </div>
@@ -667,7 +748,12 @@ async function deleteRecord() {
 .review-original { background: var(--surface); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; border: 0.5px solid var(--border); }
 .review-original-text { font-size: 14px; color: var(--text-primary); line-height: 1.7; }
 .review-card { background: var(--surface); border-radius: var(--radius-md); padding: 20px; margin-bottom: 12px; border: 0.5px solid var(--border); }
-.review-card-title { font-size: 16px; font-weight: 600; margin-bottom: 18px; }
+.review-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.chunk-index {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; border-radius: 50%; flex-shrink: 0;
+}
+.review-card-title { font-size: 16px; font-weight: 600; flex: 1; }
 .review-field { margin-bottom: 18px; }
 .review-field:last-child { margin-bottom: 0; }
 .review-field-tags { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -684,6 +770,12 @@ async function deleteRecord() {
   font-size: 14px; font-family: var(--font); color: var(--text-primary); outline: none; transition: border-color 0.2s;
 }
 .review-keywords-input:focus { border-color: var(--accent); }
+.review-textarea {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 14px; font-family: var(--font); color: var(--text-primary); outline: none; transition: border-color 0.2s;
+  resize: vertical; min-height: 80px; line-height: 1.6;
+}
+.review-textarea:focus { border-color: var(--accent); }
 
 /* Review actions */
 .review-actions { display: flex; gap: 12px; margin-top: 24px; }

@@ -5,7 +5,7 @@ import {
   getRecords as apiGetRecords,
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
-  updateRecord as apiUpdateRecord,
+  updateChunk as apiUpdateChunk,
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
   getCalendarMarks as apiGetCalendarMarks,
@@ -14,14 +14,29 @@ import {
 /** @typedef {'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
 
 /**
+ * @typedef {Object} ChunkMetadata
+ * @property {string} title
+ * @property {string} summary
+ * @property {string} contentType
+ * @property {string[]} mood
+ * @property {string[]} keywords
+ */
+
+/**
+ * @typedef {Object} ChunkVO
+ * @property {number} id
+ * @property {number} recordId
+ * @property {string} segment
+ * @property {ChunkMetadata} metadata
+ * @property {boolean} hasEmbedding
+ */
+
+/**
  * @typedef {Object} Record
  * @property {string|number} id
  * @property {string} content
- * @property {string} [title]
- * @property {string} [summary]
- * @property {string} [content_type]
- * @property {string[]} [mood]
- * @property {string[]} [keywords]
+ * @property {string[]} [segment]
+ * @property {ChunkVO[]} [chunks]
  * @property {RecordStatus} status
  * @property {boolean} [user_reviewed]
  * @property {string} created_at
@@ -122,22 +137,29 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
-   * 更新记录（仅审查状态下）
-   * @param {string|number} id
-   * @param {Object} data - 更新数据（title, summary, contentType, mood, keywords）
+   * 更新 Chunk（仅审查状态下）
+   * @param {string|number} chunkId
+   * @param {Object} data - 更新数据（segment, metadata）
    * @returns {Promise<boolean>}
    */
-  async function updateRecord(id, data) {
+  async function updateChunk(chunkId, data) {
     try {
-      const res = await apiUpdateRecord(id, data)
-      // 更新本地记录
-      const index = records.value.findIndex(r => r.id === id)
-      if (index !== -1) {
-        records.value[index] = res.data
+      const res = await apiUpdateChunk(chunkId, data)
+      // 更新本地记录中对应的 chunk
+      const updatedChunk = res.data
+      const recordIndex = records.value.findIndex(r => r.id === updatedChunk.recordId)
+      if (recordIndex !== -1) {
+        const record = records.value[recordIndex]
+        if (record.chunks) {
+          const chunkIndex = record.chunks.findIndex(c => c.id === chunkId)
+          if (chunkIndex !== -1) {
+            record.chunks[chunkIndex] = updatedChunk
+          }
+        }
       }
       return true
     } catch (err) {
-      console.error('Failed to update record:', err)
+      console.error('Failed to update chunk:', err)
       return false
     }
   }
@@ -189,41 +211,24 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
-   * 判断是否为拆分记录
+   * 判断是否为拆分记录（有多个 chunks）
    * @param {Record} record
    * @returns {boolean}
    */
   function isSplitRecord(record) {
-    return record.original_record_id !== null && record.original_record_id !== undefined
+    return record.chunks && record.chunks.length > 1
   }
 
   /**
-   * 获取拆分组的根 ID
+   * 获取记录的显示内容（优先用 segment 数组，没有则用 content）
    * @param {Record} record
-   * @returns {string|number}
+   * @returns {string}
    */
-  function getSplitRootId(record) {
-    return record.original_record_id || record.id
-  }
-
-  /**
-   * 获取同一拆分组的所有记录
-   * @param {string|number} rootId
-   * @returns {Record[]}
-   */
-  function getSplitGroup(rootId) {
-    return records.value.filter(r =>
-      r.id === rootId || r.original_record_id === rootId
-    )
-  }
-
-  /**
-   * 判断记录是否为拆分组的原记录（有子记录）
-   * @param {string|number} id
-   * @returns {boolean}
-   */
-  function isSplitRoot(id) {
-    return records.value.some(r => r.original_record_id === id)
+  function getDisplayContent(record) {
+    if (record.segment && record.segment.length > 0) {
+      return record.segment.join('\n\n')
+    }
+    return record.content
   }
 
   /**
@@ -240,30 +245,19 @@ export const useRecordsStore = defineStore('records', () => {
       const key = dateLabel(r.created_at)
       if (!groups[key]) groups[key] = []
 
-      // 如果是拆分记录（子记录）
-      if (isSplitRecord(r)) {
-        const rootId = getSplitRootId(r)
-        const rootRecord = records.value.find(rec => rec.id === rootId)
+      // 按时间戳分组：同一秒内的记录视为一组
+      const timestamp = new Date(r.created_at).getTime()
+      const sameTimestampRecords = records.value.filter(rec => {
+        const recTime = new Date(rec.created_at).getTime()
+        return Math.abs(recTime - timestamp) < 1000 && !processedIds.has(rec.id)
+      })
 
-        // 如果原记录存在且未处理，将整组添加
-        if (rootRecord && !processedIds.has(rootId)) {
-          const group = getSplitGroup(rootId)
-          groups[key].push(group)
-          group.forEach(item => processedIds.add(item.id))
-        } else if (!rootRecord) {
-          // 原记录不存在（可能被删除），单独显示
-          groups[key].push(r)
-          processedIds.add(r.id)
-        }
-      }
-      // 如果是原记录（有子记录）
-      else if (isSplitRoot(r.id)) {
-        const group = getSplitGroup(r.id)
-        groups[key].push(group)
-        group.forEach(item => processedIds.add(item.id))
-      }
-      // 普通记录
-      else {
+      if (sameTimestampRecords.length > 1) {
+        // 同一时间戳有多条记录，作为一组
+        groups[key].push(sameTimestampRecords)
+        sameTimestampRecords.forEach(item => processedIds.add(item.id))
+      } else {
+        // 单条记录，直接添加
         groups[key].push(r)
         processedIds.add(r.id)
       }
@@ -348,7 +342,7 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecords,
     fetchRecord,
     createRecord,
-    updateRecord,
+    updateChunk,
     deleteRecord,
     confirmReview,
     fetchCalendarMarks,
@@ -356,8 +350,6 @@ export const useRecordsStore = defineStore('records', () => {
     getByDate,
     getRecordDates,
     isSplitRecord,
-    getSplitRootId,
-    getSplitGroup,
-    isSplitRoot,
+    getDisplayContent,
   }
 })
