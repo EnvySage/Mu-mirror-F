@@ -317,7 +317,7 @@ function handleLogout() {
   background: var(--bg); overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
-.page-content { padding: 12px 16px 32px; }
+.page-content { padding: 12px 16px calc(32px + var(--nav-height) + var(--safe-bottom)); }
 
 .test-result {
   padding: 12px 16px; margin-bottom: 16px;

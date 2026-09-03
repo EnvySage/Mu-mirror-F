@@ -97,7 +97,7 @@ function openRecord(id) {
   background: var(--bg); overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
-.page-content { padding: 12px 16px 32px; }
+.page-content { padding: 12px 16px calc(32px + var(--nav-height) + var(--safe-bottom)); }
 
 @media (min-width: 900px) {
   .page-content { padding: 20px 36px 36px; }

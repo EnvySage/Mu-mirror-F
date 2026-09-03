@@ -18,6 +18,9 @@ export const useUIStore = defineStore('ui', () => {
   /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed' | 'split'>} */
   const detailMode = ref('view')
 
+  /** 拆分组中所有记录是否都已完成（用于禁用操作按钮） */
+  const splitAllDone = ref(false)
+
   const showDetail = ref(false)
 
   function switchPage(page) {
@@ -48,6 +51,7 @@ export const useUIStore = defineStore('ui', () => {
     sidebarSelectedDate,
     selectedRecordId,
     detailMode,
+    splitAllDone,
     showDetail,
     switchPage,
     openWriteModal,
