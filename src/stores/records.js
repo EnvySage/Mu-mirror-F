@@ -6,8 +6,11 @@ import {
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
   updateChunk as apiUpdateChunk,
+  deleteChunk as apiDeleteChunk,
+  createChunk as apiCreateChunk,
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
+  retryRecord as apiRetryRecord,
   getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
 
@@ -115,6 +118,8 @@ export const useRecordsStore = defineStore('records', () => {
       const index = records.value.findIndex(r => r.id === id)
       if (index !== -1) {
         records.value[index] = res.data
+      } else {
+        records.value.unshift(res.data)
       }
       return res.data
     } catch (err) {
@@ -132,35 +137,106 @@ export const useRecordsStore = defineStore('records', () => {
     const res = await apiCreateRecord({ content })
     const newRecord = res.data
     // 添加到本地列表开头
-    records.value.unshift(newRecord)
+    if (!records.value.some(r => r.id === newRecord.id)) {
+      records.value.unshift(newRecord)
+    }
     return newRecord
   }
 
   /**
-   * 更新 Chunk（仅审查状态下）
+   * 更新 Chunk（扁平结构：segment + 元数据字段，仅 REVIEWING）
    * @param {string|number} chunkId
-   * @param {Object} data - 更新数据（segment, metadata）
+   * @param {Object} data - { segment, title, summary, contentType, mood, keywords }
    * @returns {Promise<boolean>}
    */
   async function updateChunk(chunkId, data) {
     try {
-      const res = await apiUpdateChunk(chunkId, data)
-      // 更新本地记录中对应的 chunk
-      const updatedChunk = res.data
-      const recordIndex = records.value.findIndex(r => r.id === updatedChunk.recordId)
-      if (recordIndex !== -1) {
-        const record = records.value[recordIndex]
-        if (record.chunks) {
-          const chunkIndex = record.chunks.findIndex(c => c.id === chunkId)
-          if (chunkIndex !== -1) {
-            record.chunks[chunkIndex] = updatedChunk
-          }
+      await apiUpdateChunk(chunkId, data)
+      // 后端返回的 ChunkVO 不含完整状态，直接按参数更新本地缓存
+      applyChunkEdit(chunkId, data)
+      return true
+    } catch (err) {
+      console.error('Failed to update chunk:', err)
+      error.value = err.message || '更新片段失败'
+      return false
+    }
+  }
+
+  /**
+   * 将扁平字段合并进本地缓存的 chunk.metadata
+   * @param {string|number} chunkId
+   * @param {Object} data
+   */
+  function applyChunkEdit(chunkId, data) {
+    for (const record of records.value) {
+      if (!record.chunks) continue
+      const chunk = record.chunks.find(c => c.id === chunkId)
+      if (!chunk) continue
+      if (data.segment !== undefined) chunk.segment = data.segment
+      const meta = { ...(chunk.metadata || {}) }
+      for (const key of ['title', 'summary', 'contentType', 'mood', 'keywords']) {
+        if (data[key] !== undefined) meta[key] = data[key]
+      }
+      chunk.metadata = meta
+      return
+    }
+  }
+
+  /**
+   * 删除 Chunk（仅 REVIEWING；后端实现前会失败）
+   * @param {string|number} chunkId
+   * @returns {Promise<boolean>}
+   */
+  async function deleteChunk(chunkId) {
+    try {
+      await apiDeleteChunk(chunkId)
+      for (const record of records.value) {
+        if (!record.chunks) continue
+        if (record.chunks.some(c => c.id === chunkId)) {
+          record.chunks = record.chunks.filter(c => c.id !== chunkId)
+          return true
         }
       }
       return true
     } catch (err) {
-      console.error('Failed to update chunk:', err)
+      console.error('Failed to delete chunk:', err)
+      error.value = err.message || '删除片段失败'
       return false
+    }
+  }
+
+  /**
+   * 新增 Chunk（后端同步单段分类回填 metadata，失败不阻断）
+   * @param {string|number} recordId
+   * @param {string} segment
+   * @returns {Promise<Object|null>} 新建的 ChunkVO（后端未实现时返回占位对象）
+   */
+  async function addChunk(recordId, segment) {
+    try {
+      const res = await apiCreateChunk(recordId, { segment })
+      const chunk = res.data
+      const record = records.value.find(r => r.id === recordId)
+      if (record) {
+        if (!record.chunks) record.chunks = []
+        record.chunks.push(chunk)
+      }
+      return chunk
+    } catch (err) {
+      // 端点未就绪（404/405）：本地占位，confirm 时后端兜底补分类
+      console.warn('createChunk failed, using local placeholder:', err.message)
+      const placeholder = {
+        id: `local_${Date.now()}`,
+        recordId,
+        segment,
+        metadata: {},
+        hasEmbedding: false,
+      }
+      const record = records.value.find(r => r.id === recordId)
+      if (record) {
+        if (!record.chunks) record.chunks = []
+        record.chunks.push(placeholder)
+      }
+      return placeholder
     }
   }
 
@@ -177,27 +253,51 @@ export const useRecordsStore = defineStore('records', () => {
       return true
     } catch (err) {
       console.error('Failed to delete record:', err)
+      error.value = err.message || '删除记录失败'
       return false
     }
   }
 
   /**
-   * 确认审查完成
+   * 确认审查完成（阻塞数秒——补分类 + Embedding）
    * @param {string|number} id
-   * @returns {Promise<boolean>}
+   * @returns {Promise<Object|null>} 更新后的记录（失败返回 null）
    */
   async function confirmReview(id) {
     try {
       const res = await apiConfirmReview(id)
-      // 更新本地记录
       const index = records.value.findIndex(r => r.id === id)
-      if (index !== -1) {
+      if (index !== -1 && res.data) {
         records.value[index] = res.data
       }
-      return true
+      return res.data || records.value[index] || null
     } catch (err) {
       console.error('Failed to confirm review:', err)
-      return false
+      error.value = err.message || '确认失败'
+      return null
+    }
+  }
+
+  /**
+   * 重试失败记录（重跑管道；后端未实现时回退为删除+重建）
+   * @param {string|number} id
+   * @returns {Promise<Object|null>} 新的记录
+   */
+  async function retryRecord(id) {
+    const old = records.value.find(r => r.id === id)
+    try {
+      const res = await apiRetryRecord(id)
+      const updated = res.data
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1 && updated) records.value[index] = updated
+      return updated || null
+    } catch (err) {
+      // 后端未实现 retry：回退为软删除 + 重新提交原文
+      console.warn('retry endpoint failed, falling back to recreate:', err.message)
+      const content = old ? old.content : ''
+      await deleteRecord(id)
+      if (!content) return null
+      return createRecord(content)
     }
   }
 
@@ -343,8 +443,11 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecord,
     createRecord,
     updateChunk,
+    deleteChunk,
+    addChunk,
     deleteRecord,
     confirmReview,
+    retryRecord,
     fetchCalendarMarks,
     getById,
     getByDate,

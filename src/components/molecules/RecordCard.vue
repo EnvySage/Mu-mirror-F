@@ -10,7 +10,7 @@ const props = defineProps({
   isSplitChild: { type: Boolean, default: false },
 })
 
-defineEmits(['click'])
+const emit = defineEmits(['click', 'delete'])
 
 const isProcessing = computed(() => props.record.status === 'processing')
 const isPendingReview = computed(() => props.record.status === 'reviewing')
@@ -28,12 +28,23 @@ const displayContent = computed(() => {
   }
   return props.record.content
 })
+
+/** REVIEWING / FAILED 可软删除（8.2 允许的操作） */
+const canDelete = computed(() => isPendingReview.value || isFailed.value)
+
+function onDelete(e) {
+  e.stopPropagation()
+  emit('delete', props.record)
+}
 </script>
 
 <template>
   <div :class="['record-card', { active, 'is-failed': isFailed, 'is-pending': isPendingReview, 'is-split-child': isSplitChild }]" @click="$emit('click')">
     <!-- 拆分序号 -->
     <div v-if="isSplitChild" class="split-index">{{ splitIndex }}</div>
+    <button v-if="canDelete" class="record-delete" title="删除记录" @click="onDelete">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <div class="record-tags">
@@ -79,6 +90,18 @@ const displayContent = computed(() => {
 .record-card.is-pending { border-color: var(--warning); }
 .record-card.is-split-child { margin-left: 8px; }
 .record-card:active { transform: scale(0.98); }
+
+/* 软删除按钮（REVIEWING / FAILED） */
+.record-delete {
+  position: absolute; top: 12px; right: 12px;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: transparent; color: var(--text-tertiary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; opacity: 0; padding: 0;
+}
+.record-card:hover .record-delete { opacity: 1; }
+.record-delete:hover { background: var(--danger-light); color: var(--danger); }
+.record-delete svg { width: 14px; height: 14px; }
 
 /* 拆分序号 */
 .split-index {

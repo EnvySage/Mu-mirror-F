@@ -20,7 +20,8 @@ import {
  * @property {string} [embedding_base_url] - Embedding API 地址
  * @property {string} [embedding_api_key] - Embedding API Key（脱敏）
  * @property {string} embedding_model - Embedding 模型名
- * @property {string} review_mode - 审核模式
+ * @property {string} review_mode - 审核模式（manual / auto）
+ * @property {number} [rag_half_life] - 检索时间衰减半衰期（7-365 天，默认 30）
  * @property {string} [created_at]
  * @property {string} [updated_at]
  */
@@ -38,6 +39,7 @@ export const useSettingsStore = defineStore('settings', () => {
     embedding_api_key: '',
     embedding_model: 'BAAI/bge-m3',
     review_mode: 'manual',
+    rag_half_life: 30,
   })
 
   const loading = ref(false)
@@ -67,6 +69,7 @@ export const useSettingsStore = defineStore('settings', () => {
   /**
    * 更新配置（部分更新）
    * @param {Object} data - 要更新的字段（snake_case）
+   * @returns {Promise<boolean>}
    */
   async function updateSettings(data) {
     loading.value = true
@@ -81,9 +84,13 @@ export const useSettingsStore = defineStore('settings', () => {
       const res = await apiUpdateSettings(camelData)
       if (res.data) {
         settings.value = res.data
+      } else {
+        // 后端部分更新可能不回传全量，本地合并已提交字段
+        settings.value = { ...settings.value, ...data }
       }
       return true
     } catch (err) {
+      // 维度校验等后端约束：透出后端 message（如"当前版本仅支持 1024 维模型"）
       error.value = err.message || '更新配置失败'
       console.error('Failed to update settings:', err)
       return false

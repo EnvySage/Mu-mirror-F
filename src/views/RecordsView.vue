@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { useToastStore } from '@/stores/toast'
 import { formatFullDate } from '@/utils/time'
 import PageHeader from '@/components/organisms/PageHeader.vue'
 import RecordCard from '@/components/molecules/RecordCard.vue'
@@ -14,6 +15,7 @@ const props = defineProps({
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
+const toast = useToastStore()
 
 const grouped = computed(() => recordsStore.groupedRecordsWithSplit)
 const countText = computed(() => recordsStore.totalCount > 0 ? recordsStore.totalCount + ' 条记录' : '')
@@ -61,6 +63,32 @@ watch(() => ui.sidebarSelectedDate, (newDate) => {
   }
 })
 
+// ---- 轮询（8.2）：列表中存在 processing 记录时定时刷新 ----
+let pollTimer = null
+
+function stopListPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+function scheduleListPolling() {
+  stopListPolling()
+  if (!recordsStore.processingRecords.length) return
+  pollTimer = setTimeout(async () => {
+    await recordsStore.fetchRecords(filterDate.value
+      ? { startDate: filterDate.value, endDate: filterDate.value }
+      : undefined)
+    scheduleListPolling()
+  }, 3000)
+}
+
+watch(() => recordsStore.processingRecords.length, (n) => {
+  if (n > 0 && !pollTimer) scheduleListPolling()
+  if (n === 0) stopListPolling()
+}, { immediate: true })
+
 function selectRecord(id) {
   ui.selectedRecordId = id
   ui.showDetail = true
@@ -73,6 +101,14 @@ function selectSplitGroup(records) {
     ui.selectedRecordId = records[0].id
     ui.showDetail = true
   }
+}
+
+/** 列表内软删除（REVIEWING / FAILED） */
+async function onDeleteRecord(record) {
+  if (!window.confirm('确定删除这条记录？软删除后不可恢复。')) return
+  const ok = await recordsStore.deleteRecord(record.id)
+  if (ok) toast.success('记录已删除')
+  else toast.error(recordsStore.error || '删除失败，请重试')
 }
 </script>
 
@@ -112,6 +148,7 @@ function selectSplitGroup(records) {
               :record="item"
               :active="ui.selectedRecordId === item.id"
               @click="selectRecord(item.id)"
+              @delete="onDeleteRecord"
             />
           </template>
         </div>

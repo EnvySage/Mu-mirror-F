@@ -54,10 +54,12 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => {
     const res = response.data
-    // 后端统一返回 { code, message, data, success, timestamp }
-    if (res.success === false) {
+    // 后端统一返回 { code, message, data, timestamp }（R 包装无 success 字段）
+    // BusinessException 返回 HTTP 200 + code != 200，必须按 code 判错
+    if (res.code !== undefined && res.code !== 200) {
       const err = new Error(res.message || '请求失败')
       err.code = res.code
+      err.data = res.data
       return Promise.reject(err)
     }
     // 转换 data 中的 camelCase 为 snake_case

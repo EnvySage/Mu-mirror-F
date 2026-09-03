@@ -54,12 +54,20 @@ export const MOOD_COLOR_MAP = {
   stressed: 'anxious',
 }
 
-// 处理状态
-export const PROCESSING_STATUS = ['processing', 'done', 'failed']
+// 处理状态（8.2 状态机：processing / reviewing / done / failed）
+export const PROCESSING_STATUS = ['processing', 'reviewing', 'done', 'failed']
 
-// 审核模式
+/** 审核模式（5.5：manual 默认 / auto 无审核窗口） */
 export const REVIEW_MODES = [
-  { key: 'full_manual', label: '全手动', desc: '每条都审核' },
-  { key: 'semi_auto', label: '半自动', desc: 'AI 处理完确认（默认）' },
-  { key: 'full_auto', label: '全自动', desc: 'AI 直接保存' },
+  { key: 'manual', label: '手动审核', desc: 'AI 处理后需手动确认，可调整片段' },
+  { key: 'auto', label: '自动审核', desc: '无审核窗口，AI 自动确认（无法手动调整片段）' },
 ]
+
+/** 任务状态（仅 todo/plan 类内容显示，8.4） */
+export const TASK_STATUSES = [
+  { key: 'not_started', label: '未开始' },
+  { key: 'in_progress', label: '进行中' },
+  { key: 'completed', label: '已完成' },
+]
+
+export const taskStatusMap = Object.fromEntries(TASK_STATUSES.map(t => [t.key, t.label]))

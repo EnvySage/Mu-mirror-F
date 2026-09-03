@@ -1,14 +1,16 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import PageHeader from '@/components/organisms/PageHeader.vue'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const showEditModal = ref(false)
 const editField = ref('')
@@ -17,6 +19,11 @@ const editValue = ref('')
 const editPlaceholder = ref('')
 const editOptions = ref(null)
 const testResult = ref(null)
+
+/** rag_half_life 滑块草稿值（7-365，默认 30，6.4） */
+const halfLifeDraft = ref(30)
+const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
+const halfLifeEditing = ref(false)
 
 onMounted(() => {
   settingsStore.fetchSettings()
@@ -58,17 +65,53 @@ async function handleTestDb() {
   setTimeout(() => { testResult.value = null }, 3000)
 }
 
-/** 切换审核模式 */
+/** 切换审核模式（5.5：auto 无审核窗口，提示权衡） */
 async function toggleReviewMode() {
-  const newVal = settingsStore.settings.review_mode === 'auto' ? 'manual' : 'auto'
-  await settingsStore.updateSettings({ review_mode: newVal })
+  const toAuto = settingsStore.settings.review_mode !== 'auto'
+  if (toAuto && !window.confirm('开启自动审核后，AI 处理完成将直接确认入库，你没有手动调整片段和标签的机会。确定开启？')) {
+    return
+  }
+  const newVal = toAuto ? 'auto' : 'manual'
+  const ok = await settingsStore.updateSettings({ review_mode: newVal })
+  if (ok) {
+    if (toAuto) toast.info('已开启自动审核：无审核窗口，AI 自动确认')
+    else toast.success('已切换为手动审核')
+  } else {
+    toast.error(settingsStore.error || '保存失败')
+  }
 }
 
 /** 切换 Embedding 来源 */
 async function toggleEmbeddingSource() {
   const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
-  await settingsStore.updateSettings({ embedding_source: newVal })
+  const ok = await settingsStore.updateSettings({ embedding_source: newVal })
+  if (ok) toast.success(newVal === 'api' ? '已切换为远程 API 服务' : '已切换为本地服务')
+  else toast.error(settingsStore.error || '保存失败')
 }
+
+/** rag_half_life 滑块权重预览：衰减因子 = 1 / (1 + 天数差 / half_life) */
+function decayWeight(daysAgo, halfLife) {
+  return (1 / (1 + daysAgo / halfLife)).toFixed(2)
+}
+
+async function saveHalfLife() {
+  const ok = await settingsStore.updateSettings({ rag_half_life: halfLifeDraft.value })
+  if (ok) {
+    toast.success('已保存检索时间衰减参数')
+    halfLifeEditing.value = false
+  } else {
+    toast.error(settingsStore.error || '保存失败')
+  }
+}
+
+/** 当前生效值（编辑中用草稿，否则用已保存值） */
+const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
+
+/** 滑块基准参照天数 */
+const previewDays = computed(() => ({
+  half: Math.round(effectiveHalfLife.value * 0.5),
+  double: effectiveHalfLife.value * 2,
+}))
 
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) {
@@ -189,6 +232,51 @@ function handleLogout() {
           </div>
         </div>
 
+        <!-- 检索参数 -->
+        <div class="settings-group">
+          <div class="settings-group-title">检索参数</div>
+          <div class="settings-card half-life-card">
+            <div class="half-life-header">
+              <span class="half-life-label">记忆衰减半衰期</span>
+              <span class="half-life-value">{{ effectiveHalfLife }} 天</span>
+            </div>
+            <input
+              v-model.number="halfLifeDraft"
+              class="half-life-slider"
+              type="range"
+              min="7"
+              max="365"
+              step="1"
+              @input="halfLifeEditing = true"
+            />
+            <div class="half-life-scale"><span>7</span><span>30</span><span>365</span></div>
+            <div class="half-life-preview">
+              <div class="half-life-preview-title">检索权重预览（越久远权重越低）</div>
+              <div class="half-life-preview-row">
+                <span>{{ previewDays.half }} 天前</span>
+                <span>权重 {{ decayWeight(previewDays.half, effectiveHalfLife) }}</span>
+              </div>
+              <div class="half-life-preview-row">
+                <span>{{ previewDays.double }} 天前</span>
+                <span>权重 {{ decayWeight(previewDays.double, effectiveHalfLife) }}</span>
+              </div>
+              <div class="half-life-preview-row">
+                <span>一年前</span>
+                <span>权重 {{ decayWeight(365, effectiveHalfLife) }}</span>
+              </div>
+            </div>
+            <div class="settings-action">
+              <button
+                class="btn-test"
+                :disabled="settingsStore.loading || !halfLifeEditing"
+                @click="saveHalfLife"
+              >
+                {{ settingsStore.loading ? '保存中...' : '保存衰减参数' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- 审核模式 -->
         <div class="settings-group">
           <div class="settings-group-title">审核模式</div>
@@ -197,7 +285,7 @@ function handleLogout() {
               icon="eye"
               icon-bg="#EC4899"
               label="自动审核"
-              :description="settingsStore.settings.review_mode === 'auto' ? 'AI 处理后自动保存' : 'AI 处理后需手动确认'"
+              :description="settingsStore.settings.review_mode === 'auto' ? '已开启：无审核窗口，AI 自动确认' : '关闭：AI 处理后需手动确认'"
               action="toggle"
               :toggle-value="settingsStore.settings.review_mode === 'auto'"
               @toggle="toggleReviewMode"
@@ -354,6 +442,25 @@ function handleLogout() {
 }
 .btn-test:hover { border-color: var(--accent); color: var(--accent); }
 .btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* rag_half_life 滑块卡片 */
+.half-life-card { padding: 16px; }
+.half-life-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+}
+.half-life-label { font-size: 14px; font-weight: 500; }
+.half-life-value { font-size: 14px; font-weight: 600; color: var(--accent); font-family: var(--font-mono); }
+.half-life-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.half-life-scale {
+  display: flex; justify-content: space-between; font-size: 11px;
+  color: var(--text-tertiary); margin-top: 4px;
+}
+.half-life-preview {
+  margin-top: 14px; padding: 12px; border-radius: var(--radius-sm);
+  background: var(--bg); font-size: 12px; color: var(--text-secondary);
+}
+.half-life-preview-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 6px; }
+.half-life-preview-row { display: flex; justify-content: space-between; padding: 2px 0; }
 
 @media (min-width: 900px) {
   .page-content { padding: 20px 36px 36px; }
