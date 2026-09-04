@@ -6,25 +6,19 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 
-// 当前模式：login 或 register
 const mode = ref('login')
-
-// 表单数据
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 
-// 错误信息
 const errorMsg = ref('')
 const fieldErrors = ref({ username: '', password: '', confirmPassword: '' })
 
-// 清除错误
 function clearErrors() {
   errorMsg.value = ''
   fieldErrors.value = { username: '', password: '', confirmPassword: '' }
 }
 
-// 验证用户名
 function validateUsername() {
   if (mode.value === 'register') {
     if (username.value.length < 3) {
@@ -35,17 +29,14 @@ function validateUsername() {
       fieldErrors.value.username = '用户名最多50个字符'
       return false
     }
-  } else {
-    if (!username.value) {
-      fieldErrors.value.username = '请输入用户名'
-      return false
-    }
+  } else if (!username.value) {
+    fieldErrors.value.username = '请输入用户名'
+    return false
   }
   fieldErrors.value.username = ''
   return true
 }
 
-// 验证密码
 function validatePassword() {
   if (mode.value === 'register') {
     if (password.value.length < 6) {
@@ -56,17 +47,14 @@ function validatePassword() {
       fieldErrors.value.password = '密码最多20个字符'
       return false
     }
-  } else {
-    if (!password.value) {
-      fieldErrors.value.password = '请输入密码'
-      return false
-    }
+  } else if (!password.value) {
+    fieldErrors.value.password = '请输入密码'
+    return false
   }
   fieldErrors.value.password = ''
   return true
 }
 
-// 验证确认密码
 function validateConfirmPassword() {
   if (mode.value !== 'register') return true
   if (password.value !== confirmPassword.value) {
@@ -77,7 +65,6 @@ function validateConfirmPassword() {
   return true
 }
 
-// 表单是否有效
 const isValid = computed(() => {
   const baseValid = username.value && password.value && !fieldErrors.value.username && !fieldErrors.value.password
   if (mode.value === 'register') {
@@ -86,14 +73,11 @@ const isValid = computed(() => {
   return baseValid
 })
 
-// 提交表单
 async function handleSubmit() {
   clearErrors()
-
   const uValid = validateUsername()
   const pValid = validatePassword()
   const cValid = validateConfirmPassword()
-
   if (!uValid || !pValid || !cValid) return
 
   try {
@@ -108,7 +92,6 @@ async function handleSubmit() {
   }
 }
 
-// 切换模式
 function switchMode(newMode) {
   mode.value = newMode
   clearErrors()
@@ -128,58 +111,55 @@ function switchMode(newMode) {
     </div>
 
     <div class="auth-body">
-      <!-- Tab 切换 -->
       <div class="auth-tabs">
         <button :class="['auth-tab', { active: mode === 'login' }]" @click="switchMode('login')">登录</button>
         <button :class="['auth-tab', { active: mode === 'register' }]" @click="switchMode('register')">注册</button>
       </div>
 
-      <!-- 错误提示 -->
       <div v-if="errorMsg" class="auth-error">{{ errorMsg }}</div>
 
-      <!-- 表单 -->
-      <form @submit.prevent="handleSubmit" class="auth-form">
+      <form class="auth-form" @submit.prevent="handleSubmit">
         <div class="form-group">
           <label class="form-label">用户名</label>
           <input
+            v-model="username"
             type="text"
             class="form-input"
             :class="{ error: fieldErrors.username }"
-            v-model="username"
             :placeholder="mode === 'register' ? '请输入用户名（3-50个字符）' : '请输入用户名'"
             @input="validateUsername"
-          />
+          >
           <div v-if="fieldErrors.username" class="form-error show">{{ fieldErrors.username }}</div>
         </div>
 
         <div class="form-group">
           <label class="form-label">密码</label>
           <input
+            v-model="password"
             type="password"
             class="form-input"
             :class="{ error: fieldErrors.password }"
-            v-model="password"
             :placeholder="mode === 'register' ? '请输入密码（6-20个字符）' : '请输入密码'"
             @input="validatePassword"
-          />
+          >
           <div v-if="fieldErrors.password" class="form-error show">{{ fieldErrors.password }}</div>
         </div>
 
         <div v-if="mode === 'register'" class="form-group">
           <label class="form-label">确认密码</label>
           <input
+            v-model="confirmPassword"
             type="password"
             class="form-input"
             :class="{ error: fieldErrors.confirmPassword }"
-            v-model="confirmPassword"
             placeholder="请再次输入密码"
             @input="validateConfirmPassword"
-          />
+          >
           <div v-if="fieldErrors.confirmPassword" class="form-error show">{{ fieldErrors.confirmPassword }}</div>
         </div>
 
-        <button type="submit" class="btn btn-primary" :disabled="!isValid || auth.loading">
-          <span v-if="auth.loading" class="btn-loading"></span>
+        <button type="submit" class="btn" :disabled="!isValid || auth.loading">
+          <span v-if="auth.loading" class="btn-loading" />
           {{ mode === 'login' ? '登录' : '注册' }}
         </button>
       </form>
@@ -197,186 +177,108 @@ function switchMode(newMode) {
 </template>
 
 <style scoped>
+/* 浅色例外（mirror-auth.html 权威）：不走深色玻璃 token */
 .auth-page {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-primary);
+  min-height: 100dvh;
+  display: flex; flex-direction: column;
+  background: #F5F5F7;
+  color: #1D1D1F;
 }
 
-.auth-header {
-  padding: 60px 32px 0;
-  text-align: center;
-}
+.auth-header { padding: 60px 32px 0; text-align: center; }
 
 .auth-logo {
   width: 64px; height: 64px; border-radius: 16px;
   background: linear-gradient(135deg, #4F46E5, #7C3AED);
   display: flex; align-items: center; justify-content: center;
   margin: 0 auto 20px;
-  box-shadow: 0 8px 24px rgba(79,70,229,0.3);
+  box-shadow: 0 8px 24px rgba(79,70,229,.3);
 }
 .auth-logo svg { width: 32px; height: 32px; }
 
 .auth-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { font-size: 14px; color: var(--text-secondary); }
+.auth-subtitle { font-size: 14px; color: #6E6E73; }
 
 .auth-body {
-  flex: 1;
-  padding: 32px;
-  max-width: 400px;
-  margin: 0 auto;
-  width: 100%;
+  flex: 1; padding: 32px;
+  max-width: 400px; margin: 0 auto; width: 100%;
 }
 
-/* Tab 切换 */
 .auth-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 24px;
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  padding: 4px;
+  display: flex; margin-bottom: 24px;
+  border-radius: 14px; background: #EAEAEE; padding: 4px;
 }
 .auth-tab {
-  flex: 1;
-  padding: 10px 16px;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+  flex: 1; padding: 10px 16px;
+  border: none; background: transparent;
+  font-size: 14px; font-weight: 600; color: #6E6E73;
+  cursor: pointer; border-radius: 10px; transition: all .2s ease;
 }
 .auth-tab.active {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: #FFFFFF; color: #1D1D1F;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
 }
 
-/* 错误提示 */
 .auth-error {
-  padding: 12px 16px;
-  margin-bottom: 20px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--error);
-  font-size: 13px;
-  text-align: center;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: #FFE5E3; border-radius: 14px;
+  color: #FF3B30; font-size: 13px; text-align: center;
 }
 
-/* 表单 */
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.auth-form { display: flex; flex-direction: column; gap: 20px; }
 
 .form-group { position: relative; }
 .form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  display: block; font-size: 13px; font-weight: 600;
+  color: #6E6E73; margin-bottom: 8px;
 }
 
 .form-input {
-  width: 100%;
-  padding: 14px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 16px;
-  font-family: var(--font);
-  color: var(--text-primary);
-  background: var(--bg-primary);
-  outline: none;
-  transition: all 0.2s ease;
+  width: 100%; padding: 14px 16px;
+  border: 1.5px solid #E8E8ED; border-radius: 14px;
+  font-size: 16px; color: #1D1D1F; background: #fff;
+  outline: none; transition: all .2s ease;
 }
 .form-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-light);
+  border-color: #4F46E5;
+  box-shadow: 0 0 0 3px #EEF0FF;
 }
-.form-input.error { border-color: var(--error); }
-.form-input::placeholder { color: var(--text-tertiary); }
+.form-input.error { border-color: #FF3B30; }
+.form-input::placeholder { color: #AEAEB2; }
 
-.form-error {
-  font-size: 12px;
-  color: var(--error);
-  margin-top: 6px;
-  display: none;
-}
+.form-error { font-size: 12px; color: #FF3B30; margin-top: 6px; display: none; }
 .form-error.show { display: block; }
 
-/* 按钮 */
 .btn {
-  width: 100%;
-  padding: 14px 24px;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn-primary {
+  width: 100%; padding: 14px 24px;
+  border: none; border-radius: 14px;
+  font-size: 16px; font-weight: 600; cursor: pointer;
+  transition: all .2s ease;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   background: linear-gradient(135deg, #4F46E5, #7C3AED);
-  color: white;
-  box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79,70,229,.3);
 }
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(79,70,229,0.4);
-}
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(79,70,229,.4); }
+.btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
 
 .btn-loading {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,.3); border-top-color: white;
+  border-radius: 50%; animation: spin .6s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* 底部 */
 .auth-footer {
-  padding: 20px 32px;
-  text-align: center;
-  border-top: 0.5px solid var(--border);
+  padding: 20px 32px; text-align: center;
+  border-top: 0.5px solid #E8E8ED;
 }
-.auth-footer-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
+.auth-footer-text { font-size: 13px; color: #6E6E73; }
 .auth-link {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0;
+  background: none; border: none;
+  color: #4F46E5; font-weight: 600; cursor: pointer; font-size: 13px; padding: 0;
 }
-.auth-link:hover {
-  text-decoration: underline;
-}
+.auth-link:hover { text-decoration: underline; }
 
 @media (min-width: 768px) {
   .auth-header { padding: 80px 40px 0; }

@@ -9,17 +9,20 @@ export const useUIStore = defineStore('ui', () => {
 
   const showWriteModal = ref(false)
 
+  /** 每日总结 sheet（T-F-R7，数据待 GET /api/summaries） */
+  const showSummarySheet = ref(false)
+
+  /** 对话页空态说明（B 未就绪时置灰发送） */
+  const chatReady = ref(false)
+
   /** 侧边栏日历选中的日期（桌面端用） @type {import('vue').Ref<Date | null>} */
   const sidebarSelectedDate = ref(null)
 
   /** @type {import('vue').Ref<string | null>} */
   const selectedRecordId = ref(null)
 
-  /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed' | 'split'>} */
+  /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed'>} */
   const detailMode = ref('view')
-
-  /** 拆分组中所有记录是否都已完成（用于禁用操作按钮） */
-  const splitAllDone = ref(false)
 
   const showDetail = ref(false)
 
@@ -37,6 +40,14 @@ export const useUIStore = defineStore('ui', () => {
     showWriteModal.value = false
   }
 
+  function openSummarySheet() {
+    showSummarySheet.value = true
+  }
+
+  function closeSummarySheet() {
+    showSummarySheet.value = false
+  }
+
   function updateMobile() {
     isMobile.value = window.innerWidth < 900
   }
@@ -48,13 +59,16 @@ export const useUIStore = defineStore('ui', () => {
     currentPage,
     isMobile,
     showWriteModal,
+    showSummarySheet,
+    chatReady,
     sidebarSelectedDate,
     selectedRecordId,
     detailMode,
-    splitAllDone,
     showDetail,
     switchPage,
     openWriteModal,
     closeWriteModal,
+    openSummarySheet,
+    closeSummarySheet,
   }
 })

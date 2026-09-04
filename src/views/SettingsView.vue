@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import PageHeader from '@/components/organisms/PageHeader.vue'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 
 const router = useRouter()
@@ -18,12 +17,12 @@ const editLabel = ref('')
 const editValue = ref('')
 const editPlaceholder = ref('')
 const editOptions = ref(null)
-const testResult = ref(null)
 
-/** rag_half_life 滑块草稿值（7-365，默认 30，6.4） */
+/** rag_half_life 滑块（7-365，默认 30，6.4） */
 const halfLifeDraft = ref(30)
-const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
 const halfLifeEditing = ref(false)
+const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
+const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
 
 onMounted(() => {
   settingsStore.fetchSettings()
@@ -44,6 +43,9 @@ async function saveEdit() {
   const success = await settingsStore.updateSettings(data)
   if (success) {
     showEditModal.value = false
+    toast.success('已保存')
+  } else {
+    toast.error(settingsStore.error || '保存失败')
   }
 }
 
@@ -52,20 +54,19 @@ function selectOption(value) {
 }
 
 async function handleTestAi() {
-  testResult.value = null
   const result = await settingsStore.testAiConnection()
-  testResult.value = result
-  setTimeout(() => { testResult.value = null }, 3000)
+  result.success ? toast.success(result.message) : toast.error(result.message)
 }
 
-async function handleTestDb() {
-  testResult.value = null
-  const result = await settingsStore.testDbConnection()
-  testResult.value = result
-  setTimeout(() => { testResult.value = null }, 3000)
+/** 模型协议 chips（anthropic / openai 二选一） */
+async function selectProtocol(protocol) {
+  if (settingsStore.settings.ai_protocol === protocol) return
+  const ok = await settingsStore.updateSettings({ ai_protocol: protocol })
+  if (ok) toast.success(protocol === 'anthropic' ? '已切换 Anthropic 协议' : '已切换 OpenAI 兼容协议')
+  else toast.error(settingsStore.error || '保存失败')
 }
 
-/** 切换审核模式（5.5：auto 无审核窗口，提示权衡） */
+/** 切换审核模式（5.5：auto 无审核窗口，权衡警告） */
 async function toggleReviewMode() {
   const toAuto = settingsStore.settings.review_mode !== 'auto'
   if (toAuto && !window.confirm('开启自动审核后，AI 处理完成将直接确认入库，你没有手动调整片段和标签的机会。确定开启？')) {
@@ -74,24 +75,19 @@ async function toggleReviewMode() {
   const newVal = toAuto ? 'auto' : 'manual'
   const ok = await settingsStore.updateSettings({ review_mode: newVal })
   if (ok) {
-    if (toAuto) toast.info('已开启自动审核：无审核窗口，AI 自动确认')
+    if (toAuto) toast.info('已开启 auto：新记录将跳过审核直接入库')
     else toast.success('已切换为手动审核')
   } else {
     toast.error(settingsStore.error || '保存失败')
   }
 }
 
-/** 切换 Embedding 来源 */
+/** 切换 Embedding 来源（1024 维硬约束说明见下方 note） */
 async function toggleEmbeddingSource() {
   const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
   const ok = await settingsStore.updateSettings({ embedding_source: newVal })
   if (ok) toast.success(newVal === 'api' ? '已切换为远程 API 服务' : '已切换为本地服务')
   else toast.error(settingsStore.error || '保存失败')
-}
-
-/** rag_half_life 滑块权重预览：衰减因子 = 1 / (1 + 天数差 / half_life) */
-function decayWeight(daysAgo, halfLife) {
-  return (1 / (1 + daysAgo / halfLife)).toFixed(2)
 }
 
 async function saveHalfLife() {
@@ -104,14 +100,15 @@ async function saveHalfLife() {
   }
 }
 
-/** 当前生效值（编辑中用草稿，否则用已保存值） */
-const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
+/** 衰减权重预览 final_score = 相似度 × 1/(1 + 天数差/half_life) */
+const halfLifePreview = computed(() =>
+  `final_score = 相似度 × 1/(1 + 天数差/${effectiveHalfLife.value})`
+)
 
-/** 滑块基准参照天数 */
-const previewDays = computed(() => ({
-  half: Math.round(effectiveHalfLife.value * 0.5),
-  double: effectiveHalfLife.value * 2,
-}))
+/** 导出（/api/export/* 未就绪，toast 占位） */
+function handleExport(kind) {
+  toast.info(`导出 ${kind}（接口未就绪 · 原型占位）`)
+}
 
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) {
@@ -123,472 +120,325 @@ function handleLogout() {
 
 <template>
   <div class="page settings-page">
-    <PageHeader title="设置" />
+    <div class="page-header">
+      <div class="page-title">设置</div>
+      <div class="page-subtitle">模型 · 审核 · RAG · 数据</div>
+    </div>
     <div class="page-content">
-      <!-- 测试结果提示 -->
-      <div v-if="testResult" :class="['test-result', testResult.success ? 'success' : 'error']">
-        {{ testResult.message }}
-      </div>
-
-      <div class="settings-grid">
-        <!-- AI 模型配置 -->
-        <div class="settings-group">
-          <div class="settings-group-title">AI 模型</div>
-          <div class="settings-card">
-            <SettingsItem
-              icon="zap"
-              icon-bg="var(--accent)"
-              label="模型协议"
-              :description="settingsStore.settings.ai_protocol === 'anthropic' ? 'Anthropic 协议' : 'OpenAI 协议'"
-              action="edit"
-              @click="openEdit('ai_protocol', settingsStore.settings.ai_protocol, '模型协议', '', [
-                { value: 'openai', label: 'OpenAI 协议', desc: '适用于 OpenAI、Deepseek、通义千问等' },
-                { value: 'anthropic', label: 'Anthropic 协议', desc: '适用于 Claude 系列模型' },
-              ])"
-            />
-            <SettingsItem
-              icon="info"
-              icon-bg="#8B5CF6"
-              label="AI 提供商"
-              :description="settingsStore.settings.ai_provider || '未配置'"
-              action="edit"
-              @click="openEdit('ai_provider', settingsStore.settings.ai_provider, 'AI 提供商', 'openai / zhipu / qwen')"
-            />
-            <SettingsItem
-              icon="lock"
-              icon-bg="#7C3AED"
-              label="API Key"
-              :description="settingsStore.settings.ai_api_key || '未配置'"
-              action="edit"
-              @click="openEdit('ai_api_key', '', 'API Key', '输入 API Key')"
-            />
-            <SettingsItem
-              icon="chat"
-              icon-bg="#10B981"
-              label="模型"
-              :description="settingsStore.settings.ai_model || '未配置'"
-              action="edit"
-              @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'gpt-4o / claude-3-5-sonnet')"
-            />
-            <SettingsItem
-              icon="link"
-              icon-bg="#6B7280"
-              label="API 地址"
-              :description="settingsStore.settings.ai_base_url || '使用默认'"
-              action="edit"
-              @click="openEdit('ai_base_url', settingsStore.settings.ai_base_url, 'API 地址', 'https://api.openai.com/v1')"
-            />
-            <div class="settings-action">
-              <button
-                class="btn-test"
-                :disabled="settingsStore.testLoading"
-                @click="handleTestAi"
-              >
-                {{ settingsStore.testLoading ? '测试中...' : '测试 AI 连接' }}
-              </button>
-            </div>
+      <!-- AI 模型 -->
+      <div class="settings-group">
+        <div class="settings-group-title">AI 模型（加密存储 · 脱敏返回）</div>
+        <div class="settings-card card">
+          <SettingsItem
+            icon="chat"
+            icon-bg="var(--accent-grad)"
+            label="API Key"
+            :description="settingsStore.settings.ai_api_key || '未配置'"
+            action="edit"
+            @click="openEdit('ai_api_key', '', 'API Key', '输入 API Key')"
+          />
+          <div class="protocol-chips">
+            <button
+              :class="['chip', { selected: settingsStore.settings.ai_protocol === 'anthropic' }]"
+              @click="selectProtocol('anthropic')"
+            >Anthropic 协议</button>
+            <button
+              :class="['chip', { selected: settingsStore.settings.ai_protocol === 'openai' }]"
+              @click="selectProtocol('openai')"
+            >OpenAI 兼容</button>
           </div>
-        </div>
-
-        <!-- Embedding 配置 -->
-        <div class="settings-group">
-          <div class="settings-group-title">Embedding 模型</div>
-          <div class="settings-card">
-            <SettingsItem
-              icon="database"
-              icon-bg="#F59E0B"
-              label="Embedding 来源"
-              :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地服务'"
-              action="toggle"
-              :toggle-value="settingsStore.settings.embedding_source === 'api'"
-              @toggle="toggleEmbeddingSource"
-            />
-            <SettingsItem
-              icon="cpu"
-              icon-bg="#EC4899"
-              label="Embedding 模型"
-              :description="settingsStore.settings.embedding_model || '未配置'"
-              action="edit"
-              @click="openEdit('embedding_model', settingsStore.settings.embedding_model, 'Embedding 模型', 'BAAI/bge-m3')"
-            />
-            <template v-if="settingsStore.settings.embedding_source === 'api'">
-              <SettingsItem
-                icon="link"
-                icon-bg="#6B7280"
-                label="Embedding API 地址"
-                :description="settingsStore.settings.embedding_base_url || '使用默认'"
-                action="edit"
-                @click="openEdit('embedding_base_url', settingsStore.settings.embedding_base_url, 'Embedding API 地址', 'https://api.example.com/v1')"
-              />
-              <SettingsItem
-                icon="lock"
-                icon-bg="#7C3AED"
-                label="Embedding API Key"
-                :description="settingsStore.settings.embedding_api_key || '未配置'"
-                action="edit"
-                @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 API Key')"
-              />
-            </template>
-          </div>
-        </div>
-
-        <!-- 检索参数 -->
-        <div class="settings-group">
-          <div class="settings-group-title">检索参数</div>
-          <div class="settings-card half-life-card">
-            <div class="half-life-header">
-              <span class="half-life-label">记忆衰减半衰期</span>
-              <span class="half-life-value">{{ effectiveHalfLife }} 天</span>
-            </div>
-            <input
-              v-model.number="halfLifeDraft"
-              class="half-life-slider"
-              type="range"
-              min="7"
-              max="365"
-              step="1"
-              @input="halfLifeEditing = true"
-            />
-            <div class="half-life-scale"><span>7</span><span>30</span><span>365</span></div>
-            <div class="half-life-preview">
-              <div class="half-life-preview-title">检索权重预览（越久远权重越低）</div>
-              <div class="half-life-preview-row">
-                <span>{{ previewDays.half }} 天前</span>
-                <span>权重 {{ decayWeight(previewDays.half, effectiveHalfLife) }}</span>
-              </div>
-              <div class="half-life-preview-row">
-                <span>{{ previewDays.double }} 天前</span>
-                <span>权重 {{ decayWeight(previewDays.double, effectiveHalfLife) }}</span>
-              </div>
-              <div class="half-life-preview-row">
-                <span>一年前</span>
-                <span>权重 {{ decayWeight(365, effectiveHalfLife) }}</span>
-              </div>
-            </div>
-            <div class="settings-action">
-              <button
-                class="btn-test"
-                :disabled="settingsStore.loading || !halfLifeEditing"
-                @click="saveHalfLife"
-              >
-                {{ settingsStore.loading ? '保存中...' : '保存衰减参数' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 审核模式 -->
-        <div class="settings-group">
-          <div class="settings-group-title">审核模式</div>
-          <div class="settings-card">
-            <SettingsItem
-              icon="eye"
-              icon-bg="#EC4899"
-              label="自动审核"
-              :description="settingsStore.settings.review_mode === 'auto' ? '已开启：无审核窗口，AI 自动确认' : '关闭：AI 处理后需手动确认'"
-              action="toggle"
-              :toggle-value="settingsStore.settings.review_mode === 'auto'"
-              @toggle="toggleReviewMode"
-            />
-          </div>
-        </div>
-
-        <!-- 数据库 -->
-        <div class="settings-group">
-          <div class="settings-group-title">数据库</div>
-          <div class="settings-card">
-            <SettingsItem
-              icon="database"
-              icon-bg="#F59E0B"
-              label="数据库连接"
-              description="点击测试连接"
-              action="none"
-            />
-            <div class="settings-action">
-              <button
-                class="btn-test"
-                :disabled="settingsStore.testLoading"
-                @click="handleTestDb"
-              >
-                {{ settingsStore.testLoading ? '测试中...' : '测试数据库连接' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 关于 -->
-        <div class="settings-group">
-          <div class="settings-group-title">关于</div>
-          <div class="settings-card">
-            <SettingsItem
-              icon="info"
-              icon-bg="#6B7280"
-              label="版本"
-              description="v0.1.0"
-              action="none"
-            />
-          </div>
-        </div>
-
-        <!-- 账号 -->
-        <div class="settings-group">
-          <div class="settings-group-title">账号</div>
-          <div class="settings-card">
-            <SettingsItem
-              v-if="auth.user"
-              icon="user"
-              icon-bg="#3B82F6"
-              label="当前用户"
-              :description="auth.user.username"
-              action="none"
-            />
-            <div class="logout-btn" @click="handleLogout">
-              <span class="logout-text">退出登录</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 编辑弹窗 -->
-      <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>{{ editLabel }}</h3>
-            <button class="modal-close" @click="showEditModal = false">×</button>
-          </div>
-
-          <div class="modal-body">
-            <!-- 选项模式 -->
-            <div v-if="editOptions" class="option-list">
-              <div
-                v-for="opt in editOptions"
-                :key="opt.value"
-                :class="['option-item', { active: editValue === opt.value }]"
-                @click="selectOption(opt.value)"
-              >
-                <div class="option-radio">
-                  <div v-if="editValue === opt.value" class="option-radio-checked" />
-                </div>
-                <div class="option-content">
-                  <div class="option-label">{{ opt.label }}</div>
-                  <div v-if="opt.desc" class="option-desc">{{ opt.desc }}</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 输入模式 -->
-            <input
-              v-else
-              v-model="editValue"
-              :type="editField.includes('api_key') ? 'password' : 'text'"
-              class="modal-input"
-              :placeholder="editPlaceholder"
-              @keyup.enter="saveEdit"
-            />
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="showEditModal = false">取消</button>
-            <button class="btn-save" @click="saveEdit" :disabled="settingsStore.loading">
-              {{ settingsStore.loading ? '保存中...' : '保存' }}
+          <SettingsItem
+            icon="link"
+            icon-bg="rgba(167,139,250,.8)"
+            label="API 地址"
+            :description="settingsStore.settings.ai_base_url || '使用默认'"
+            action="edit"
+            @click="openEdit('ai_base_url', settingsStore.settings.ai_base_url, 'API 地址', 'https://api.anthropic.com')"
+          />
+          <SettingsItem
+            icon="zap"
+            icon-bg="rgba(74,222,156,.8)"
+            label="模型"
+            :description="settingsStore.settings.ai_model || '未配置'"
+            action="edit"
+            @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'claude-sonnet-5 / gpt-4o')"
+          />
+          <div class="settings-item" style="cursor:default">
+            <span />
+            <button class="test-btn" :disabled="settingsStore.testLoading" @click="handleTestAi">
+              {{ settingsStore.testLoading ? '测试中…' : '测试连接' }}
             </button>
           </div>
         </div>
       </div>
+
+      <!-- Embedding -->
+      <div class="settings-group">
+        <div class="settings-group-title">Embedding（维度硬约束 1024）</div>
+        <div class="settings-card card">
+          <SettingsItem
+            icon="sparkle"
+            icon-bg="rgba(110,231,240,.8)"
+            label="来源"
+            :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地 BGE-m3（1024 维）'"
+            action="toggle"
+            :toggle-value="settingsStore.settings.embedding_source === 'api'"
+            @toggle="toggleEmbeddingSource"
+          />
+          <SettingsItem
+            icon="database"
+            icon-bg="rgba(255,200,98,.8)"
+            label="API 模式地址"
+            :description="settingsStore.settings.embedding_base_url || '未启用'"
+            action="edit"
+            @click="openEdit('embedding_base_url', settingsStore.settings.embedding_base_url, 'Embedding API 地址', 'https://api.example.com/v1')"
+          />
+          <SettingsItem
+            icon="lock"
+            icon-bg="rgba(232,121,249,.8)"
+            label="API 模式 Key"
+            :description="settingsStore.settings.embedding_api_key || '未配置'"
+            action="edit"
+            @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 Embedding API Key')"
+          />
+        </div>
+        <div class="settings-note">
+          切换 API 模式后，保存/测试连接时将调用 GetModelInfo 校验维度，非 1024 维模型会被拒绝。
+        </div>
+      </div>
+
+      <!-- 审核 -->
+      <div class="settings-group">
+        <div class="settings-group-title">审核</div>
+        <div class="settings-card card">
+          <SettingsItem
+            icon="eye"
+            icon-bg="rgba(232,121,249,.8)"
+            label="自动审核（auto）"
+            :description="settingsStore.settings.review_mode === 'auto' ? '已开启：跳过审核窗口，AI 直接入库' : '关闭：AI 处理后需手动确认'"
+            action="toggle"
+            :toggle-value="settingsStore.settings.review_mode === 'auto'"
+            @toggle="toggleReviewMode"
+          />
+        </div>
+        <div class="settings-note warn">
+          开启后将没有手动调整片段的机会——AI 拆错了也无法纠正。默认建议保持手动。
+        </div>
+      </div>
+
+      <!-- RAG 时间衰减 -->
+      <div class="settings-group">
+        <div class="settings-group-title">RAG 时间衰减</div>
+        <div class="settings-card card">
+          <div class="half-life-row">
+            <div class="half-life-header">
+              <span class="half-life-label">半衰期</span>
+              <span class="half-life-value">{{ effectiveHalfLife }} 天</span>
+            </div>
+            <input
+              v-model.number="halfLifeDraft"
+              type="range"
+              min="7"
+              max="365"
+              value="30"
+              @input="halfLifeEditing = true"
+              @change="saveHalfLife"
+            >
+            <div class="settings-note" style="padding:8px 0 0">{{ halfLifePreview }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 数据 -->
+      <div class="settings-group">
+        <div class="settings-group-title">数据</div>
+        <div class="settings-card card">
+          <SettingsItem
+            icon="download"
+            icon-bg="rgba(148,163,184,.8)"
+            label="导出 JSON"
+            description="结构化备份 · 不含向量"
+            action="none"
+          >
+            <template #append><button class="test-btn" @click="handleExport('JSON')">导出</button></template>
+          </SettingsItem>
+          <SettingsItem
+            icon="file"
+            icon-bg="rgba(148,163,184,.8)"
+            label="导出 Markdown"
+            description="人可读 · 不含向量"
+            action="none"
+          >
+            <template #append><button class="test-btn" @click="handleExport('Markdown')">导出</button></template>
+          </SettingsItem>
+          <SettingsItem
+            icon="logout"
+            icon-bg="rgba(255,107,129,.8)"
+            :label="auth.user ? `退出登录（${auth.user.username}）` : '退出登录'"
+            action="none"
+          >
+            <template #append>
+              <button class="test-btn" style="color:var(--danger);box-shadow:inset 0 0 0 1px rgba(255,107,129,.35)" @click="handleLogout">退出</button>
+            </template>
+          </SettingsItem>
+        </div>
+      </div>
+
+      <!-- 编辑弹窗 -->
+      <Teleport to="body">
+        <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>{{ editLabel }}</h3>
+              <button class="modal-close" @click="showEditModal = false">×</button>
+            </div>
+            <div class="modal-body">
+              <div v-if="editOptions" class="option-list">
+                <div
+                  v-for="opt in editOptions"
+                  :key="opt.value"
+                  :class="['option-item', { active: editValue === opt.value }]"
+                  @click="selectOption(opt.value)"
+                >
+                  <div class="option-radio"><div v-if="editValue === opt.value" class="option-radio-checked" /></div>
+                  <div class="option-content">
+                    <div class="option-label">{{ opt.label }}</div>
+                    <div v-if="opt.desc" class="option-desc">{{ opt.desc }}</div>
+                  </div>
+                </div>
+              </div>
+              <input
+                v-else
+                v-model="editValue"
+                :type="editField.includes('api_key') ? 'password' : 'text'"
+                class="modal-input"
+                :placeholder="editPlaceholder"
+                @keyup.enter="saveEdit"
+              >
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="showEditModal = false">取消</button>
+              <button class="btn-save" :disabled="settingsStore.loading" @click="saveEdit">
+                {{ settingsStore.loading ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </div>
 </template>
 
 <style scoped>
-.page {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: var(--bg); overflow-y: auto; overflow-x: hidden;
+.page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.page-header { display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px; }
+@media (min-width: 900px) { .page-header { display: flex; } }
+.page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
+.page-subtitle { font-size: 13px; color: var(--text-low); }
+
+.page-content {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 10px 18px calc(96px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
-.page-content { padding: 12px 16px calc(32px + var(--nav-height) + var(--safe-bottom)); }
-
-.test-result {
-  padding: 12px 16px; margin-bottom: 16px;
-  border-radius: var(--radius-md); font-size: 14px;
-}
-.test-result.success {
-  background: rgba(16, 185, 129, 0.1); color: #10B981;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-.test-result.error {
-  background: rgba(239, 68, 68, 0.1); color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.settings-grid { display: flex; flex-direction: column; gap: 16px; }
-.settings-group { margin-bottom: 0; }
-.settings-group-title {
-  font-size: 12px; font-weight: 600; color: var(--text-tertiary);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-left: 4px;
-}
-.settings-card {
-  background: var(--surface); border-radius: var(--radius-md);
-  border: 0.5px solid var(--border); overflow: hidden;
-}
-
-.settings-action {
-  padding: 12px 16px; border-top: 0.5px solid var(--border);
-}
-.btn-test {
-  width: 100%; padding: 10px; border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 500; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text-primary); cursor: pointer;
-  transition: all 0.2s; font-family: var(--font);
-}
-.btn-test:hover { border-color: var(--accent); color: var(--accent); }
-.btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* rag_half_life 滑块卡片 */
-.half-life-card { padding: 16px; }
-.half-life-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
-}
-.half-life-label { font-size: 14px; font-weight: 500; }
-.half-life-value { font-size: 14px; font-weight: 600; color: var(--accent); font-family: var(--font-mono); }
-.half-life-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
-.half-life-scale {
-  display: flex; justify-content: space-between; font-size: 11px;
-  color: var(--text-tertiary); margin-top: 4px;
-}
-.half-life-preview {
-  margin-top: 14px; padding: 12px; border-radius: var(--radius-sm);
-  background: var(--bg); font-size: 12px; color: var(--text-secondary);
-}
-.half-life-preview-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 6px; }
-.half-life-preview-row { display: flex; justify-content: space-between; padding: 2px 0; }
-
 @media (min-width: 900px) {
-  .page-content { padding: 20px 36px 36px; }
-  .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-  .settings-group-title { margin-bottom: 10px; }
+  .page-content { padding: 18px 32px 40px; max-width: 760px; }
 }
 
-.logout-btn {
-  padding: 14px 16px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  border-top: 0.5px solid var(--border);
+.settings-group { margin-bottom: 20px; }
+.settings-group-title {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em;
+  color: var(--text-low); margin: 0 4px 8px;
 }
-.logout-btn:hover { background: var(--bg-secondary); }
-.logout-text { color: var(--error); font-size: 14px; font-weight: 500; }
+.settings-card { overflow: hidden; }
 
-/* Modal */
+.settings-note {
+  font-size: 11.5px; color: var(--text-low); line-height: 1.6;
+  padding: 10px 16px 14px;
+}
+.settings-note.warn { color: var(--warn); }
+
+.protocol-chips { display: flex; gap: 8px; padding: 4px 16px 14px; }
+
+.test-btn {
+  font-size: 12.5px; color: var(--cyan);
+  padding: 5px 13px; border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1px rgba(110,231,240,.35);
+  flex-shrink: 0; cursor: pointer;
+}
+.test-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* half-life */
+.half-life-row { padding: 13px 16px; }
+.half-life-header { display: flex; justify-content: space-between; align-items: baseline; }
+.half-life-label { font-size: 14px; }
+.half-life-value { font-family: var(--font-mono); font-size: 13px; color: var(--cyan); }
+input[type="range"] { width: 100%; margin-top: 10px; accent-color: #A78BFA; background: transparent; }
+
+/* 编辑弹窗（暗色玻璃） */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  position: fixed; inset: 0; background: rgba(5,7,15,.6);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000; backdrop-filter: blur(4px);
+  z-index: 50; padding: 20px;
 }
 .modal-content {
-  background: var(--surface); border-radius: var(--radius-lg);
-  width: 90%; max-width: 400px; max-height: 80vh;
+  background: rgba(19,23,44,.96);
+  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+  border-radius: 22px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line-strong);
+  width: 100%; max-width: 400px; max-height: 80dvh;
   display: flex; flex-direction: column;
 }
 .modal-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 16px 20px; border-bottom: 0.5px solid var(--border);
+  padding: 16px 20px; border-bottom: 1px solid var(--line);
 }
-.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-header h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 .modal-close {
   width: 28px; height: 28px; border-radius: 50%;
-  border: none; background: var(--bg); font-size: 18px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: var(--text-mid);
+  display: grid; place-items: center;
 }
 .modal-body { padding: 20px; overflow-y: auto; }
 .modal-footer {
   display: flex; gap: 12px; padding: 16px 20px;
-  border-top: 0.5px solid var(--border);
+  border-top: 1px solid var(--line);
 }
 .btn-cancel {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 500; border: 1px solid var(--border);
-  background: var(--bg); cursor: pointer; font-family: var(--font);
+  font-size: 14px; color: var(--text-mid);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .btn-save {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 500; border: none;
-  background: var(--accent); color: #fff; cursor: pointer;
-  font-family: var(--font);
+  font-size: 14px; font-weight: 600;
+  background: var(--accent-grad); color: #0B0E1A;
 }
-.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-save:disabled { opacity: .5; cursor: not-allowed; }
 
 .modal-input {
-  width: 100%; padding: 12px; border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm); font-size: 14px;
-  font-family: var(--font); outline: none;
+  width: 100%; padding: 12px 14px; border: none;
+  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: var(--radius-sm); font-size: 14px; color: var(--text-hi);
 }
-.modal-input:focus { border-color: var(--accent); }
+.modal-input:focus { outline: none; box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
 
-/* 选项列表 */
-.option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+.option-list { display: flex; flex-direction: column; gap: 8px; }
 .option-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer; transition: all .15s;
 }
-
-.option-item:hover {
-  border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.02);
-}
-
-.option-item.active {
-  border-color: var(--accent);
-  background: rgba(99, 102, 241, 0.05);
-}
-
+.option-item.active { box-shadow: inset 0 0 0 1.5px rgba(110,231,240,.5); background: rgba(110,231,240,.05); }
 .option-radio {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border);
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 1px;
-  transition: border-color 0.2s;
+  width: 18px; height: 18px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  flex-shrink: 0; display: grid; place-items: center; margin-top: 2px;
 }
-
-.option-item.active .option-radio {
-  border-color: var(--accent);
-}
-
-.option-radio-checked {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.option-content {
-  flex: 1;
-}
-
-.option-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.option-desc {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  line-height: 1.4;
-}
+.option-item.active .option-radio { box-shadow: inset 0 0 0 1.5px var(--cyan); }
+.option-radio-checked { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); }
+.option-label { font-size: 14px; font-weight: 600; }
+.option-desc { font-size: 12px; color: var(--text-low); line-height: 1.4; margin-top: 2px; }
 </style>

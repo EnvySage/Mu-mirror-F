@@ -241,6 +241,48 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
+   * 将审核页的本地空占位片段提交到后端（POST /records/{id}/chunks），
+   * 成功后用返回的 ChunkVO 替换占位；失败时保留占位文本（confirm 时后端兜底）。
+   * @param {Object} placeholder - ReviewPanel 生成的本地占位 chunk
+   * @param {Object} payload - 扁平 ChunkDTO 字段
+   * @returns {Promise<boolean>}
+   */
+  async function createChunkForRecord(placeholder, payload) {
+    const recordId = placeholder.recordId
+    try {
+      const res = await apiCreateChunk(recordId, {
+        segment: payload.segment,
+        title: payload.title,
+        summary: payload.summary,
+        contentType: payload.contentType,
+        mood: payload.mood,
+        keywords: payload.keywords,
+        ...(payload.taskStatus ? { taskStatus: payload.taskStatus } : {}),
+      })
+      const chunk = res.data
+      const record = records.value.find(r => r.id === recordId)
+      if (record && record.chunks) {
+        const idx = record.chunks.findIndex(c => c.id === placeholder.id)
+        if (idx !== -1) record.chunks.splice(idx, 1, chunk)
+        else record.chunks.push(chunk)
+      }
+      return true
+    } catch (err) {
+      // 端点未就绪：占位升级为带文本的本地片段（保留已编辑的 metadata）
+      console.warn('createChunk failed, upgrading local placeholder:', err.message)
+      placeholder.segment = payload.segment
+      placeholder.metadata = {
+        ...(placeholder.metadata || {}),
+        ...(payload.contentType ? { contentType: payload.contentType } : {}),
+        ...(payload.mood && payload.mood.length ? { mood: payload.mood } : {}),
+        ...(payload.keywords && payload.keywords.length ? { keywords: payload.keywords } : {}),
+        ...(payload.taskStatus ? { taskStatus: payload.taskStatus } : {}),
+      }
+      return true
+    }
+  }
+
+  /**
    * 删除记录（软删除）
    * @param {string|number} id
    * @returns {Promise<boolean>}
@@ -445,6 +487,7 @@ export const useRecordsStore = defineStore('records', () => {
     updateChunk,
     deleteChunk,
     addChunk,
+    createChunkForRecord,
     deleteRecord,
     confirmReview,
     retryRecord,
