@@ -1,140 +1,137 @@
 <script setup>
 import { computed } from 'vue'
 import { timeAgo } from '@/utils/time'
-import { typeMap, moodMap, MOOD_COLOR_MAP } from '@/constants/tags'
+import { typeMap, moodMap } from '@/constants/tags'
+import { MOOD_COLOR } from '@/constants/moodColor'
 
 const props = defineProps({
   record: { type: Object, required: true },
   active: { type: Boolean, default: false },
-  splitIndex: { type: Number, default: 0 },
-  isSplitChild: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['click', 'delete'])
+const emit = defineEmits(['open', 'retry', 'delete'])
 
-const isProcessing = computed(() => props.record.status === 'processing')
-const isPendingReview = computed(() => props.record.status === 'reviewing')
-const isFailed = computed(() => props.record.status === 'failed')
-const isDone = computed(() => props.record.status === 'done')
-
+const status = computed(() => props.record.status)
 const timeText = computed(() => timeAgo(props.record.created_at))
 
-// 从第一个 chunk 获取元数据
-const firstChunk = computed(() => props.record.chunks?.[0])
-const typeLabel = computed(() => typeMap[firstChunk.value?.metadata?.contentType] || firstChunk.value?.metadata?.contentType || '')
-const displayContent = computed(() => {
-  if (props.record.segment && props.record.segment.length > 0) {
-    return props.record.segment[0]
-  }
-  return props.record.content
+const chunks = computed(() => props.record.chunks || [])
+const firstChunk = computed(() => chunks.value[0])
+const isMulti = computed(() => chunks.value.length > 1)
+
+/** done/reviewing 卡片标题：多片段 "A 等 N 件事" */
+const title = computed(() => {
+  const t = firstChunk.value?.metadata?.title
+  if (!t) return '（待分类）'
+  return isMulti.value ? `${t} 等 ${chunks.value.length} 件事` : t
 })
 
-/** REVIEWING / FAILED 可软删除（8.2 允许的操作） */
-const canDelete = computed(() => isPendingReview.value || isFailed.value)
+const summary = computed(() => firstChunk.value?.metadata?.summary || '')
 
-function onDelete(e) {
-  e.stopPropagation()
-  emit('delete', props.record)
-}
+const types = computed(() =>
+  [...new Set(chunks.value.map(c => c.metadata?.contentType).filter(Boolean))]
+)
+
+const moodChips = computed(() => (firstChunk.value?.metadata?.mood || []).slice(0, 2))
+
+/** 处理中摘要截断 */
+const processingPreview = computed(() => {
+  const c = props.record.content || ''
+  return c.length > 40 ? c.slice(0, 40) + '…' : c
+})
 </script>
 
 <template>
-  <div :class="['record-card', { active, 'is-failed': isFailed, 'is-pending': isPendingReview, 'is-split-child': isSplitChild }]" @click="$emit('click')">
-    <!-- 拆分序号 -->
-    <div v-if="isSplitChild" class="split-index">{{ splitIndex }}</div>
-    <button v-if="canDelete" class="record-delete" title="删除记录" @click="onDelete">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
+  <!-- processing：转圈 + "AI 整理中" -->
+  <div v-if="status === 'processing'" class="record-card card processing" @click="emit('open')">
+    <div class="record-meta">
+      <span class="record-time">{{ timeText }}</span>
+      <span class="tag tag-processing"><span class="spinner" />AI 整理中</span>
+    </div>
+    <div class="record-summary">{{ processingPreview }}</div>
+  </div>
+
+  <!-- failed：红字原因 + 重试 + 删除 -->
+  <div v-else-if="status === 'failed'" class="record-card card failed" @click="emit('open')">
+    <div class="record-meta">
+      <span class="record-time">{{ timeText }}</span>
+      <span class="tag" style="color:var(--danger);box-shadow:inset 0 0 0 1px rgba(255,107,129,.35)">失败</span>
+    </div>
+    <div class="record-summary">{{ record.content }}</div>
+    <div class="status-failed-row">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+      {{ record.fail_reason || '处理失败' }}
+    </div>
+    <div class="failed-ops">
+      <button class="chip" style="color:var(--cyan)" @click.stop="emit('retry', record)">重试</button>
+      <button class="chip" style="color:var(--danger)" @click.stop="emit('delete', record)">删除</button>
+    </div>
+  </div>
+
+  <!-- reviewing / done -->
+  <div
+    v-else
+    :class="['record-card', 'card', status, { active }]"
+    @click="emit('open')"
+  >
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <div class="record-tags">
-        <!-- 状态标签 -->
-        <span v-if="isProcessing" class="tag tag-processing">AI 整理中</span>
-        <span v-else-if="isPendingReview" class="tag tag-pending">待审核</span>
-        <span v-else-if="isFailed" class="tag tag-failed">处理失败</span>
-
-        <!-- 内容标签（仅完成和待审核状态显示） -->
-        <template v-if="isDone || isPendingReview">
-          <span v-if="typeLabel" class="tag tag-type">{{ typeLabel }}</span>
-          <span
-            v-for="m in (firstChunk?.metadata?.mood || [])"
-            :key="m"
-            :class="['tag', 'tag-mood', MOOD_COLOR_MAP[m] || '']"
-          >{{ moodMap[m] || m }}</span>
-        </template>
+        <span v-for="t in types" :key="t" class="tag tag-type">{{ typeMap[t] || t }}</span>
+        <span v-if="status === 'reviewing'" class="tag tag-processing">待审核</span>
+        <span v-for="m in moodChips" :key="m" class="tag">
+          <span class="dot" :style="{ background: MOOD_COLOR[m] || '#999' }" />{{ moodMap[m] || m }}
+        </span>
       </div>
     </div>
-    <div class="record-title">
-      {{ isProcessing || isFailed ? displayContent.substring(0, 30) + '...' : firstChunk?.metadata?.title || '未生成标题' }}
+    <div class="record-title">{{ title }}</div>
+    <div class="record-summary">{{ summary }}</div>
+    <div v-if="(firstChunk?.metadata?.keywords || []).length" class="record-keywords">
+      <span v-for="k in firstChunk.metadata.keywords" :key="k" class="keyword">{{ k }}</span>
     </div>
-    <div v-if="isDone || isPendingReview" class="record-summary">
-      {{ firstChunk?.metadata?.summary }}
-    </div>
-    <div v-if="(isDone || isPendingReview) && firstChunk?.metadata?.keywords?.length" class="record-keywords">
-      <span v-for="k in firstChunk.metadata.keywords" :key="k" class="keyword">#{{ k }}</span>
+    <div v-if="isMulti" class="record-footer">
+      <span class="chunk-count">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        {{ chunks.length }} 个片段
+      </span>
     </div>
   </div>
 </template>
 
 <style scoped>
 .record-card {
-  background: var(--surface); border-radius: var(--radius-md);
-  padding: 16px 18px; margin-bottom: 10px;
-  box-shadow: var(--shadow-sm); border: 0.5px solid var(--border);
-  cursor: pointer; transition: all 0.15s ease;
-  position: relative;
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+  transition: all .18s; position: relative; overflow: hidden;
 }
-.record-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.record-card.active { border-color: var(--accent); background: var(--accent-light); }
-.record-card.is-failed { border-color: var(--danger); background: var(--danger-light); }
-.record-card.is-pending { border-color: var(--warning); }
-.record-card.is-split-child { margin-left: 8px; }
-.record-card:active { transform: scale(0.98); }
+/* 左缘渐变光条 */
+.record-card::before {
+  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px;
+  width: 2.5px; border-radius: 3px; background: var(--accent-grad);
+  opacity: 0; transition: opacity .18s;
+}
+.record-card:hover { background: var(--glass-2); }
+.record-card:active { transform: scale(.985); }
+.record-card.active::before,
+.record-card.reviewing::before { opacity: 1; }
+.record-card.processing::before, .record-card.failed::before { background: none; }
 
-/* 软删除按钮（REVIEWING / FAILED） */
-.record-delete {
-  position: absolute; top: 12px; right: 12px;
-  width: 26px; height: 26px; border-radius: 50%;
-  border: none; background: transparent; color: var(--text-tertiary);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; opacity: 0; padding: 0;
+.record-meta {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;
 }
-.record-card:hover .record-delete { opacity: 1; }
-.record-delete:hover { background: var(--danger-light); color: var(--danger); }
-.record-delete svg { width: 14px; height: 14px; }
+.record-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); }
+.record-tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.record-title { font-size: 15.5px; font-weight: 600; line-height: 1.45; }
+.record-summary {
+  font-size: 13px; color: var(--text-mid); margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.record-keywords { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.record-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.chunk-count {
+  font-family: var(--font-mono); font-size: 11px; color: var(--violet);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.chunk-count svg { width: 12px; height: 12px; stroke: var(--violet); fill: none; stroke-width: 2; }
 
-/* 拆分序号 */
-.split-index {
-  position: absolute;
-  top: 14px;
-  left: -4px;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
-}
-.record-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.record-time { font-size: 12px; color: var(--text-tertiary); font-weight: 500; font-family: var(--font-mono); }
-.record-tags { display: flex; gap: 5px; flex-wrap: wrap; }
-.tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
-.tag-type { background: var(--accent-light); color: var(--accent); }
-.tag-mood { background: var(--success-light); color: var(--success); }
-.tag-mood.anxious { background: var(--warning-light); color: var(--warning); }
-.tag-mood.sad { background: var(--danger-light); color: var(--danger); }
-.tag-mood.tired { background: #F3F0FF; color: #7C3AED; }
-.tag-processing { background: var(--processing-light); color: var(--processing); animation: tagPulse 2s ease-in-out infinite; }
-.tag-pending { background: var(--warning-light); color: var(--warning); }
-.tag-failed { background: var(--danger-light); color: var(--danger); }
-@keyframes tagPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-.record-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.record-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.record-keywords { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
-.keyword { font-size: 11px; color: var(--text-tertiary); background: var(--bg); padding: 2px 8px; border-radius: var(--radius-full); }
+.failed-ops { display: flex; gap: 8px; margin-top: 10px; }
+.failed-ops .chip { cursor: pointer; }
 </style>

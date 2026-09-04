@@ -5,7 +5,6 @@ import { formatFullDate } from '@/utils/time'
 
 const props = defineProps({
   mode: { type: String, default: 'mini' }, // mini | full
-  /** 外部控制的选中日期（侧边栏联动用） */
   modelValue: { type: Date, default: null },
 })
 
@@ -16,13 +15,12 @@ const recordsStore = useRecordsStore()
 const calendarDate = ref(new Date())
 const selectedDate = ref(null)
 
-/** 优先用外部传入的选中日期 */
 const effectiveSelected = computed(() => props.modelValue || selectedDate.value)
 
 const year = computed(() => calendarDate.value.getFullYear())
 const month = computed(() => calendarDate.value.getMonth())
 
-const monthText = computed(() => year.value + '年' + (month.value + 1) + '月')
+const monthText = computed(() => year.value + ' 年 ' + (month.value + 1) + ' 月')
 
 const recordDates = computed(() => recordsStore.getRecordDates(year.value, month.value))
 
@@ -35,12 +33,10 @@ const calendarDays = computed(() => {
 
   const days = []
 
-  // Previous month
   for (let i = firstDay - 1; i >= 0; i--) {
     days.push({ day: daysInPrevMonth - i, otherMonth: true })
   }
 
-  // Current month
   for (let day = 1; day <= daysInMonth; day++) {
     const isToday = today.getFullYear() === year.value && today.getMonth() === month.value && today.getDate() === day
     const hasRecord = recordDates.value.has(day)
@@ -51,7 +47,6 @@ const calendarDays = computed(() => {
     days.push({ day, isToday, hasRecord, isSelected, otherMonth: false })
   }
 
-  // Next month
   const totalCells = firstDay + daysInMonth
   const remaining = 7 - (totalCells % 7)
   if (remaining < 7) {
@@ -63,25 +58,18 @@ const calendarDays = computed(() => {
   return days
 })
 
-// 加载日历标记数据
 async function loadCalendarMarks() {
   await recordsStore.fetchCalendarMarks(year.value, month.value)
 }
 
-// 监听月份变化，重新加载标记数据
-watch([year, month], () => {
-  loadCalendarMarks()
-})
-
-// 初始加载
-onMounted(() => {
-  loadCalendarMarks()
-})
+watch([year, month], loadCalendarMarks)
+onMounted(loadCalendarMarks)
 
 function changeMonth(delta) {
   const d = new Date(calendarDate.value)
   d.setMonth(d.getMonth() + delta)
   calendarDate.value = d
+  selectedDate.value = null
 }
 
 function selectDay(dayObj) {
@@ -97,11 +85,11 @@ function selectDay(dayObj) {
   <div :class="['calendar-widget', mode]">
     <div class="calendar-header">
       <button class="calendar-nav-btn" @click="changeMonth(-1)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <span class="calendar-month">{{ monthText }}</span>
       <button class="calendar-nav-btn" @click="changeMonth(1)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
     <div class="calendar-weekdays">
@@ -124,79 +112,58 @@ function selectDay(dayObj) {
 </template>
 
 <style scoped>
-.calendar-widget {
-  padding: 16px;
-  background: var(--bg);
-  border-radius: var(--radius-md);
-}
-
-.calendar-widget.full {
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin-bottom: 16px;
-  border: 0.5px solid var(--border);
-}
+.calendar-widget { padding: 0; }
 
 .calendar-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
 }
-.calendar-month { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.full .calendar-month { font-size: 18px; }
+.calendar-month { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 
 .calendar-nav-btn {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: none; border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-secondary); transition: all 0.15s;
+  width: 32px; height: 32px; border-radius: 10px;
+  display: grid; place-items: center;
+  box-shadow: inset 0 0 0 1px var(--line);
 }
-.calendar-nav-btn:hover { background: var(--surface); }
-.calendar-nav-btn svg { width: 16px; height: 16px; }
+.calendar-nav-btn svg { width: 15px; height: 15px; stroke: var(--text-mid); fill: none; }
 
 .calendar-weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
-  text-align: center; margin-bottom: 6px;
+  text-align: center; margin-bottom: 8px;
 }
 .calendar-weekdays span {
-  font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-low);
   padding: 4px 0;
 }
-.full .calendar-weekdays span { font-size: 12px; }
-.full .calendar-weekdays { margin-bottom: 8px; }
 
-.calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.full .calendar-days { gap: 4px; }
+.calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .calendar-day {
-  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; border-radius: 8px; cursor: pointer;
-  transition: all 0.15s; position: relative;
-  color: var(--text-secondary);
+  position: relative; aspect-ratio: 1;
+  display: grid; place-items: center;
+  font-size: 13.5px; border-radius: 11px;
+  color: var(--text-mid); transition: all .15s; cursor: pointer;
 }
-.full .calendar-day { font-size: 14px; border-radius: 10px; }
-.calendar-day:hover { background: var(--surface); }
-.calendar-day.other-month { color: var(--text-tertiary); opacity: 0.4; }
-.calendar-day.today { background: var(--accent); color: #fff; font-weight: 600; }
-.calendar-day.today:hover { background: var(--accent-hover); }
-.calendar-day.selected { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+.calendar-day.other-month { color: var(--text-low); opacity: .35; }
+.calendar-day.has-record { color: var(--text-hi); font-weight: 500; }
 .calendar-day.has-record::after {
-  content: ''; position: absolute; bottom: 4px;
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--accent);
+  content: ""; position: absolute; bottom: 6px;
+  width: 4.5px; height: 4.5px; border-radius: 50%;
+  background: var(--accent-grad); box-shadow: 0 0 6px rgba(110,231,240,.6);
 }
-.calendar-day.today.has-record::after { background: #fff; }
+.calendar-day.today { box-shadow: inset 0 0 0 1.5px var(--cyan); }
+.calendar-day.selected { background: var(--accent-grad); color: #0B0E1A; font-weight: 600; }
+.calendar-day.selected::after { background: #0B0E1A; box-shadow: none; }
 
 .calendar-legend {
-  display: flex; gap: 12px; margin-top: 10px; padding-top: 10px;
-  border-top: 0.5px solid var(--border);
+  display: flex; gap: 16px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--line);
 }
-.full .calendar-legend { margin-top: 16px; padding-top: 16px; }
 .calendar-legend-item {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 11px; color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-low);
 }
-.calendar-dot { width: 8px; height: 8px; border-radius: 50%; }
-.calendar-dot.has-record { background: var(--accent); }
-.calendar-dot.today { background: var(--accent); border: 2px solid var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-.calendar-dot.selected { background: var(--accent-light); border: 2px solid var(--accent); }
+.calendar-dot { width: 7px; height: 7px; border-radius: 50%; }
+.calendar-dot.has-record { background: var(--accent-grad); }
+.calendar-dot.today { box-shadow: inset 0 0 0 1.5px var(--cyan); background: transparent; }
+.calendar-dot.selected { background: var(--accent-grad); }
 </style>
