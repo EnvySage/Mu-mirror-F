@@ -316,7 +316,7 @@ async function removeSession(id) {
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
 .sessions-drawer {
-  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
+  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 0);
   width: 100%; max-width: 640px; max-height: 70dvh; z-index: 45;
   background: rgba(19,23,44,.95);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
@@ -365,5 +365,4 @@ async function removeSession(id) {
 
 .sessions-drawer-enter-active, .sessions-drawer-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sessions-drawer-enter-from, .sessions-drawer-leave-to { transform: translate(-50%, 110%) !important; }
-.sessions-drawer-enter-to, .sessions-drawer-leave-from { transform: translate(-50%, 0) !important; }
 </style>

@@ -116,7 +116,7 @@ function genTime(dateStr) {
 }
 
 .sheet {
-  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
+  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 0);
   width: 100%; max-width: 640px; max-height: 78dvh; z-index: 45;
   background: rgba(19,23,44,.95);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
@@ -168,5 +168,4 @@ function genTime(dateStr) {
 
 .sheet-enter-active, .sheet-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%) !important; }
-.sheet-enter-to, .sheet-leave-from { transform: translate(-50%, 0) !important; }
 </style>

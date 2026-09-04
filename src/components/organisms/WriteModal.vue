@@ -111,7 +111,9 @@ function onClose() {
 }
 
 .write-modal {
-  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
+  position: fixed; left: 50%; bottom: 0;
+  /* 屏内位为默认态：Transition 结束移除 enter 类后停留在此（此前基础态是屏外 110%，动画结束瞬间弹走） */
+  transform: translate(-50%, 0);
   width: 100%; max-width: 640px; z-index: 41;
   background: rgba(19,23,44,.92);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
@@ -162,8 +164,7 @@ function onClose() {
 .write-hint svg { width: 13px; height: 13px; stroke: var(--cyan); fill: none; flex-shrink: 0; }
 .write-counter { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); }
 
-/* sheet 过渡：translate 与 .write-modal 自身 transform 冲突，走 Vue class 覆盖 */
+/* sheet 过渡：基础态=屏内，enter-from/leave-to=屏外，过渡完成后自然停留屏内 */
 .sheet-enter-active, .sheet-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%) !important; }
-.sheet-enter-to, .sheet-leave-from { transform: translate(-50%, 0) !important; }
 </style>
