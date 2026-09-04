@@ -1,18 +1,21 @@
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes tagPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-@keyframes dotPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
-@keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { to { opacity: .5; } }
+@keyframes sheen { 0%, 55% { background-position: 130% 0; } 85%, 100% { background-position: -60% 0; } }
+@keyframes chunkIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 0%, 70%, 100% { opacity: .25; } 35% { opacity: 1; } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
 /* Page transitions */
-.page-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.page-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.page-enter-active { transition: opacity .2s ease, transform .2s ease; }
+.page-leave-active { transition: opacity .15s ease; }
 .page-enter-from { opacity: 0; transform: translateY(6px); }
-.page-leave-to { opacity: 0; transform: translateY(-6px); }
+.page-leave-to { opacity: 0; }
 
-/* Modal transitions */
-.modal-enter-active { transition: opacity 0.3s ease; }
-.modal-leave-active { transition: opacity 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
+/* Overlay / sheet transitions */
+.fade-enter-active, .fade-leave-active { transition: opacity .25s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.sheet-enter-active, .sheet-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
+.sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%); }
+.slide-right-enter-active, .slide-right-leave-active { transition: transform .3s cubic-bezier(.32,.72,.28,1); }
+.slide-right-enter-from, .slide-right-leave-to { transform: translateX(102%); }

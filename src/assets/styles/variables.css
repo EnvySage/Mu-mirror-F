@@ -1,42 +1,42 @@
+/* ===================================================================
+   Mirror v2 Design Tokens —— 权威来源：docs/prototype/mirror-prototype-v2.html
+   深蓝黑玻璃拟态（auth 登录页例外，浅色风格内联在 AuthLayout/WelcomeView）
+   =================================================================== */
 :root {
-  /* 颜色系统 */
-  --bg: #F5F5F7;
-  --surface: #FFFFFF;
-  --text-primary: #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-tertiary: #AEAEB2;
-  --accent: #4F46E5;
-  --accent-light: #EEF0FF;
-  --accent-hover: #4338CA;
-  --border: #E8E8ED;
-  --success: #34C759;
-  --success-light: #E8F9ED;
-  --warning: #FF9F0A;
-  --warning-light: #FFF4E5;
-  --danger: #FF3B30;
-  --danger-light: #FFE5E3;
-  --processing: #5856D6;
-  --processing-light: #F0F0FF;
-  --error: #FF3B30;
-  --error-light: #FFE5E3;
+  /* 基色 */
+  --ink: #0B0E1A;               /* 基色：深蓝黑 */
+  --ink-2: #101427;             /* 面板底 */
+  --glass: rgba(255,255,255,.055);
+  --glass-2: rgba(255,255,255,.085);
+  --line: rgba(255,255,255,.09);
+  --line-strong: rgba(255,255,255,.16);
+  --text-hi: #EDF0FA;
+  --text-mid: #9AA3C0;
+  --text-low: #5A617E;
 
-  /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+  /* 光谱 accent */
+  --cyan: #6EE7F0;              /* 光谱青 */
+  --violet: #A78BFA;            /* 光谱紫 */
+  --accent-grad: linear-gradient(100deg, #6EE7F0, #A78BFA 60%, #E879F9);
 
-  /* 圆角 */
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-full: 9999px;
+  /* 语义色 */
+  --danger: #FF6B81; --danger-bg: rgba(255,107,129,.12);
+  --success: #4ADE9C; --success-bg: rgba(74,222,156,.12);
+  --warn: #FFC862; --warn-bg: rgba(255,200,98,.12);
+  --processing: #818CF8; --processing-bg: rgba(129,140,248,.12);
+  --error: #FF6B81;
+
+  /* 几何 */
+  --radius: 16px; --radius-sm: 10px; --radius-full: 9999px;
+  --shadow: 0 8px 32px rgba(0,0,0,.45);
 
   /* 字体 */
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-mono: ui-monospace, "SF Mono", "Fira Code", Consolas, monospace;
 
   /* 布局 */
-  --nav-height: 60px;
-  --sidebar-width: 280px;
+  --nav-height: 62px;
+  --sidebar-width: 264px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
