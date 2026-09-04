@@ -188,6 +188,17 @@ export const useRecordsStore = defineStore('records', () => {
    * @returns {Promise<boolean>}
    */
   async function deleteChunk(chunkId) {
+    // 本地占位片段（local_ 前缀）从未落库：直接移除，不发请求（后端 Long.parseLong 会 500）
+    if (String(chunkId).startsWith('local_')) {
+      for (const record of records.value) {
+        if (!record.chunks) continue
+        if (record.chunks.some(c => c.id === chunkId)) {
+          record.chunks = record.chunks.filter(c => c.id !== chunkId)
+          return true
+        }
+      }
+      return true
+    }
     try {
       await apiDeleteChunk(chunkId)
       for (const record of records.value) {
@@ -450,16 +461,18 @@ export const useRecordsStore = defineStore('records', () => {
     const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
     const marks = calendarMarks.value[monthStr]
 
-    // 如果有后端数据，使用后端数据
-    if (marks) {
+    // 如果有后端数据，使用后端数据（键是完整日期 "2026-09-04"，取日部分）
+    if (marks && Object.keys(marks).length > 0) {
       const dates = new Set()
       Object.entries(marks).forEach(([day, count]) => {
-        if (count > 0) dates.add(Number(day))
+        if (count > 0) {
+          const n = Number(String(day).slice(-2))
+          if (!Number.isNaN(n) && n > 0) dates.add(n)
+        }
       })
       return dates
     }
-
-    // 回退到本地记录
+    // 后端无该月数据（空对象）→ 回退到本地记录推断
     const dates = new Set()
     records.value.forEach(r => {
       const d = new Date(r.created_at)

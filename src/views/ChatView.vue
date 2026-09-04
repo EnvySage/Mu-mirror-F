@@ -235,7 +235,8 @@ async function removeSession(id) {
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 10px 18px calc(10px + var(--safe-bottom));
+  padding: 10px 18px calc(96px + var(--safe-bottom));
+  -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
   .page-content { padding: 18px 32px 20px; max-width: 760px; }

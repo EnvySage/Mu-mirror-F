@@ -8,7 +8,7 @@ const props = defineProps({
   modelValue: { type: Date, default: null },
 })
 
-const emit = defineEmits(['selectDate', 'update:modelValue'])
+const emit = defineEmits(['selectDate', 'pickDate', 'update:modelValue'])
 
 const recordsStore = useRecordsStore()
 
@@ -75,6 +75,14 @@ function changeMonth(delta) {
 function selectDay(dayObj) {
   if (dayObj.otherMonth) return
   const date = new Date(year.value, month.value, dayObj.day)
+  // 同一日再次点击 → 触发 pickDate（CalendarView 跳转记录页）
+  if (effectiveSelected.value &&
+      effectiveSelected.value.getFullYear() === year.value &&
+      effectiveSelected.value.getMonth() === month.value &&
+      effectiveSelected.value.getDate() === dayObj.day) {
+    emit('pickDate', date)
+    return
+  }
   selectedDate.value = date
   emit('selectDate', date)
   emit('update:modelValue', date)

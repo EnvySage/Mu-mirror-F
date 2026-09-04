@@ -13,5 +13,6 @@ export function getMirror() {
  * @returns {Promise<{ code: number, data: import('@/stores/mirror').MirrorProfile }>}
  */
 export function generateMirror() {
-  return request.post('/mirror/generate')
+  // 画像生成阻塞数十秒（五维统计+LLM+Embedding），绕开 axios 全局 15s 超时
+  return request.post('/mirror/generate', null, { timeout: 120000 })
 }

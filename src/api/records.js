@@ -86,7 +86,8 @@ export function deleteRecord(id) {
  * @returns {Promise<{ code: number, data: RecordVO }>}
  */
 export function confirmReview(id) {
-  return request.put(`/records/${id}/confirm`)
+  // confirm 阻塞数秒~数十秒（补分类+Embedding 逐个 chunk），绕开全局 15s 超时
+  return request.put(`/records/${id}/confirm`, null, { timeout: 120000 })
 }
 
 /**
