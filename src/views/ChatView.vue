@@ -1,33 +1,45 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
-import { useToastStore } from '@/stores/toast'
 import { timeAgo } from '@/utils/time'
 
 /**
- * 对话页（T-F-R6，结构先行）
- * 后端 POST /api/mirror/chat（T-B-4）未就绪：
- *  - 发送按钮置灰（ui.chatReady=false 时禁用）
- *  - 空态提示"对话功能即将上线"
- * 接口就绪时：chat store sendMessage 走流式 + sources 引用芯片即插即用。
+ * 对话页（T-F-R6 + 三轮接线）
+ * 数据源（B 的 T-B-4 已就绪）：
+ *  - POST /api/mirror/chat：SSE 流式（chat store sendMessage）
+ *  - GET /api/mirror/sessions：会话列表（抽屉）
+ *  - GET /api/mirror/sessions/{id}：历史回放
+ *  - DELETE /api/mirror/sessions/{id}：删除会话
+ * 后端未起时：历史加载失败走空态兜底文案，流式失败走"暂时无法回答"，不白屏。
  */
-const router = useRouter()
 const ui = useUIStore()
 const chat = useChatStore()
-const toast = useToastStore()
 
 const input = ref('')
 const messagesEl = ref(null)
 const inputEl = ref(null)
 
-const canSend = computed(() => ui.chatReady && input.value.trim().length > 0 && !chat.sending)
+const showSessions = ref(false)
+
+const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
+
+/** 空态文案：加载中 / 历史加载失败（后端未起）/ 正常引导 */
+const emptyTitle = computed(() => (chat.historyLoading ? '加载会话中…' : '问我任何关于你的事'))
+const emptyDesc = computed(() => {
+  if (chat.historyLoading) return '正在从服务器拉取历史消息'
+  if (chat.historyError) return '历史加载失败 · 请检查服务是否可用'
+  return '比如「我最近在忙什么」「我的状态怎么样」'
+})
 
 onMounted(() => {
-  if (ui.chatReady && chat.messages.length === 0) {
-    chat.sendGreeting?.()
-  }
+  if (chat.sessionsLoaded) return
+  chat.fetchSessions()
+})
+
+onBeforeUnmount(() => {
+  // 离开页面时若流未结束则中断，防止消息串到下次进入
+  if (chat.sending) chat.abort()
 })
 
 async function scrollToBottom() {
@@ -37,6 +49,11 @@ async function scrollToBottom() {
 
 watch(() => chat.messages.length, scrollToBottom)
 watch(() => chat.sending, scrollToBottom)
+// 流式逐字上屏时跟随滚动
+watch(
+  () => chat.messages.map(m => m.content.length).join(','),
+  scrollToBottom,
+)
 
 function autoGrow() {
   const el = inputEl.value
@@ -52,6 +69,8 @@ async function send() {
   if (inputEl.value) inputEl.value.style.height = 'auto'
   await chat.sendMessage(text)
   await scrollToBottom()
+  // 发送成功后刷新会话列表（新会话首次落库）
+  chat.fetchSessions()
 }
 
 function onKeydown(e) {
@@ -67,6 +86,22 @@ function openSource(msg) {
   ui.selectedRecordId = msg.recordId
   ui.showDetail = true
 }
+
+async function openSession(id) {
+  showSessions.value = false
+  await chat.loadSession(id)
+  await scrollToBottom()
+}
+
+function startNew() {
+  showSessions.value = false
+  chat.newConversation()
+}
+
+async function removeSession(id) {
+  await chat.removeSession(id)
+  chat.fetchSessions()
+}
 </script>
 
 <template>
@@ -74,16 +109,55 @@ function openSource(msg) {
     <div class="page-header">
       <div class="page-title">对话</div>
       <div class="page-subtitle">每个结论都能点回原始记录</div>
+      <button class="chat-sessions-btn" @click="showSessions = !showSessions">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+        会话
+      </button>
     </div>
+
+    <!-- 会话列表抽屉 -->
+    <Transition name="fade">
+      <div v-if="showSessions" class="sessions-overlay" @click="showSessions = false" />
+    </Transition>
+    <Transition name="sessions-drawer">
+      <div v-if="showSessions" class="sessions-drawer">
+        <div class="sessions-head">
+          <span class="sessions-title">历史会话</span>
+          <div class="sessions-head-actions">
+            <button class="sessions-new" @click="startNew">+ 新会话</button>
+            <button class="sessions-close" @click="showSessions = false">关闭</button>
+          </div>
+        </div>
+        <div class="sessions-list">
+          <div v-if="chat.sessionsLoading" class="sessions-empty">加载中…</div>
+          <div v-else-if="!chat.sessions.length" class="sessions-empty">还没有会话 · 开始第一次提问吧</div>
+          <div
+            v-for="s in chat.sessions"
+            :key="s.id"
+            :class="['session-item', { active: s.id === chat.activeSessionId }]"
+            @click="openSession(s.id)"
+          >
+            <div class="session-item-main">
+              <div class="session-item-title">{{ s.title || '未命名会话' }}</div>
+              <div class="session-item-time">{{ timeAgo(s.updated_at) }}</div>
+            </div>
+            <button class="session-item-del" title="删除会话" @click.stop="removeSession(s.id)">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <div class="page-content">
       <div class="chat-wrap">
-        <!-- 空态 / 未就绪提示 -->
+        <!-- 空态（含加载中 / 失败兜底） -->
         <div v-if="chat.messages.length === 0" class="chat-empty">
           <div class="empty-icon" style="width:52px;height:52px;margin:0 auto 14px;border-radius:18px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--line);display:grid;place-items:center">
             <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--text-low);fill:none;stroke-width:1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
-          <div class="empty-title">问我任何关于你的事</div>
-          <div class="empty-desc">{{ ui.chatReady ? '比如「我最近在忙什么」「我的状态怎么样」' : '对话功能即将上线 · AI 检索通道就绪后开放' }}</div>
+          <div class="empty-title">{{ emptyTitle }}</div>
+          <div class="empty-desc">{{ emptyDesc }}</div>
         </div>
 
         <!-- 消息列表 -->
@@ -109,7 +183,7 @@ function openSource(msg) {
                   v-for="(s, i) in msg.sources"
                   :key="i"
                   class="chat-source-link"
-                  @click="openSource({ recordId: s.recordId })"
+                  @click="openSource(s)"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                   {{ s.date }} · {{ s.quote.slice(0, 10) }}…
@@ -126,8 +200,8 @@ function openSource(msg) {
             v-model="input"
             class="chat-input"
             rows="1"
-            :placeholder="ui.chatReady ? '问我任何关于你的事…' : '对话功能即将上线'"
-            :disabled="!ui.chatReady"
+            placeholder="问我任何关于你的事…"
+            :disabled="chat.sending"
             @input="autoGrow"
             @keydown="onKeydown"
           />
@@ -146,7 +220,18 @@ function openSource(msg) {
 .page-header { display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px; }
 @media (min-width: 900px) { .page-header { display: flex; } }
 .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
-.page-subtitle { font-size: 13px; color: var(--text-low); }
+.page-subtitle { font-size: 13px; color: var(--text-low); flex: 1; }
+
+/* 会话入口（桌面 header 右侧） */
+.chat-sessions-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text-mid);
+  padding: 6px 14px; border-radius: var(--radius-full);
+  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.chat-sessions-btn svg { width: 13px; height: 13px; stroke: currentColor; }
+.chat-sessions-btn:hover { box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); color: var(--cyan); }
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
@@ -223,4 +308,62 @@ function openSource(msg) {
 .typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-low); animation: blink 1.2s infinite; }
 .typing-dots i:nth-child(2) { animation-delay: .2s; }
 .typing-dots i:nth-child(3) { animation-delay: .4s; }
+
+/* ===== 会话抽屉 ===== */
+.sessions-overlay {
+  position: fixed; inset: 0; z-index: 44;
+  background: rgba(5,7,15,.6);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.sessions-drawer {
+  position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
+  width: 100%; max-width: 640px; max-height: 70dvh; z-index: 45;
+  background: rgba(19,23,44,.95);
+  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 48px rgba(0,0,0,.5), inset 0 1px 0 var(--line-strong);
+  display: flex; flex-direction: column;
+  padding-bottom: var(--safe-bottom);
+}
+@media (min-width: 900px) {
+  .sessions-drawer { border-radius: 22px; bottom: 8dvh; }
+}
+.sessions-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px 10px;
+}
+.sessions-title { font-family: var(--font-display); font-size: 16px; }
+.sessions-head-actions { display: flex; gap: 14px; }
+.sessions-new { font-size: 13px; color: var(--cyan); cursor: pointer; }
+.sessions-close { font-size: 14.5px; color: var(--text-mid); padding: 6px 2px; cursor: pointer; }
+
+.sessions-list { overflow-y: auto; padding: 4px 14px 18px; }
+.sessions-empty {
+  text-align: center; color: var(--text-low); font-size: 13px;
+  padding: 30px 0;
+}
+.session-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 8px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .15s;
+}
+.session-item:hover { background: var(--glass); }
+.session-item.active { box-shadow: inset 0 0 0 1px rgba(110,231,240,.3); }
+.session-item-main { flex: 1; min-width: 0; }
+.session-item-title {
+  font-size: 14px; color: var(--text-hi);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.session-item-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); margin-top: 3px; }
+.session-item-del {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center; opacity: 0; transition: opacity .15s;
+}
+.session-item:hover .session-item-del { opacity: 1; }
+.session-item-del svg { width: 13px; height: 13px; stroke: var(--danger); }
+.session-item-del:hover { background: var(--danger-bg); }
+
+.sessions-drawer-enter-active, .sessions-drawer-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
+.sessions-drawer-enter-from, .sessions-drawer-leave-to { transform: translate(-50%, 110%) !important; }
+.sessions-drawer-enter-to, .sessions-drawer-leave-from { transform: translate(-50%, 0) !important; }
 </style>

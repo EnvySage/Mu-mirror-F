@@ -1,36 +1,46 @@
 <script setup>
 /**
- * 每日总结 sheet（v2 原型样式，T-F-R7）
- * 数据源：GET /api/summaries 未就绪 —— 展示 mock 占位，结构先行。
+ * 每日总结 sheet（v2 原型样式，T-F-R7 + 三轮接线）
+ * 数据源：GET /api/summaries
+ *  - 不带 date：全部日报列表（新→旧，content 空、highlights 取前 3 行）
+ *  - 带 date=YYYY-MM-DD：该日单篇（含全文 content）
+ * 交互：列表展示日期 + 摘要行，点击展开拉全文；无日报 / 加载失败走兜底文案。
  */
 import { ref, watch } from 'vue'
-import { useUIStore } from '@/stores/ui'
+import { useSummariesStore } from '@/stores/summaries'
 
 const props = defineProps({
   show: Boolean,
 })
 const emit = defineEmits(['close'])
 
-const ui = useUIStore()
+const summaries = useSummariesStore()
 
-/** TODO: 接 GET /api/summaries（agent-B 未就绪，mock 顶着） */
-const mockSummary = {
-  tag: '系统记录 · source=system',
-  date: '2026-09-02',
-  count: '记录 4 条',
-  time: '23:41 生成',
-  body: '昨日接口尚未开放，这里展示的是占位数据。每日总结由 AI 在深夜自动生成：汇总当天记录、标注情绪走向与挂起事项。后端 GET /api/summaries 就绪后此面板将自动展示真实数据。',
-}
-const loading = ref(false)
+/** 当前展开全文的日报日期（YYYY-MM-DD） */
+const expandedDate = ref(null)
 
 watch(() => props.show, (val) => {
-  if (val) loadSummary()
+  if (val) {
+    expandedDate.value = null
+    summaries.fetchList()
+  }
 })
 
-async function loadSummary() {
-  loading.value = true
-  // TODO: const res = await api.get('/summaries')
-  setTimeout(() => { loading.value = false }, 300)
+/** 展开/收起单篇（首次展开时拉全文） */
+async function toggleItem(item) {
+  if (expandedDate.value === item.summary_date) {
+    expandedDate.value = null
+    return
+  }
+  expandedDate.value = item.summary_date
+  if (!item.content) {
+    await summaries.fetchDetail(item.summary_date)
+  }
+}
+
+/** 生成时间 HH:mm（created_at "yyyy-MM-dd HH:mm:ss"） */
+function genTime(dateStr) {
+  return dateStr ? dateStr.slice(11, 16) : ''
 }
 </script>
 
@@ -46,17 +56,50 @@ async function loadSummary() {
           <button class="sheet-close" @click="emit('close')">关闭</button>
         </div>
         <div class="sheet-body">
-          <template v-if="loading">
+          <!-- 加载中 -->
+          <template v-if="summaries.loading">
             <div class="summary-loading"><span class="spinner" /> 加载中…</div>
           </template>
+
+          <!-- 加载失败（后端未起兜底，不白屏） -->
+          <template v-else-if="summaries.error">
+            <div class="summary-empty">{{ summaries.error }}</div>
+          </template>
+
+          <!-- 空态：还没有日报 -->
+          <template v-else-if="!summaries.list.length">
+            <div class="summary-empty">还没有每日总结 · AI 会在每天凌晨自动生成昨日的总结</div>
+          </template>
+
+          <!-- 日报列表 -->
           <template v-else>
-            <span class="summary-tag">{{ mockSummary.tag }}</span>
-            <div class="summary-meta">
-              <span>{{ mockSummary.date }}</span>
-              <span>{{ mockSummary.count }}</span>
-              <span>{{ mockSummary.time }}</span>
+            <div
+              v-for="item in summaries.list"
+              :key="item.summary_date"
+              class="summary-item"
+            >
+              <span class="summary-tag">系统记录 · source=system</span>
+              <div class="summary-meta">
+                <span>{{ item.summary_date }}</span>
+                <span>记录 {{ item.stats?.record_count ?? '—' }} 条</span>
+                <span>{{ genTime(item.created_at) }} 生成</span>
+              </div>
+
+              <!-- 已展开：全文 -->
+              <template v-if="expandedDate === item.summary_date">
+                <div v-if="summaries.detailLoading" class="summary-loading"><span class="spinner" /> 加载全文…</div>
+                <p v-else-if="item.content" class="summary-text">{{ item.content }}</p>
+                <p v-else class="summary-empty">全文加载失败</p>
+              </template>
+
+              <!-- 未展开：摘要行 + 展开按钮 -->
+              <template v-else>
+                <p class="summary-text summary-text-brief">
+                  {{ (item.highlights && item.highlights.length ? item.highlights.join('\n') : '暂无摘要') }}
+                </p>
+                <button class="summary-expand" @click="toggleItem(item)">展开全文</button>
+              </template>
             </div>
-            <p class="summary-text">{{ mockSummary.body }}</p>
           </template>
         </div>
       </div>
@@ -91,13 +134,18 @@ async function loadSummary() {
   padding: 16px 20px 10px;
 }
 .sheet-title { font-family: var(--font-display); font-size: 16px; }
-.sheet-close { font-size: 14.5px; color: var(--text-mid); padding: 6px 2px; }
+.sheet-close { font-size: 14.5px; color: var(--text-mid); padding: 6px 2px; cursor: pointer; }
 
 .sheet-body {
   overflow-y: auto; padding: 6px 20px 22px;
   font-size: 14px; line-height: 1.85; color: var(--text-mid);
 }
 .summary-loading { display: flex; align-items: center; gap: 8px; color: var(--text-low); }
+.summary-empty { color: var(--text-low); font-size: 13px; padding: 18px 0; text-align: center; }
+
+.summary-item { padding: 4px 0 14px; margin-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.summary-item:last-child { border-bottom: none; margin-bottom: 0; }
+
 .summary-tag {
   display: inline-flex; font-size: 11px; color: var(--cyan);
   padding: 3px 10px; border-radius: var(--radius-full);
@@ -107,7 +155,16 @@ async function loadSummary() {
   font-family: var(--font-mono); font-size: 11px; color: var(--text-low);
   margin-bottom: 12px; display: flex; gap: 14px;
 }
-.summary-text { margin: 0; }
+.summary-text { margin: 0; white-space: pre-wrap; }
+.summary-text-brief {
+  color: var(--text-mid);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.summary-expand {
+  margin-top: 8px; font-size: 12.5px; color: var(--cyan); cursor: pointer;
+  padding: 2px 0;
+}
+.summary-expand:hover { text-decoration: underline; }
 
 .sheet-enter-active, .sheet-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%) !important; }

@@ -9,11 +9,8 @@ export const useUIStore = defineStore('ui', () => {
 
   const showWriteModal = ref(false)
 
-  /** 每日总结 sheet（T-F-R7，数据待 GET /api/summaries） */
+  /** 每日总结 sheet（数据源 GET /api/summaries） */
   const showSummarySheet = ref(false)
-
-  /** 对话页空态说明（B 未就绪时置灰发送） */
-  const chatReady = ref(false)
 
   /** 侧边栏日历选中的日期（桌面端用） @type {import('vue').Ref<Date | null>} */
   const sidebarSelectedDate = ref(null)
@@ -60,7 +57,6 @@ export const useUIStore = defineStore('ui', () => {
     isMobile,
     showWriteModal,
     showSummarySheet,
-    chatReady,
     sidebarSelectedDate,
     selectedRecordId,
     detailMode,

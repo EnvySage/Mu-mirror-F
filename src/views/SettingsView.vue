@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { exportData } from '@/api/export'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 
 const router = useRouter()
@@ -105,9 +106,14 @@ const halfLifePreview = computed(() =>
   `final_score = 相似度 × 1/(1 + 天数差/${effectiveHalfLife.value})`
 )
 
-/** 导出（/api/export/* 未就绪，toast 占位） */
-function handleExport(kind) {
-  toast.info(`导出 ${kind}（接口未就绪 · 原型占位）`)
+/** 导出（GET /api/export/json | /api/export/markdown，blob 下载） */
+const exportingKind = ref('')
+async function handleExport(kind) {
+  if (exportingKind.value) return
+  exportingKind.value = kind
+  const result = await exportData(kind === 'JSON' ? 'json' : 'markdown')
+  exportingKind.value = ''
+  result.ok ? toast.success(result.message) : toast.error(result.message)
 }
 
 function handleLogout() {
@@ -260,7 +266,7 @@ function handleLogout() {
             description="结构化备份 · 不含向量"
             action="none"
           >
-            <template #append><button class="test-btn" @click="handleExport('JSON')">导出</button></template>
+            <template #append><button class="test-btn" :disabled="exportingKind === 'JSON'" @click="handleExport('JSON')">{{ exportingKind === 'JSON' ? '导出中…' : '导出' }}</button></template>
           </SettingsItem>
           <SettingsItem
             icon="file"
@@ -269,7 +275,7 @@ function handleLogout() {
             description="人可读 · 不含向量"
             action="none"
           >
-            <template #append><button class="test-btn" @click="handleExport('Markdown')">导出</button></template>
+            <template #append><button class="test-btn" :disabled="exportingKind === 'Markdown'" @click="handleExport('Markdown')">{{ exportingKind === 'Markdown' ? '导出中…' : '导出' }}</button></template>
           </SettingsItem>
           <SettingsItem
             icon="logout"
