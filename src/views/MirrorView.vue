@@ -1,197 +1,350 @@
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
-import { useChatStore } from '@/stores/chat'
 import { useRecordsStore } from '@/stores/records'
-import PageHeader from '@/components/organisms/PageHeader.vue'
-import PortraitSection from '@/components/molecules/PortraitSection.vue'
-import MoodBar from '@/components/molecules/MoodBar.vue'
-import StatBlock from '@/components/molecules/StatBlock.vue'
-import ChatMessage from '@/components/molecules/ChatMessage.vue'
+import { useToastStore } from '@/stores/toast'
+import { MOOD_COLOR } from '@/constants/moodColor'
+import { moodMap, taskStatusMap } from '@/constants/tags'
+import { timeAgo } from '@/utils/time'
 
 const mirror = useMirrorStore()
-const chat = useChatStore()
-const records = useRecordsStore()
-
-const chatInput = ref('')
-const chatMessagesEl = ref(null)
-
-const canSend = ref(false)
+const recordsStore = useRecordsStore()
+const toast = useToastStore()
 
 onMounted(() => {
-  // 如果还没有记录数据，先获取
-  if (records.records.length === 0) {
-    records.fetchRecords()
-  }
+  mirror.fetchMirror()
+  if (recordsStore.records.length === 0) recordsStore.fetchRecords()
 })
 
-function onChatInput() {
-  canSend.value = chatInput.value.trim().length > 0
-}
+/** 镜子名：当前月份 */
+const now = new Date()
+const mirrorName = computed(() => `你的镜子 · ${now.getMonth() + 1} 月`)
 
-async function sendMessage() {
-  if (!chatInput.value.trim()) return
-  const text = chatInput.value
-  chatInput.value = ''
-  canSend.value = false
-  await chat.sendMessage(text)
-  await nextTick()
-  if (chatMessagesEl.value) {
-    chatMessagesEl.value.scrollTop = chatMessagesEl.value.scrollHeight
-  }
-}
+/** 三格 stats：总记录 / 活跃天 / 日均（从记录本地统计） */
+const stats = computed(() => {
+  const rs = recordsStore.records
+  const days = new Set(rs.map(r => {
+    const d = new Date(String(r.created_at).replace(' ', 'T'))
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  }))
+  const activeDays = days.size || 1
+  return [
+    { num: rs.length, label: '条记录' },
+    { num: days.size, label: '活跃天' },
+    { num: (rs.length / activeDays).toFixed(1), label: '日均' },
+  ]
+})
 
-function onKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    sendMessage()
-  }
+/** 情绪分布（从记录 chunks mood 统计，top5） */
+const moodSegments = computed(() => {
+  const count = {}
+  recordsStore.records.forEach(r => (r.chunks || []).forEach(c =>
+    (c.metadata?.mood || []).forEach(m => { count[m] = (count[m] || 0) + 1 })
+  ))
+  const total = Object.values(count).reduce((a, b) => a + b, 0)
+  if (!total) return []
+  return Object.entries(count)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([m, n]) => ({ key: m, label: moodMap[m] || m, pct: Math.round((n / total) * 100), color: MOOD_COLOR[m] || '#888' }))
+})
+
+/** 学习来源证据（learning 类 chunk，最近 2 条） */
+const learningEvidence = computed(() => {
+  const items = []
+  recordsStore.records.forEach(r => (r.chunks || []).forEach(c => {
+    if (c.metadata?.contentType === 'learning') items.push({ date: timeAgo(r.created_at), text: c.metadata?.title || c.segment })
+  }))
+  return items.slice(0, 2)
+})
+
+/** 未完成的事（todo/plan 且 taskStatus !== completed） */
+const todos = computed(() => {
+  const items = []
+  recordsStore.records.forEach(r => (r.chunks || []).forEach(c => {
+    if ((c.metadata?.contentType === 'todo' || c.metadata?.contentType === 'plan') && c.metadata?.taskStatus !== 'completed') {
+      items.push({ title: c.metadata?.title || c.segment, status: c.metadata?.taskStatus })
+    }
+  }))
+  return items
+})
+
+/** 快照轨迹（sessions 接口未就绪，仅当前快照） */
+const snapshots = computed(() => {
+  const p = mirror.profile
+  if (!p || p.id === null || p.id === undefined) return []
+  const d = p.created_at ? new Date(String(p.created_at).replace(' ', 'T')) : now
+  const label = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return [{ label, type: p.snapshot_type === 'monthly' ? 'monthly' : 'manual', current: true }]
+})
+
+async function onGenerate() {
+  const ok = await mirror.generate()
+  if (ok) toast.success('快照已生成')
+  else toast.error(mirror.error || '生成失败，请重试')
 }
 </script>
 
 <template>
   <div class="page mirror-page">
-    <PageHeader title="镜子" subtitle="认识你自己" />
+    <div class="page-header">
+      <div class="page-title">镜子</div>
+      <div class="page-subtitle">快照 · 漂移 · 变化轨迹</div>
+    </div>
     <div class="page-content">
-      <!-- Hero -->
-      <div class="mirror-hero">
-        <div class="mirror-greeting">这是我在你身上看到的</div>
-        <div class="mirror-name">你的镜子</div>
-        <div class="mirror-stats">
-          <StatBlock :num="records.totalCount" label="条记录" />
-          <StatBlock num="3" label="天" />
-          <StatBlock num="1.7" label="日均" />
-        </div>
+      <!-- 生成中 -->
+      <div v-if="mirror.generating" class="processing-view">
+        <div class="processing-ring" />
+        <div class="processing-title">正在生成画像快照</div>
+        <div class="processing-desc">五维统计 + 最近记录 → GenerateProfile</div>
       </div>
 
-      <!-- Portrait Grid -->
-      <div class="portrait-grid">
-        <PortraitSection icon="book2" icon-bg="#4F46E5" title="学习进展">
-          <div class="portrait-text">{{ mirror.profile.learning.text }}</div>
-          <div class="portrait-evidence">
-            <div class="portrait-evidence-label">来源</div>
-            <div v-for="(ev, i) in mirror.profile.learning.evidence" :key="i" class="portrait-evidence-item">
-              <div class="evidence-dot" />
-              <span class="evidence-date">{{ ev.date }}</span>
-              <span>{{ ev.text }}</span>
+      <!-- 首次使用：引导生成 -->
+      <div v-else-if="mirror.isEmpty && !mirror.loading" class="empty-state" style="padding:70px 20px">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+        </div>
+        <div class="empty-title">还没有画像快照</div>
+        <div class="empty-desc">写满几条记录后，让 AI 为你生成第一份画像</div>
+        <button class="mirror-generate" style="max-width:260px;margin:20px auto 0" @click="onGenerate">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+          生成画像快照
+        </button>
+      </div>
+
+      <template v-else-if="mirror.profile">
+        <!-- mirror-hero：sheen 扫光 + 渐变 stats -->
+        <div class="mirror-hero card">
+          <div class="mirror-greeting">这是我在你身上看到的</div>
+          <div class="mirror-name">{{ mirrorName }}</div>
+          <div v-if="mirror.drift" class="mirror-drift">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+            较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
+          </div>
+          <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
+          <div class="mirror-stats">
+            <div v-for="(s, i) in stats" :key="i" class="mirror-stat">
+              <div class="mirror-stat-num">{{ s.num }}</div>
+              <div class="mirror-stat-label">{{ s.label }}</div>
             </div>
           </div>
-        </PortraitSection>
-
-        <PortraitSection icon="smile" icon-bg="#10B981" title="情绪分布">
-          <MoodBar :segments="mirror.profile.mood.segments" />
-        </PortraitSection>
-
-        <PortraitSection icon="checkSquare" icon-bg="#F59E0B" title="未完成事项">
-          <div class="portrait-text">{{ mirror.profile.todos }}</div>
-        </PortraitSection>
-
-        <PortraitSection icon="tag" icon-bg="#7C3AED" title="个人标签">
-          <div class="portrait-text">{{ mirror.profile.tags }}</div>
-        </PortraitSection>
-      </div>
-
-      <!-- Chat Section -->
-      <div class="chat-section">
-        <div class="chat-section-title">向镜子提问</div>
-        <div ref="chatMessagesEl" class="chat-messages">
-          <ChatMessage v-for="msg in chat.messages" :key="msg.id" :message="msg" />
-        </div>
-        <div class="chat-input-box">
-          <textarea
-            v-model="chatInput"
-            class="chat-input"
-            placeholder="你想了解什么?"
-            rows="1"
-            @input="onChatInput"
-            @keydown="onKeydown"
-          />
-          <button :class="['chat-send', { enabled: canSend }]" @click="sendMessage">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+            {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
           </button>
         </div>
-      </div>
+
+        <!-- portrait-grid 四卡 -->
+        <div class="portrait-grid">
+          <div class="portrait-section card">
+            <div class="portrait-section-header">
+              <div class="portrait-section-icon" style="background:var(--accent-grad)">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </div>
+              <div class="portrait-section-title">情绪分布</div>
+            </div>
+            <div v-if="moodSegments.length" class="mood-bar">
+              <div
+                v-for="seg in moodSegments"
+                :key="seg.key"
+                class="mood-bar-seg"
+                :style="{ width: seg.pct + '%', background: seg.color }"
+              />
+            </div>
+            <div v-if="moodSegments.length" class="mood-legend">
+              <div v-for="seg in moodSegments" :key="seg.key" class="mood-legend-item">
+                <div class="mood-legend-dot" :style="{ background: seg.color }" />{{ seg.label }} {{ seg.pct }}%
+              </div>
+            </div>
+            <div v-if="mirror.profile.mood_analysis" class="portrait-text" style="margin-top:10px">{{ mirror.profile.mood_analysis }}</div>
+          </div>
+
+          <div class="portrait-section card">
+            <div class="portrait-section-header">
+              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#4ADE9C,#6EE7F0)">
+                <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              </div>
+              <div class="portrait-section-title">学习进展</div>
+            </div>
+            <div class="portrait-text">{{ mirror.profile.learning_analysis || '暂无学习维度分析。' }}</div>
+            <div v-if="learningEvidence.length" class="portrait-evidence">
+              <div class="portrait-evidence-label">来源 SOURCES</div>
+              <div v-for="(ev, i) in learningEvidence" :key="i" class="portrait-evidence-item">
+                <div class="evidence-dot" />
+                <span class="evidence-date">{{ ev.date }}</span>
+                <span>{{ ev.text }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="portrait-section card">
+            <div class="portrait-section-header">
+              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#FFC862,#FB923C)">
+                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </div>
+              <div class="portrait-section-title">未完成的事 · {{ todos.length }}</div>
+            </div>
+            <template v-if="todos.length">
+              <div v-for="(t, i) in todos" :key="i" class="todo-row">
+                <span>{{ t.title }}</span>
+                <span class="tag tag-status">{{ taskStatusMap[t.status] || '未开始' }}</span>
+              </div>
+            </template>
+            <div v-else class="portrait-text">没有挂起的待办，干得漂亮。</div>
+          </div>
+
+          <div class="portrait-section card">
+            <div class="portrait-section-header">
+              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#E879F9,#A78BFA)">
+                <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              </div>
+              <div class="portrait-section-title">个人标签</div>
+            </div>
+            <div v-if="(mirror.profile.user_tags || []).length" class="user-tags">
+              <span v-for="tag in mirror.profile.user_tags" :key="tag" class="user-tag">{{ tag }}</span>
+            </div>
+            <div v-else class="portrait-text">标签将在画像生成后出现。</div>
+            <div v-if="mirror.profile.rhythm_analysis" class="portrait-text" style="margin-top:10px">{{ mirror.profile.rhythm_analysis }}</div>
+          </div>
+        </div>
+
+        <!-- snapshot-strip 快照轨迹 -->
+        <div class="portrait-section card span-2" style="margin-top:12px">
+          <div class="portrait-section-header">
+            <div class="portrait-section-icon" style="background:rgba(255,255,255,.14)">
+              <svg viewBox="0 0 24 24" style="stroke:var(--text-hi)"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+            </div>
+            <div class="portrait-section-title">快照轨迹（manual 保 2 · monthly 保 12）</div>
+          </div>
+          <div v-if="snapshots.length" class="snapshot-strip">
+            <span
+              v-for="(s, i) in snapshots"
+              :key="i"
+              :class="['snapshot-chip', { current: s.current, compare: s.type === 'monthly' && !s.current }]"
+            >{{ s.label }} · {{ s.type }}{{ s.current ? ' · 当前' : '' }}</span>
+          </div>
+          <div v-else class="portrait-text">暂无历史快照。</div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.page {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: var(--bg); overflow-y: auto; overflow-x: hidden;
+.page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.page-header { display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px; }
+@media (min-width: 900px) { .page-header { display: flex; } }
+.page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
+.page-subtitle { font-size: 13px; color: var(--text-low); }
+
+.page-content {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 10px 18px calc(96px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
-.page-content { padding: 12px 16px calc(32px + var(--nav-height) + var(--safe-bottom)); }
-
 @media (min-width: 900px) {
-  .page-content { padding: 20px 36px 36px; }
+  .page-content { padding: 18px 32px 40px; max-width: 900px; }
 }
 
-/* Hero */
-.mirror-hero {
-  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
-  border-radius: 0 0 24px 24px;
-  padding: 28px 20px 24px; margin: 0 -16px 20px;
-  color: #fff; position: relative; overflow: hidden;
+/* mirror-hero + sheen 扫光 */
+.mirror-hero { position: relative; overflow: hidden; padding: 26px 22px; margin-top: 8px; text-align: left; }
+.mirror-hero::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.07) 46%, rgba(110,231,240,.06) 50%, transparent 66%);
+  background-size: 240% 100%;
+  animation: sheen 7s ease-in-out infinite;
+  pointer-events: none;
 }
-.mirror-hero::after { content: ''; position: absolute; top: -30%; right: -15%; width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,0.07); }
-.mirror-hero::before { content: ''; position: absolute; bottom: -25%; left: -10%; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.04); }
-.mirror-greeting { font-size: 13px; opacity: 0.75; margin-bottom: 2px; }
-.mirror-name { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 16px; }
-.mirror-stats { display: flex; gap: 20px; }
+.mirror-greeting { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .22em; color: var(--cyan); margin-bottom: 8px; }
+.mirror-name { font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.3; }
+.mirror-drift {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+  font-size: 12px; color: var(--violet);
+  padding: 4px 12px; border-radius: var(--radius-full);
+  background: rgba(167,139,250,.1); box-shadow: inset 0 0 0 1px rgba(167,139,250,.3);
+}
+.mirror-drift svg { width: 12px; height: 12px; stroke: var(--violet); fill: none; }
+.mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; }
 
+.mirror-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+.mirror-stat {
+  text-align: center; padding: 12px 6px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px var(--line);
+}
+.mirror-stat-num {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  background: var(--accent-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.mirror-stat-label { font-size: 11px; color: var(--text-low); margin-top: 1px; }
+
+.mirror-generate {
+  margin-top: 16px; width: 100%; padding: 12px; border-radius: 13px;
+  font-size: 14px; font-weight: 600; color: var(--text-mid);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all .2s;
+}
+.mirror-generate:hover:not(:disabled) { color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.mirror-generate:disabled { opacity: .55; cursor: not-allowed; }
+.mirror-generate svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
+
+/* portrait grid */
+.portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px; }
 @media (min-width: 900px) {
-  .mirror-hero { margin: 0 -36px 28px; padding: 44px 36px 32px; border-radius: 0 0 28px 28px; }
-  .mirror-hero .mirror-greeting { font-size: 14px; }
-  .mirror-hero .mirror-name { font-size: 32px; margin-bottom: 24px; }
-  .mirror-hero .mirror-stats { gap: 32px; }
+  .portrait-grid { grid-template-columns: repeat(2, 1fr); }
+  .portrait-grid .card.span-2 { grid-column: span 2; }
+}
+.portrait-section { padding: 16px; }
+.portrait-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.portrait-section-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+.portrait-section-icon svg { width: 15px; height: 15px; stroke: #0B0E1A; fill: none; stroke-width: 2; }
+.portrait-section-title { font-size: 14px; font-weight: 600; }
+.portrait-text { font-size: 13.5px; line-height: 1.8; color: var(--text-mid); }
+.portrait-evidence { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.portrait-evidence-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; color: var(--text-low); margin-bottom: 7px; }
+.portrait-evidence-item { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--text-low); margin-bottom: 5px; }
+.evidence-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; align-self: center; }
+.evidence-date { font-family: var(--font-mono); font-size: 10.5px; color: var(--cyan); flex-shrink: 0; }
+
+/* mood-bar */
+.mood-bar { display: flex; height: 9px; border-radius: 6px; overflow: hidden; gap: 2px; }
+.mood-bar-seg { transition: width .6s ease; }
+.mood-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 11px; }
+.mood-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-mid); }
+.mood-legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* todo rows + user tags */
+.todo-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px;
+}
+.todo-row:last-child { border-bottom: none; }
+.user-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.user-tag {
+  font-size: 12.5px; padding: 5px 13px; border-radius: var(--radius-full);
+  background: var(--accent-grad); color: #0B0E1A; font-weight: 600;
 }
 
-/* Portrait */
-.portrait-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-.portrait-text { font-size: 13px; color: var(--text-secondary); line-height: 1.65; }
-.portrait-evidence { margin-top: 12px; padding-top: 12px; border-top: 0.5px solid var(--border); }
-.portrait-evidence-label { font-size: 10px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.portrait-evidence-item { display: flex; align-items: flex-start; gap: 6px; padding: 4px 0; font-size: 11px; color: var(--text-secondary); }
-.evidence-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); margin-top: 5px; flex-shrink: 0; }
-.evidence-date { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); flex-shrink: 0; min-width: 36px; }
+/* snapshot strip */
+.snapshot-strip { display: flex; gap: 8px; margin-top: 4px; overflow-x: auto; padding-bottom: 4px; }
+.snapshot-chip {
+  flex-shrink: 0; font-family: var(--font-mono); font-size: 10.5px;
+  padding: 5px 11px; border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1px var(--line); color: var(--text-low);
+}
+.snapshot-chip.current { color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.snapshot-chip.compare { color: var(--violet); box-shadow: inset 0 0 0 1px rgba(167,139,250,.4); }
 
-@media (min-width: 900px) {
-  .portrait-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-  .portrait-text { font-size: 14px; line-height: 1.75; }
-  .portrait-evidence { margin-top: 14px; padding-top: 14px; }
-  .portrait-evidence-label { font-size: 11px; margin-bottom: 8px; }
-  .portrait-evidence-item { font-size: 12px; gap: 8px; padding: 5px 0; }
-  .evidence-date { font-size: 11px; min-width: 40px; }
+/* 生成中视图 */
+.processing-view { text-align: center; padding: 70px 20px; }
+.processing-ring {
+  width: 58px; height: 58px; margin: 0 auto 22px; border-radius: 50%;
+  border: 2.5px solid rgba(110,231,240,.15); border-top-color: var(--cyan);
+  animation: spin 1.1s linear infinite;
 }
-
-/* Chat */
-.chat-section { margin-top: 20px; }
-.chat-section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-.chat-messages { margin-bottom: 10px; max-height: 240px; overflow-y: auto; }
-.chat-input-box { display: flex; gap: 8px; align-items: flex-end; }
-.chat-input {
-  flex: 1; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
-  font-size: 13px; font-family: var(--font); color: var(--text-primary);
-  outline: none; resize: none; min-height: 40px; max-height: 100px; line-height: 1.5; transition: border-color 0.2s;
-}
-.chat-input:focus { border-color: var(--accent); }
-.chat-send {
-  width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent);
-  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: all 0.15s; opacity: 0.3; pointer-events: none;
-}
-.chat-send.enabled { opacity: 1; pointer-events: auto; }
-.chat-send:hover { background: var(--accent-hover); }
-.chat-send:active { transform: scale(0.9); }
-.chat-send svg { width: 16px; height: 16px; }
-
-@media (min-width: 900px) {
-  .chat-section { margin-top: 28px; }
-  .chat-section-title { font-size: 15px; margin-bottom: 14px; }
-  .chat-messages { max-height: 300px; }
-  .chat-input { font-size: 14px; padding: 12px 16px; min-height: 44px; }
-  .chat-send { width: 44px; height: 44px; }
-  .chat-send svg { width: 18px; height: 18px; }
-}
+.processing-title { font-family: var(--font-display); font-size: 17px; }
+.processing-desc { font-size: 12.5px; color: var(--text-low); margin-top: 6px; }
 </style>
