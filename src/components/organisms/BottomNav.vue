@@ -7,12 +7,13 @@ const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
 
-const navItems = [
-  { page: 'records', icon: 'list', label: '记录' },
-  { page: 'calendar', icon: 'calendar', label: '日历' },
-  { action: 'write', icon: 'plus', label: '写日记' },
-  { page: 'mirror', icon: 'mirror', label: '镜子' },
-  { page: 'settings', icon: 'settings', label: '设置' },
+/** 顺序对齐原型：记录 / 日历 / [写日记凸钮] / 镜子 / 对话 */
+const NAV = [
+  { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
+  { page: 'calendar', label: '日历', icon: 'calendar' },
+  { action: 'write', label: '写日记', icon: 'M12 5v14M5 12h14' },
+  { page: 'mirror', label: '镜子', icon: 'clock' },
+  { page: 'chat', label: '对话', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
 ]
 
 const activePage = computed(() => route.name)
@@ -20,7 +21,8 @@ const activePage = computed(() => route.name)
 function handleNav(item) {
   if (item.action === 'write') {
     ui.openWriteModal()
-  } else if (item.page) {
+  } else {
+    if (item.page === 'records') ui.sidebarSelectedDate = null
     router.push({ name: item.page })
   }
 }
@@ -29,27 +31,26 @@ function handleNav(item) {
 <template>
   <nav class="bottom-nav">
     <button
-      v-for="item in navItems"
+      v-for="item in NAV"
       :key="item.page || item.action"
-      :class="['nav-item', { active: activePage === item.page, 'write-btn': item.action === 'write' }]"
+      :class="['nav-item', { active: activePage === item.page }]"
       @click="handleNav(item)"
     >
       <template v-if="item.action === 'write'">
         <div class="write-btn-circle">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </div>
       </template>
       <template v-else>
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-          <path v-if="item.icon === 'list'" d="M4 6h16M4 12h16M4 18h10" />
-          <template v-else-if="item.icon === 'calendar'">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <template v-if="item.icon === 'calendar'">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
           </template>
-          <template v-else-if="item.icon === 'mirror'">
-            <circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2.5" />
+          <template v-else-if="item.icon === 'clock'">
+            <circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/>
           </template>
-          <template v-else-if="item.icon === 'settings'">
-            <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          <template v-else>
+            <path :d="item.icon" />
           </template>
         </svg>
       </template>
@@ -60,32 +61,31 @@ function handleNav(item) {
 
 <style scoped>
 .bottom-nav {
-  position: absolute; bottom: 0; left: 0; right: 0;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: flex; justify-content: space-around; align-items: center;
   height: calc(var(--nav-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border-top: 0.5px solid var(--border);
-  display: flex; align-items: center; justify-content: space-around;
-  z-index: 100;
+  background: rgba(13,16,32,.88);
+  backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
+  border-top: 1px solid var(--line);
 }
-
-@media (min-width: 900px) {
-  .bottom-nav { display: none !important; }
-}
+@media (min-width: 900px) { .bottom-nav { display: none; } }
 
 .nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 6px 16px; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  border: none; background: none; outline: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--text-low); font-size: 10px; width: 56px; padding: 6px 0;
+  transition: color .18s;
 }
-.nav-item svg { width: 22px; height: 22px; stroke: var(--text-tertiary); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.2s; }
-.nav-item span { font-size: 10px; font-weight: 500; color: var(--text-tertiary); transition: color 0.2s; }
-.nav-item.active svg { stroke: var(--accent); }
-.nav-item.active span { color: var(--accent); }
-.nav-item.write-btn { position: relative; margin-top: -22px; }
-.write-btn-circle { width: 50px; height: 50px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(79,70,229,0.3); transition: transform 0.15s ease; }
-.write-btn-circle svg { stroke: #fff; width: 20px; height: 20px; }
-.write-btn:active .write-btn-circle { transform: scale(0.9); }
+.nav-item svg { width: 21px; height: 21px; stroke: currentColor; fill: none; }
+.nav-item.active { color: var(--cyan); }
+.nav-item.active svg { filter: drop-shadow(0 0 6px rgba(110,231,240,.55)); }
+
+.write-btn-circle {
+  width: 46px; height: 46px; margin-top: -26px; border-radius: 50%;
+  background: var(--accent-grad); display: grid; place-items: center;
+  box-shadow: 0 6px 22px rgba(110,231,240,.35), 0 0 0 5px var(--ink);
+  transition: transform .15s;
+}
+.write-btn-circle:active { transform: scale(.92); }
+.write-btn-circle svg { width: 20px; height: 20px; stroke: #0B0E1A; }
 </style>
