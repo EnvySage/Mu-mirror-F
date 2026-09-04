@@ -1,126 +1,124 @@
 <script setup>
 import { computed } from 'vue'
+import { useRecordsStore } from '@/stores/records'
 import ChunkCard from '@/components/organisms/ChunkCard.vue'
-import MButton from '@/components/atoms/MButton.vue'
 
 /**
- * 审核面板（8.3 片段卡片交互 → 端点映射的编排层）
- *
- * 职责：渲染片段卡片列表、引导合并/拆分/新增片段的多步端点序列，
- * 所有点击只 emit 给父级（DetailPanel）执行真正的 API 编排。
+ * 审核面板（v2 原型版）
+ * 上：review-original「光源」面板（只读原文）
+ * 下：chunk-card「镜面反射」卡片列表 + add-chunk-btn 虚线按钮 + review-hint 引导
+ * chips 编辑即保存（PUT /chunks/{id}），编排逻辑在 ChunkCard/store 内。
  */
 const props = defineProps({
   record: { type: Object, required: true },
-  /** 各 chunk 是否有待保存修改：{ [chunkId]: true } */
-  dirtyMap: { type: Object, default: () => ({}) },
-  submitting: { type: Boolean, default: false },
-  /** 确认中的长时 loading 文案 */
-  confirming: { type: Boolean, default: false },
-  /** 最后一次操作产生的提示（来自父级） */
-  notice: { type: String, default: '' },
 })
 
-const emit = defineEmits([
-  'save-chunk',
-  'remove-chunk',
-  'add-chunk',
-  'merge-chunks',
-  'split-chunk',
-  'confirm',
-  'discard',
-])
+const recordsStore = useRecordsStore()
 
+const editable = computed(() => props.record.status === 'reviewing')
 const chunks = computed(() => props.record.chunks || [])
-const canConfirm = computed(() => chunks.value.length > 0)
+
+/** 新增片段：本地空占位，用户输入文本失焦时 POST /records/{id}/chunks */
+function onAddChunk() {
+  const placeholder = {
+    id: `local_${Date.now()}`,
+    recordId: props.record.id,
+    segment: '',
+    metadata: {},
+  }
+  if (!props.record.chunks) props.record.chunks = []
+  props.record.chunks.push(placeholder)
+}
 </script>
 
 <template>
   <div class="review-panel">
-    <!-- 原始内容（只读，不可改） -->
+    <!-- 原文面板 —— "光源" -->
     <div class="review-original">
-      <div class="section-label">原始内容</div>
+      <div class="review-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        原始内容 · 不可修改
+      </div>
       <div class="review-original-text">{{ record.content }}</div>
-      <div class="review-original-hint">片段间不要求拼回原文，原文始终作为完整备份保存</div>
     </div>
 
     <!-- 片段卡片列表 -->
-    <div class="chunks-list">
-      <div class="section-label">片段（{{ chunks.length }}）</div>
-      <ChunkCard
-        v-for="(chunk, i) in chunks"
-        :key="chunk.id"
-        :chunk="chunk"
-        :index="i"
-        :total="chunks.length"
-        :submitting="submitting"
-        :dirty="!!dirtyMap[chunk.id]"
-        @save="emit('save-chunk', $event)"
-        @remove="emit('remove-chunk', $event)"
-        @merge-up="emit('merge-chunks', { ...$event, targetIndex: i - 1 })"
-        @split-request="emit('split-chunk', { ...$event, index: i })"
-      />
-      <div v-if="chunks.length === 0" class="chunks-empty">
-        已无片段。新增至少 1 个片段后才能确认。
+    <div class="review-list-label">
+      <span>片段卡片 · CHUNKS</span>
+      <span>{{ chunks.length }}</span>
+    </div>
+
+    <ChunkCard
+      v-for="(chunk, i) in chunks"
+      :key="chunk.id"
+      :chunk="chunk"
+      :index="i"
+      :editable="editable"
+    />
+
+    <div v-if="chunks.length === 0" class="chunks-empty">
+      已无片段。新增至少 1 个片段后才能确认入库。
+    </div>
+
+    <template v-if="editable">
+      <button class="add-chunk-btn" @click="onAddChunk">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        新增片段（AI 自动单段分类）
+      </button>
+      <div class="review-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v5"/></svg>
+        合并：把 A 的文本改成合并内容，再删掉 B。拆分：把 A 改成前半句，再点「新增片段」补后半。改动文本的片段会在确认时自动重新分类。
       </div>
-    </div>
-
-    <button class="add-chunk-btn" :disabled="submitting" @click="emit('add-chunk')">
-      + 新增片段
-    </button>
-
-    <div v-if="notice" class="review-notice">{{ notice }}</div>
-
-    <!-- 底部操作 -->
-    <div class="review-actions">
-      <MButton
-        variant="primary"
-        :disabled="!canConfirm || submitting"
-        :loading="confirming"
-        @click="emit('confirm')"
-      >
-        {{ confirming ? '确认中…（补分类 + 向量化，约需数秒）' : '✓ 确认' }}
-      </MButton>
-      <MButton variant="secondary" :disabled="submitting" @click="emit('discard')">丢弃这条记录</MButton>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.review-panel { animation: fadeIn 0.3s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.review-panel { animation: fadeIn .3s ease; }
 
 .review-original {
-  background: var(--surface); border-radius: var(--radius-md);
-  padding: 18px; margin-bottom: 20px; border: 0.5px solid var(--border);
+  position: relative; padding: 14px 16px; margin-bottom: 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(110,231,240,.07), rgba(167,139,250,.06));
+  box-shadow: inset 0 0 0 1px rgba(110,231,240,.18);
 }
-.review-original-text { font-size: 14px; color: var(--text-primary); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-.review-original-hint { margin-top: 8px; font-size: 11px; color: var(--text-tertiary); }
+.review-label {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em;
+  color: var(--text-low); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.review-label svg { width: 12px; height: 12px; stroke: var(--cyan); fill: none; }
+.review-original-text { font-size: 14px; line-height: 1.8; color: var(--text-hi); white-space: pre-wrap; word-break: break-word; }
 
-.chunks-list { margin-bottom: 12px; }
-.chunks-list > .section-label { margin-bottom: 10px; }
+.review-list-label {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em;
+  color: var(--text-low); margin: 4px 2px 10px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+
 .chunks-empty {
-  padding: 24px; text-align: center; font-size: 13px; color: var(--text-tertiary);
-  border: 1.5px dashed var(--border); border-radius: var(--radius-md);
+  padding: 24px; text-align: center; font-size: 13px; color: var(--text-low);
+  border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
 }
 
 .add-chunk-btn {
-  width: 100%; padding: 12px; border-radius: var(--radius-md);
-  border: 1.5px dashed var(--border); background: transparent;
-  color: var(--text-secondary); font-size: 14px; cursor: pointer;
-  transition: all 0.15s; font-family: var(--font); margin-bottom: 16px;
+  width: 100%; padding: 13px; margin-top: 4px;
+  border-radius: var(--radius);
+  border: 1.5px dashed var(--line-strong);
+  color: var(--text-low); font-size: 13.5px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: all .18s;
 }
-.add-chunk-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.add-chunk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.add-chunk-btn:hover { color: var(--cyan); border-color: rgba(110,231,240,.4); }
+.add-chunk-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
 
-.review-notice {
-  padding: 10px 14px; margin-bottom: 12px; border-radius: var(--radius-sm);
-  background: var(--accent-light); color: var(--accent); font-size: 13px;
+.review-hint {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 12px; color: var(--text-low); line-height: 1.6;
+  padding: 12px 14px; margin-top: 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,200,98,.06);
+  box-shadow: inset 0 0 0 1px rgba(255,200,98,.15);
 }
-
-.review-actions { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
-
-.section-label {
-  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
-}
+.review-hint svg { width: 14px; height: 14px; stroke: var(--warn); fill: none; flex-shrink: 0; margin-top: 2px; }
 </style>
