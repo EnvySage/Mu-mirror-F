@@ -4,20 +4,105 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useGlossaryStore } from '@/stores/glossary'
+import { useUIStore } from '@/stores/ui'
 import { exportData } from '@/api/export'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
+import TermCard from '@/components/molecules/TermCard.vue'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
 const auth = useAuthStore()
 const toast = useToastStore()
+const glossary = useGlossaryStore()
+const ui = useUIStore()
 
-const showEditModal = ref(false)
-const editField = ref('')
-const editLabel = ref('')
-const editValue = ref('')
-const editPlaceholder = ref('')
-const editOptions = ref(null)
+// ==================== 个人词典（lexicon-design.md 5b） ====================
+
+/** 已忽略组折叠态 */
+const dismissedOpen = ref(false)
+/** 「教镜子一个词」空表单展开态 */
+const addOpen = ref(false)
+const addDraft = ref({ term: '', aliasesText: '', description: '' })
+/** 正在操作（确认/保存）的词条 id */
+const busyTermId = ref(null)
+
+onMounted(() => {
+  settingsStore.fetchSettings()
+  // 词条三组：设置图标角标 + 词典卡共用同一 store（MainLayout 不重复拉）
+  glossary.fetch()
+})
+
+/** 词条操作统一收口：成功 toast 分文案，失败透 store.error */
+async function runTermAction(id, action, payload, successMsg) {
+  busyTermId.value = id
+  const ok = action === 'update' ? await glossary.update(id, payload) : await glossary[action](id)
+  busyTermId.value = null
+  if (ok) toast.success(successMsg)
+  else toast.error(glossary.error || '操作失败')
+  return ok
+}
+
+/** 待确认：确认（词条卡确认按钮） */
+function onTermConfirm(term) {
+  runTermAction(term.id, 'confirm', null, `「${term.term}」已生效 · 下次对话开始使用`)
+}
+
+/** 改一改/编辑：保存（原地展开编辑框，PUT） */
+function onTermSave(term, data) {
+  runTermAction(term.id, 'update', data, '已更新')
+}
+
+/** 不要/删除按钮：待确认与已生效 = 忽略（dismiss 沉底不删行），已忽略组 = 真删除 */
+function onTermDismiss(term) {
+  if (term.status === 'dismissed') {
+    runTermAction(term.id, 'remove', null, `「${term.term}」已删除`)
+  } else {
+    runTermAction(term.id, 'dismiss', null, `「${term.term}」已忽略 · 30 天后可能重新浮现`)
+  }
+}
+
+/** 已忽略 → 恢复（重新确认进已生效） */
+function onTermRestore(term) {
+  runTermAction(term.id, 'confirm', null, `「${term.term}」已恢复生效`)
+}
+
+/** 「依据：查看原文」（设置页确认弹窗里该行隐藏，防御性兜底） */
+function onTermOpenSource(term) {
+  if (term.source_chunk_id == null) return
+  ui.selectedRecordId = term.source_chunk_id
+  ui.showDetail = true
+}
+
+/** 教镜子一个词：空表单新增（POST，直接 confirmed） */
+async function submitAdd() {
+  const { term, aliasesText, description } = addDraft.value
+  if (!term.trim() || !description.trim()) {
+    toast.warning('词条和理解说明都要填')
+    return
+  }
+  const aliases = aliasesText.split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean)
+  const ok = await glossary.add({ term: term.trim(), aliases, description: description.trim() })
+  if (ok) {
+    toast.success(`「${term.trim()}」已教给镜子 · 下次对话开始使用`)
+    addOpen.value = false
+    addDraft.value = { term: '', aliasesText: '', description: '' }
+  } else {
+    toast.error(glossary.error || '新增失败')
+  }
+}
+
+/** 手动触发抽取（懒人立即出候选，POST /glossary/extract） */
+async function handleExtract() {
+  const ok = await glossary.extract()
+  if (ok) {
+    toast.success(glossary.pending.length
+      ? `抽取完成 · ${glossary.pending.length} 条候选待确认`
+      : '抽取完成 · 近 14 天语料没有新候选')
+  } else {
+    toast.error(glossary.error || '抽取失败')
+  }
+}
 
 /** rag_half_life 滑块（7-365，默认 30，6.4） */
 const halfLifeDraft = ref(30)
@@ -25,9 +110,13 @@ const halfLifeEditing = ref(false)
 const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
 const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
 
-onMounted(() => {
-  settingsStore.fetchSettings()
-})
+// ==================== 设置项编辑弹窗（既有逻辑） ====================
+const showEditModal = ref(false)
+const editField = ref('')
+const editLabel = ref('')
+const editValue = ref('')
+const editPlaceholder = ref('')
+const editOptions = ref(null)
 
 function openEdit(field, currentValue, label, placeholder, options = null) {
   editField.value = field
@@ -229,6 +318,114 @@ function handleLogout() {
         </div>
         <div class="settings-note warn">
           开启后将没有手动调整片段的机会——AI 拆错了也无法纠正。默认建议保持手动。
+        </div>
+      </div>
+
+      <!-- 个人词典（lexicon-design.md 5b：全量管理入口） -->
+      <div class="settings-group">
+        <div class="settings-group-title">个人词典 · 镜子这样理解你的话</div>
+        <div class="settings-card card glossary-card">
+          <!-- 顶部操作行：教镜子一个词 + 手动抽取 -->
+          <div class="glossary-toolbar">
+            <span class="glossary-hint">从你的日记里学"论文=毕设 RAG"这类个人指代</span>
+            <div class="glossary-toolbar-btns">
+              <button class="test-btn" :disabled="glossary.extracting" @click="handleExtract">
+                {{ glossary.extracting ? '抽取中…' : '重新抽取' }}
+              </button>
+              <button class="glossary-add-btn" @click="addOpen = !addOpen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                教镜子一个词
+              </button>
+            </div>
+          </div>
+
+          <!-- 新增表单（空表单展开，直接 confirmed） -->
+          <div v-if="addOpen" class="glossary-add-form">
+            <label class="glossary-field">
+              <span class="glossary-field-label">词条</span>
+              <input v-model="addDraft.term" class="glossary-input" placeholder="比如：那个设计" @keyup.enter="submitAdd">
+            </label>
+            <label class="glossary-field">
+              <span class="glossary-field-label">别名</span>
+              <input v-model="addDraft.aliasesText" class="glossary-input" placeholder="可选 · 多个用顿号分隔，如：毕设、那个设计" @keyup.enter="submitAdd">
+            </label>
+            <label class="glossary-field">
+              <span class="glossary-field-label">它指的是什么</span>
+              <textarea v-model="addDraft.description" class="glossary-input glossary-textarea" rows="2" placeholder="镜子会按这句话理解你的记录" />
+            </label>
+            <div class="glossary-add-actions">
+              <button class="term-btn-ghost glossary-cancel" @click="addOpen = false">取消</button>
+              <button class="glossary-submit" @click="submitAdd">加入词典</button>
+            </div>
+          </div>
+
+          <!-- 加载中 -->
+          <div v-if="glossary.loading" class="glossary-empty"><span class="spinner" /> 加载中…</div>
+
+          <template v-else>
+            <!-- 1. 待确认（badge 计数） -->
+            <div class="glossary-group-head">
+              <span>待确认</span>
+              <span v-if="glossary.pendingCount" class="glossary-badge">{{ glossary.pendingCount }}</span>
+            </div>
+            <template v-if="glossary.pending.length">
+              <TermCard
+                v-for="t in glossary.pending"
+                :key="t.id"
+                :term="t"
+                group="pending"
+                :busy="busyTermId === t.id"
+                @confirm="onTermConfirm(t)"
+                @save="data => onTermSave(t, data)"
+                @dismiss="onTermDismiss(t)"
+                @open-source="onTermOpenSource"
+              />
+            </template>
+            <div v-else class="glossary-empty">没有待确认的候选 · 凌晨任务会从近 14 天日记里学新词</div>
+
+            <!-- 2. 已生效 -->
+            <div class="glossary-group-head">
+              <span>已生效</span>
+              <span v-if="glossary.confirmed.length" class="glossary-badge glossary-badge-mid">{{ glossary.confirmed.length }}</span>
+            </div>
+            <template v-if="glossary.confirmed.length">
+              <TermCard
+                v-for="t in glossary.confirmed"
+                :key="t.id"
+                :term="t"
+                group="confirmed"
+                :busy="busyTermId === t.id"
+                @confirm="onTermConfirm(t)"
+                @save="data => onTermSave(t, data)"
+                @dismiss="onTermDismiss(t)"
+                @open-source="onTermOpenSource"
+              />
+            </template>
+            <div v-else class="glossary-empty">还没有已生效的词 · 确认候选或点上方「教镜子一个词」</div>
+
+            <!-- 3. 已忽略（折叠） -->
+            <template v-if="glossary.dismissed.length">
+              <button class="glossary-group-head glossary-group-toggle" @click="dismissedOpen = !dismissedOpen">
+                <span>已忽略</span>
+                <span class="glossary-badge glossary-badge-low">{{ glossary.dismissed.length }}</span>
+                <svg :class="['glossary-caret', { open: dismissedOpen }]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <template v-if="dismissedOpen">
+                <TermCard
+                  v-for="t in glossary.dismissed"
+                  :key="t.id"
+                  :term="t"
+                  group="dismissed"
+                  :busy="busyTermId === t.id"
+                  @confirm="onTermRestore(t)"
+                  @dismiss="onTermDismiss(t)"
+                />
+              </template>
+            </template>
+          </template>
+        </div>
+        <div class="settings-note">
+          确认后对话会按词条理解检索你的记录；理解过时会导致偏差，可在这里随时修改。被忽略的词 30 天后可能重新浮现。
         </div>
       </div>
 
@@ -454,4 +651,84 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent)
 .option-radio-checked { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .option-label { font-size: 14px; font-weight: 600; }
 .option-desc { font-size: 12px; color: var(--text-low); line-height: 1.4; margin-top: 2px; }
+
+/* ===== 个人词典卡（lexicon-design.md 5b） ===== */
+.glossary-card { padding: 14px 16px 16px; }
+
+.glossary-toolbar {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding-bottom: 12px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.glossary-hint { font-size: 12px; color: var(--text-low); min-width: 0; }
+.glossary-toolbar-btns { display: flex; gap: 8px; flex-shrink: 0; }
+
+.glossary-add-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; font-weight: 600; color: #FFFFFF;
+  background: var(--accent); padding: 5px 13px; border-radius: var(--radius-full);
+  transition: background .15s;
+}
+.glossary-add-btn:hover { background: var(--accent-hover); }
+.glossary-add-btn svg { width: 12px; height: 12px; }
+
+/* 新增表单 */
+.glossary-add-form {
+  display: flex; flex-direction: column; gap: 9px;
+  margin: 12px 0 4px; padding: 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--ink-2);
+  animation: cardIn .25s ease;
+}
+.glossary-field { display: flex; flex-direction: column; gap: 4px; }
+.glossary-field-label {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; color: var(--text-low);
+}
+.glossary-input {
+  width: 100%; padding: 8px 11px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--text-hi);
+  resize: vertical;
+}
+.glossary-input:focus { outline: none; border-color: var(--accent); }
+.glossary-textarea { line-height: 1.6; min-height: 56px; }
+.glossary-add-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.glossary-cancel {
+  font-size: 12.5px; padding: 5px 14px; border-radius: var(--radius-full);
+  color: var(--text-mid); box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.glossary-cancel:hover { background: var(--card); color: var(--text-hi); }
+.glossary-submit {
+  font-size: 12.5px; font-weight: 600; padding: 5px 14px;
+  border-radius: var(--radius-full); background: var(--accent); color: #FFFFFF;
+}
+.glossary-submit:hover { background: var(--accent-hover); }
+
+/* 分组标题行 */
+.glossary-group-head {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em;
+  color: var(--text-low);
+  margin: 14px 0 8px;
+  text-align: left; width: 100%;
+}
+.glossary-group-toggle { cursor: pointer; }
+.glossary-group-toggle:hover { color: var(--text-mid); }
+.glossary-caret { width: 12px; height: 12px; margin-left: auto; transition: transform .2s; }
+.glossary-caret.open { transform: rotate(90deg); }
+.glossary-badge {
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: var(--radius-full);
+  background: var(--accent); color: #FFFFFF;
+  font-size: 10.5px; line-height: 17px; text-align: center; letter-spacing: 0;
+}
+.glossary-badge-mid { background: var(--line-strong); color: var(--text-mid); }
+.glossary-badge-low { background: var(--ink-2); color: var(--text-low); box-shadow: inset 0 0 0 1px var(--line); }
+
+.glossary-empty {
+  font-size: 12.5px; color: var(--text-low); line-height: 1.6;
+  padding: 10px 12px; border-radius: var(--radius-sm); background: var(--ink-2);
+  display: flex; align-items: center; gap: 8px;
+}
+.glossary-card .glossary-empty { margin-bottom: 2px; }
 </style>

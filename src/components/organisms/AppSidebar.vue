@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
+import { useGlossaryStore } from '@/stores/glossary'
 
 const props = defineProps({
   /** 移动端 bottom-nav 无需重复事件，桌面写日记按钮也走全局 ui store */
@@ -13,6 +14,7 @@ const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
 const auth = useAuthStore()
+const glossary = useGlossaryStore()
 
 const NAV = [
   { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
@@ -78,6 +80,12 @@ function openWrite() {
           </template>
         </svg>
         <span>{{ item.label }}</span>
+        <!-- 词典 pending 角标：有候选才显示（lexicon-design.md 5b 入口角标，不弹窗不打断） -->
+        <span
+          v-if="item.page === 'settings' && glossary.pendingCount"
+          class="sidebar-nav-badge"
+          :title="`${glossary.pendingCount} 条词典候选待确认`"
+        >{{ glossary.pendingCount > 9 ? '9+' : glossary.pendingCount }}</span>
       </button>
     </nav>
 
@@ -133,6 +141,14 @@ function openWrite() {
 .sidebar-nav-item.active::before {
   content: ""; position: absolute; left: 0; top: 9px; bottom: 9px;
   width: 3px; border-radius: 2px; background: var(--accent);
+}
+.sidebar-nav-badge {
+  margin-left: auto;
+  min-width: 17px; height: 17px; padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger); color: #FFFFFF;
+  font-family: var(--font-mono); font-size: 10px; line-height: 17px; text-align: center;
+  animation: cardIn .25s ease;
 }
 .sidebar-spacer { flex: 1; min-height: 14px; }
 

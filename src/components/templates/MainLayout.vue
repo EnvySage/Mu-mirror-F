@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
+import { useGlossaryStore } from '@/stores/glossary'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
 import MobileHeader from '@/components/organisms/MobileHeader.vue'
@@ -19,6 +20,7 @@ const ui = useUIStore()
 const auth = useAuthStore()
 const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
+const glossary = useGlossaryStore()
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
@@ -30,6 +32,8 @@ onMounted(() => {
   settingsStore.fetchSettings()
   // 有记录数据才拉取（各 view 也会自行拉取，这里做导航条计数兜底）
   if (recordsStore.records.length === 0) recordsStore.fetchRecords()
+  // 词典三组：设置图标角标数据源（AppSidebar / MobileHeader 共用，失败静默不打断导航）
+  glossary.fetch()
 })
 
 function openWrite() {
