@@ -27,9 +27,9 @@ const statsStore = useStatsStore()
 
 // ==================== 1. 今日概览 ====================
 
-/** 本地日期 key（yyyy-MM-dd） */
+/** 本地日期 key（yyyy-MM-dd）；兼容 Date 对象与后端 "yyyy-MM-dd HH:mm:ss" 字符串 */
 function localDayKey(dateLike) {
-  const d = parseDate(dateLike)
+  const d = dateLike instanceof Date ? dateLike : parseDate(dateLike)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 

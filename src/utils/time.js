@@ -5,6 +5,8 @@
  */
 export function parseDate(dateStr) {
   if (!dateStr) return new Date()
+  // Date 对象直接返回（防御非字符串输入）
+  if (dateStr instanceof Date) return dateStr
   // 将 "2026-08-07 06:22:58" 转为 ISO 格式 "2026-08-07T06:22:58"
   const isoStr = dateStr.replace(' ', 'T')
   return new Date(isoStr)
