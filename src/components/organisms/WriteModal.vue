@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
@@ -64,6 +64,25 @@ function onClose() {
   if (loading.value) return
   emit('close')
 }
+
+// ---- 桌面/移动形态切换（2a）：≥900px 居中 modal，<900px 底部抽屉 ----
+/** 窗口 ≥900px（与全局断点一致）；用 matchMedia 而非 resize 轮询 */
+const desktopMq = typeof window !== 'undefined' && window.matchMedia
+  ? window.matchMedia('(min-width: 900px)')
+  : null
+const isDesktop = ref(desktopMq ? desktopMq.matches : false)
+
+function onMqChange(e) {
+  isDesktop.value = e.matches
+}
+
+onMounted(() => {
+  desktopMq?.addEventListener?.('change', onMqChange)
+})
+
+onBeforeUnmount(() => {
+  desktopMq?.removeEventListener?.('change', onMqChange)
+})
 </script>
 
 <template>
@@ -71,8 +90,8 @@ function onClose() {
     <Transition name="fade">
       <div v-if="show" class="modal-overlay" @click="onClose" />
     </Transition>
-    <Transition name="sheet">
-      <div v-if="show" class="write-modal">
+    <Transition :name="isDesktop ? 'modal' : 'sheet'">
+      <div v-if="show" :class="['write-modal', { desktop: isDesktop }]">
         <div class="write-header">
           <button class="write-cancel" @click="onClose">取消</button>
           <span class="write-header-title">写日记</span>
@@ -121,8 +140,18 @@ function onClose() {
 }
 .write-modal.show { transform: translate(-50%, 0); }
 
+/* ===== 桌面（≥900px）：居中 modal（任务 2a） ===== */
 @media (min-width: 900px) {
-  .write-modal { border-radius: 20px; bottom: 8dvh; }
+  /* 遮罩适度加深 + backdrop-blur */
+  .modal-overlay { background: rgba(26,26,23,.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  .write-modal.desktop {
+    top: 50%; bottom: auto;
+    transform: translate(-50%, -50%);
+    width: 640px; max-width: calc(100vw - 48px);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-float);
+    padding-bottom: 0;
+  }
 }
 
 .write-header {
@@ -162,7 +191,15 @@ function onClose() {
 .write-hint svg { width: 13px; height: 13px; stroke: var(--accent); fill: none; flex-shrink: 0; }
 .write-counter { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); }
 
-/* sheet 过渡：基础态=屏内，enter-from/leave-to=屏外，过渡完成后自然停留屏内 */
+/* sheet 过渡（移动端底部抽屉）：基础态=屏内，enter-from/leave-to=屏外，过渡完成后自然停留屏内 */
 .sheet-enter-active, .sheet-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%) !important; }
+
+/* modal 过渡（桌面居中弹窗）：fade + scale 0.96→1，transform-origin 居中 */
+.modal-enter-active { transition: opacity .22s ease, transform .22s cubic-bezier(.32,.72,.28,1); }
+.modal-leave-active { transition: opacity .16s ease, transform .16s ease; }
+.modal-enter-from, .modal-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.96) !important;
+}
 </style>

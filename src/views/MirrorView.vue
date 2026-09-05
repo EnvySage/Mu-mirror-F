@@ -20,11 +20,12 @@ const statsStore = useStatsStore()
 const toast = useToastStore()
 
 onMounted(() => {
-  mirror.fetchMirror()
+  // 异步回调统一过 isUnmounted 守卫：resolve 时组件可能已被 Transition 卸载（out-in 离场期间无 DOM 可更新）
+  mirror.fetchMirror().catch(() => {})
   // 快照历史轨迹（真接口：GET /mirror/snapshots，失败静默回落空轨迹）
-  mirror.fetchSnapshots()
+  mirror.fetchSnapshots().catch(() => {})
   // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
-  statsStore.fetchStats()
+  statsStore.fetchStats().catch(() => {})
 })
 
 /** 镜子名：当前月份 */
@@ -53,7 +54,7 @@ const stats = computed(() => {
 })
 
 // ---- 生成完成：hero 一次轻脉冲 ----
-/** 组件卸载标志：卸载后 watcher/timer 不得再写响应式状态 */
+/** 组件卸载标志：卸载后 watcher/timer/异步回调不得再写响应式状态 */
 let isUnmounted = false
 const justSettled = ref(false)
 let settledTimer = null
@@ -145,16 +146,16 @@ const timeline = computed(() => (mirror.snapshots || []).map((s, i) => ({
   viewing: mirror.currentSnapshotId === s.id,
 })))
 
-/** 查看历史快照（hero 切换为该快照内容） */
+/** 查看历史快照（hero 切换为该快照内容）；卸载后不弹 toast（组件已不在 DOM） */
 async function onViewSnapshot(node) {
   const ok = await mirror.viewSnapshot(node.id)
-  if (!ok) toast.error(mirror.error || '快照加载失败')
+  if (!ok && !isUnmounted) toast.error(mirror.error || '快照加载失败')
 }
 
 /** 回到最新（最新节点也可点，用于从历史快照切回） */
 async function onBackToLatest() {
   const ok = await mirror.backToLatest()
-  if (!ok) toast.error(mirror.error || '快照加载失败')
+  if (!ok && !isUnmounted) toast.error(mirror.error || '快照加载失败')
 }
 
 /** 对比模式开关 */
@@ -189,7 +190,8 @@ const compareA = ref(null)
 const compareB = ref(null)
 const compareLoading = ref(false)
 
-/** 拉取两份对比快照详情（store 内 60s 缓存，重复对比不重复请求） */
+/** 拉取两份对比快照详情（store 内 60s 缓存，重复对比不重复请求）
+ *  卸载守卫：resolve 时组件可能已随路由切走（out-in 离场期无 DOM），不再写状态 */
 watch([compareAId, compareBId], async ([aId, bId], [prevA, prevB]) => {
   if (!compareMode.value) return
   if (aId === prevA && bId === prevB && compareA.value) return
@@ -198,6 +200,7 @@ watch([compareAId, compareBId], async ([aId, bId], [prevA, prevB]) => {
     aId ? mirror.fetchSnapshotDetail(aId) : Promise.resolve(null),
     bId ? mirror.fetchSnapshotDetail(bId) : Promise.resolve(null),
   ])
+  if (isUnmounted) return
   compareA.value = a
   compareB.value = b
   compareLoading.value = false
@@ -218,6 +221,9 @@ function deltaTier(label) {
   return 'stable'
 }
 
+/** Δ 程度词（driftDelta → 程度词；沿用 store.driftLevel 阈值口径） */
+const driftDeltaLabel = computed(() => (driftDelta.value === null ? null : mirror.driftLevel(driftDelta.value)))
+
 /** Δ 程度档位（driftDelta → 'stable' | 'minor' | 'major' | null） */
 const driftDeltaTier = computed(() => (driftDelta.value === null ? null : deltaTier(driftDeltaLabel.value)))
 
@@ -233,6 +239,8 @@ function compareLabel(id) {
 
 async function onGenerate() {
   const ok = await mirror.generate()
+  // 生成阻塞数十秒，期间用户可能已切页：卸载后只落 store 不弹 toast（无宿主 DOM）
+  if (isUnmounted) return
   if (ok) toast.success('快照已生成')
   else toast.error(mirror.error || '生成失败，请重试')
 }

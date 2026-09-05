@@ -16,6 +16,8 @@ const props = defineProps({
 const recordsStore = useRecordsStore()
 
 const editable = computed(() => props.record.status === 'reviewing')
+/** done 记录只读：控件禁用而非点击报错 */
+const readonly = computed(() => props.record.status === 'done')
 const chunks = computed(() => props.record.chunks || [])
 
 /** 新增片段：本地空占位，用户输入文本失焦时 POST /records/{id}/chunks */
@@ -44,7 +46,7 @@ function onAddChunk() {
 
     <!-- 片段卡片列表 -->
     <div class="review-list-label">
-      <span>片段卡片 · CHUNKS</span>
+      <span>{{ readonly ? '片段卡片 · CHUNKS（已入库，只读）' : '片段卡片 · CHUNKS' }}</span>
       <span>{{ chunks.length }}</span>
     </div>
 
@@ -54,6 +56,7 @@ function onAddChunk() {
       :chunk="chunk"
       :index="i"
       :editable="editable"
+      :readonly="readonly"
     />
 
     <div v-if="chunks.length === 0" class="chunks-empty">

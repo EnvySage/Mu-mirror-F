@@ -5,8 +5,10 @@
  * 每天 1 柱，高 = count/max 占比；无记录天 0 高但保留 1px 底座感。
  * hover 原生 <title>：日期 + 条数；柱高 CSS transition 0.4s。
  * range 暴露窗口首尾日期（MM-DD / MM-DD）供宿主页图例行展示。
+ *
+ * 注意：defineExpose 必须在 range 声明之后——前置会踩 const TDZ
+ * （Cannot access 'range' before initialization），组件 setup 即崩、整页白屏。
  */
-defineExpose({ range })
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
 
@@ -46,6 +48,8 @@ const range = computed(() => {
   const last = props.data[props.data.length - 1]?.date
   return first && last ? `${shortDate(first)} / ${shortDate(last)}` : null
 })
+
+defineExpose({ range })
 </script>
 
 <template>

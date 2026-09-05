@@ -13,10 +13,15 @@ const props = defineProps({
   chunk: { type: Object, required: true },
   index: { type: Number, default: 0 },
   editable: { type: Boolean, default: false },
+  /** 只读态（done 记录）：所有编辑控件禁用/隐藏，一眼可见"不可修改" */
+  readonly: { type: Boolean, default: false },
 })
 
 const recordsStore = useRecordsStore()
 const toast = useToastStore()
+
+/** 编辑可用 = 审核中 且 非只读（done） */
+const canEdit = computed(() => props.editable && !props.readonly)
 
 /** 仅本地占位片段（ReviewPanel 新增）走 POST /records/{id}/chunks */
 const isNew = computed(() => String(props.chunk.id).startsWith('local_'))
@@ -70,6 +75,7 @@ async function onSegmentBlur() {
 }
 
 function toggleMood(m) {
+  if (!canEdit.value) return
   const i = edit.mood.indexOf(m)
   if (i >= 0) edit.mood.splice(i, 1)
   else edit.mood.push(m)
@@ -77,12 +83,14 @@ function toggleMood(m) {
 }
 
 function selectType(t) {
+  if (!canEdit.value) return
   edit.contentType = t
   if (!showTaskStatus.value) edit.taskStatus = ''
   save({ contentType: t, ...(showTaskStatus.value && edit.taskStatus ? { taskStatus: edit.taskStatus } : { taskStatus: null }) })
 }
 
 function selectTask(t) {
+  if (!canEdit.value) return
   edit.taskStatus = edit.taskStatus === t ? '' : t
   save({ taskStatus: edit.taskStatus || null })
 }
@@ -128,11 +136,11 @@ async function removeChunk() {
 </script>
 
 <template>
-  <div class="chunk-card card">
+  <div :class="['chunk-card', 'card', { 'chunk-readonly': readonly }]">
     <div class="chunk-top">
-      <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}</span>
+      <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
       <div class="chunk-actions">
-        <button v-if="editable" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
+        <button v-if="canEdit" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
         </button>
       </div>
@@ -140,7 +148,7 @@ async function removeChunk() {
 
     <!-- segment -->
     <textarea
-      v-if="editable"
+      v-if="canEdit"
       ref="textareaEl"
       v-model="edit.segment"
       class="chunk-segment"
@@ -166,12 +174,13 @@ async function removeChunk() {
           v-for="t in CONTENT_TYPES"
           :key="t.key"
           :class="['chip', { selected: edit.contentType === t.key }]"
+          :disabled="!canEdit"
           @click="selectType(t.key)"
         >{{ t.label }}</button>
       </div>
     </div>
 
-    <!-- 情绪 chips（13 色多选） -->
+    <!-- 情绪 chips（13 色多选，已选可点取消） -->
     <div class="chunk-field">
       <div class="chunk-field-label">情绪 MOOD · 多选</div>
       <div class="chip-row">
@@ -180,12 +189,13 @@ async function removeChunk() {
           :key="m.key"
           :class="['chip', 'mood-chip', { selected: edit.mood.includes(m.key) }]"
           :style="{ color: edit.mood.includes(m.key) ? MOOD_COLOR[m.key] : undefined }"
+          :disabled="!canEdit"
           @click="toggleMood(m.key)"
         ><span class="dot" />{{ m.label }}</button>
       </div>
     </div>
 
-    <!-- 任务状态（仅 todo/plan） -->
+    <!-- 任务状态（仅 todo/plan；点已选项清空该字段） -->
     <div v-if="showTaskStatus" class="chunk-field">
       <div class="chunk-field-label">任务状态 TASK</div>
       <div class="chip-row">
@@ -193,6 +203,7 @@ async function removeChunk() {
           v-for="t in TASK_STATUSES"
           :key="t.key"
           :class="['chip', { selected: edit.taskStatus === t.key }]"
+          :disabled="!canEdit"
           @click="selectTask(t.key)"
         >{{ t.label }}</button>
       </div>
@@ -202,7 +213,7 @@ async function removeChunk() {
     <div class="chunk-field">
       <div class="chunk-field-label">关键词 KEYWORDS · 3-5 个</div>
       <input
-        v-if="editable"
+        v-if="canEdit"
         v-model="edit.keywords"
         class="keywords-input"
         placeholder="用逗号分隔"
@@ -258,4 +269,18 @@ async function removeChunk() {
 .keywords-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
 .record-keywords { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* 只读态（done 记录）：控件禁用 + 弱化视觉，"不可修改"一眼可见 */
+.chunk-card.chunk-readonly { opacity: .72; }
+.chunk-card.chunk-readonly .chip,
+.chunk-card.chunk-readonly .chunk-segment {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.chunk-card.chunk-readonly .chip:hover {
+  background: var(--card);
+  border-color: var(--line-strong);
+  color: var(--text-mid);
+}
+.chunk-card.chunk-readonly .chunk-index { color: var(--text-low); }
 </style>
