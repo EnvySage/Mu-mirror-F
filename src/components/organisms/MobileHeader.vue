@@ -33,8 +33,10 @@ const emit = defineEmits(['write', 'summary'])
 .header-actions { display: flex; gap: 8px; }
 .header-icon-btn {
   width: 36px; height: 36px; border-radius: 12px;
-  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  background: #FFFFFF; border: 1px solid var(--line);
   display: grid; place-items: center;
+  transition: background .15s;
 }
+.header-icon-btn:active { transform: scale(.94); }
 .header-icon-btn svg { width: 17px; height: 17px; stroke: var(--text-mid); fill: none; }
 </style>

@@ -1,34 +1,38 @@
 /* ===================================================================
-   Mirror v2 Design Tokens —— 权威来源：docs/prototype/mirror-prototype-v2.html
-   深蓝黑玻璃拟态（auth 登录页例外，浅色风格内联在 AuthLayout/WelcomeView）
+   Mirror 「晨纸」主题 Design Tokens
+   暖白纸面 + 墨色字迹 + 钢笔墨蓝唯一 accent
+   装饰服务内容：细线边框、纸感投影、无渐变、无发光、无玻璃拟态
    =================================================================== */
 :root {
-  /* 基色 */
-  --ink: #0B0E1A;               /* 基色：深蓝黑 */
-  --ink-2: #101427;             /* 面板底 */
-  --glass: rgba(255,255,255,.055);
-  --glass-2: rgba(255,255,255,.085);
-  --line: rgba(255,255,255,.09);
-  --line-strong: rgba(255,255,255,.16);
-  --text-hi: #EDF0FA;
-  --text-mid: #9AA3C0;
-  --text-low: #5A617E;
+  /* 纸面 */
+  --ink: #FAFAF8;               /* 基色：暖白纸 */
+  --ink-2: #F3F2EE;             /* 次级底 */
+  --card: #FFFFFF;              /* 卡片白 */
+  --line: #E8E6E0;              /* 细线 */
+  --line-strong: #D8D5CC;
 
-  /* 光谱 accent */
-  --cyan: #6EE7F0;              /* 光谱青 */
-  --violet: #A78BFA;            /* 光谱紫 */
-  --accent-grad: linear-gradient(100deg, #6EE7F0, #A78BFA 60%, #E879F9);
+  /* 文字 */
+  --text-hi: #1A1A17;           /* 墨黑 */
+  --text-mid: #6B6B64;          /* 石墨灰 */
+  --text-low: #A8A8A0;
 
-  /* 语义色 */
-  --danger: #FF6B81; --danger-bg: rgba(255,107,129,.12);
-  --success: #4ADE9C; --success-bg: rgba(74,222,156,.12);
-  --warn: #FFC862; --warn-bg: rgba(255,200,98,.12);
-  --processing: #818CF8; --processing-bg: rgba(129,140,248,.12);
-  --error: #FF6B81;
+  /* 钢笔墨蓝（唯一 accent） */
+  --accent: #2C5FE8;
+  --accent-hover: #1E47B8;
+  --accent-soft: #EEF2FE;       /* 淡蓝底：选中态 / 标签底 */
 
-  /* 几何 */
-  --radius: 16px; --radius-sm: 10px; --radius-full: 9999px;
-  --shadow: 0 8px 32px rgba(0,0,0,.45);
+  /* 语义色（配 .10~.12 透明底） */
+  --success: #2E9E6B; --success-bg: rgba(46,158,107,.12);
+  --warn: #C98A1B;    --warn-bg: rgba(201,138,27,.12);
+  --danger: #D6455D;  --danger-bg: rgba(214,69,93,.12);
+  --processing: #5B6BE8; --processing-bg: rgba(91,107,232,.12);
+  --error: #D6455D;
+
+  /* 几何 / 投影 */
+  --radius: 12px; --radius-sm: 8px; --radius-full: 9999px;
+  --shadow: 0 1px 3px rgba(20,20,15,.05);
+  --shadow-hover: 0 3px 8px rgba(20,20,15,.08);
+  --shadow-float: 0 8px 28px rgba(20,20,15,.12);
 
   /* 字体 */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
@@ -39,4 +43,8 @@
   --nav-height: 62px;
   --sidebar-width: 264px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* 兼容别名（历史组件遗留引用：MButton / ToastContainer） */
+  --surface: #FFFFFF;
+  --text-primary: #1A1A17;
 }

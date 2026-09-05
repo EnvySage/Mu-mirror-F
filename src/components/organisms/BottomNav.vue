@@ -65,8 +65,7 @@ function handleNav(item) {
   display: flex; justify-content: space-around; align-items: center;
   height: calc(var(--nav-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: rgba(13,16,32,.88);
-  backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
+  background: #FFFFFF;
   border-top: 1px solid var(--line);
 }
 @media (min-width: 900px) { .bottom-nav { display: none; } }
@@ -77,15 +76,15 @@ function handleNav(item) {
   transition: color .18s;
 }
 .nav-item svg { width: 21px; height: 21px; stroke: currentColor; fill: none; }
-.nav-item.active { color: var(--cyan); }
-.nav-item.active svg { filter: drop-shadow(0 0 6px rgba(110,231,240,.55)); }
+.nav-item:active { transform: scale(.94); }
+.nav-item.active { color: var(--accent); font-weight: 500; }
 
 .write-btn-circle {
   width: 46px; height: 46px; margin-top: -26px; border-radius: 50%;
-  background: var(--accent-grad); display: grid; place-items: center;
-  box-shadow: 0 6px 22px rgba(110,231,240,.35), 0 0 0 5px var(--ink);
+  background: var(--accent); display: grid; place-items: center;
+  box-shadow: 0 4px 12px rgba(44,95,232,.3), 0 0 0 5px var(--ink);
   transition: transform .15s;
 }
 .write-btn-circle:active { transform: scale(.92); }
-.write-btn-circle svg { width: 20px; height: 20px; stroke: #0B0E1A; }
+.write-btn-circle svg { width: 20px; height: 20px; stroke: #FFFFFF; }
 </style>

@@ -100,17 +100,21 @@ function selectDay(dayObj) {
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <div class="calendar-weekdays">
-      <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-    </div>
-    <div class="calendar-days">
-      <div
-        v-for="(d, i) in calendarDays"
-        :key="i"
-        :class="['calendar-day', { 'other-month': d.otherMonth, today: d.isToday, 'has-record': d.hasRecord, selected: d.isSelected }]"
-        @click="selectDay(d)"
-      >{{ d.day }}</div>
-    </div>
+    <Transition name="fade" mode="out-in">
+      <div :key="monthText" class="calendar-grid">
+        <div class="calendar-weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="calendar-days">
+          <div
+            v-for="(d, i) in calendarDays"
+            :key="i"
+            :class="['calendar-day', { 'other-month': d.otherMonth, today: d.isToday, 'has-record': d.hasRecord, selected: d.isSelected }]"
+            @click="selectDay(d)"
+          >{{ d.day }}</div>
+        </div>
+      </div>
+    </Transition>
     <div class="calendar-legend">
       <div class="calendar-legend-item"><div class="calendar-dot has-record" /><span>有记录</span></div>
       <div class="calendar-legend-item"><div class="calendar-dot today" /><span>今天</span></div>
@@ -129,11 +133,16 @@ function selectDay(dayObj) {
 .calendar-month { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 
 .calendar-nav-btn {
-  width: 32px; height: 32px; border-radius: 10px;
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
   display: grid; place-items: center;
-  box-shadow: inset 0 0 0 1px var(--line);
+  border: 1px solid var(--line);
+  background: var(--card);
+  transition: background .15s;
 }
+.calendar-nav-btn:hover { background: var(--ink-2); }
 .calendar-nav-btn svg { width: 15px; height: 15px; stroke: var(--text-mid); fill: none; }
+
+.calendar-grid { animation: monthIn .25s ease; }
 
 .calendar-weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
@@ -148,19 +157,20 @@ function selectDay(dayObj) {
 .calendar-day {
   position: relative; aspect-ratio: 1;
   display: grid; place-items: center;
-  font-size: 13.5px; border-radius: 11px;
-  color: var(--text-mid); transition: all .15s; cursor: pointer;
+  font-size: 13.5px; border-radius: var(--radius-sm);
+  color: var(--text-mid); transition: background .15s, color .15s; cursor: pointer;
 }
+.calendar-day:hover { background: var(--ink-2); }
 .calendar-day.other-month { color: var(--text-low); opacity: .35; }
 .calendar-day.has-record { color: var(--text-hi); font-weight: 500; }
 .calendar-day.has-record::after {
   content: ""; position: absolute; bottom: 6px;
   width: 4.5px; height: 4.5px; border-radius: 50%;
-  background: var(--accent-grad); box-shadow: 0 0 6px rgba(110,231,240,.6);
+  background: var(--accent);
 }
-.calendar-day.today { box-shadow: inset 0 0 0 1.5px var(--cyan); }
-.calendar-day.selected { background: var(--accent-grad); color: #0B0E1A; font-weight: 600; }
-.calendar-day.selected::after { background: #0B0E1A; box-shadow: none; }
+.calendar-day.today { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: var(--radius-sm); }
+.calendar-day.selected { background: var(--accent); color: #FFFFFF; font-weight: 600; animation: dayPop .25s cubic-bezier(.34,1.4,.5,1); }
+.calendar-day.selected::after { background: #FFFFFF; }
 
 .calendar-legend {
   display: flex; gap: 16px; margin-top: 14px; padding-top: 12px;
@@ -171,7 +181,7 @@ function selectDay(dayObj) {
   font-size: 11px; color: var(--text-low);
 }
 .calendar-dot { width: 7px; height: 7px; border-radius: 50%; }
-.calendar-dot.has-record { background: var(--accent-grad); }
-.calendar-dot.today { box-shadow: inset 0 0 0 1.5px var(--cyan); background: transparent; }
-.calendar-dot.selected { background: var(--accent-grad); }
+.calendar-dot.has-record { background: var(--accent); }
+.calendar-dot.today { box-shadow: inset 0 0 0 1.5px var(--accent); background: transparent; }
+.calendar-dot.selected { background: var(--accent); }
 </style>

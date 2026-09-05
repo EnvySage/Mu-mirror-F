@@ -1,7 +1,7 @@
 <script setup>
 defineProps({
   icon: { type: String, default: 'info' },
-  iconBg: { type: String, default: 'var(--accent-grad)' },
+  iconBg: { type: String, default: 'var(--accent)' },
   label: { type: String, required: true },
   description: { type: String, default: '' },
   action: { type: String, default: 'chevron' }, // chevron | toggle | edit | none
@@ -15,7 +15,7 @@ defineEmits(['click', 'toggle'])
   <div class="settings-item" @click="(action === 'chevron' || action === 'edit') ? $emit('click') : null">
     <div class="settings-item-left">
       <div class="settings-item-icon" :style="{ background: iconBg }">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#0B0E1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path v-if="icon === 'chat'" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           <template v-else-if="icon === 'lock'">
             <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -76,11 +76,12 @@ defineEmits(['click', 'toggle'])
 <style scoped>
 .settings-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,.045);
+  padding: 13px 16px; border-bottom: 1px solid var(--line);
   cursor: pointer; transition: background .15s;
   gap: 12px;
 }
 .settings-item:last-child { border-bottom: none; }
+.settings-item:hover { background: var(--ink-2); }
 .settings-item-left {
   display: flex; align-items: center; gap: 12px;
   min-width: 0; flex: 1;

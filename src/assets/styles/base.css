@@ -12,50 +12,30 @@ body {
 
 button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input, textarea, select { font-family: inherit; color: var(--text-hi); }
-a { color: var(--cyan); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; }
 
-:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(20,20,15,.16); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ============ Aurora 背景（氛围，不是装饰） ============ */
-.aurora {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(52vw 42vh at 8% -6%, rgba(110,231,240,.13), transparent 62%),
-    radial-gradient(58vw 50vh at 96% 104%, rgba(167,139,250,.14), transparent 62%),
-    radial-gradient(40vw 34vh at 78% 6%, rgba(232,121,249,.05), transparent 60%);
-}
-
-/* ============ 通用玻璃卡 ============ */
+/* ============ 通用白纸卡（细边 + 纸感投影 + hover 上浮） ============ */
 .card {
-  background: var(--glass);
+  background: var(--card);
   border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px var(--line);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+@media (hover: hover) {
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
 }
 
-/* auth（登录页）浅色例外：不套深色玻璃 —— token 内联在 AuthLayout/WelcomeView，
-   保留 .theme-light 组以备其他浅色页面复用 */
-.theme-light {
-  --ink: #F5F5F7;
-  --ink-2: #FFFFFF;
-  --glass: #FFFFFF;
-  --glass-2: #F0F0F4;
-  --line: #E8E8ED;
-  --line-strong: #D6D6DD;
-  --text-hi: #1D1D1F;
-  --text-mid: #6E6E73;
-  --text-low: #AEAEB2;
-  --cyan: #4F46E5;
-  --violet: #7C3AED;
-  --shadow: 0 12px 40px rgba(0,0,0,.1);
-  background: #F5F5F7;
-  color: #1D1D1F;
-}
-.theme-light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.16); }
+/* ============ 按钮按压微交互 ============ */
+button { transition: transform .1s ease; }
+button:active { transform: scale(.97); }
+/* 导航 / toggle / 日历格等自管 transform 的按钮不受全局缩放影响 */
+.calendar-day:active, .toggle:active { transform: none; }
 
 /* ============ 动效无障碍 ============ */
 @media (prefers-reduced-motion: reduce) {

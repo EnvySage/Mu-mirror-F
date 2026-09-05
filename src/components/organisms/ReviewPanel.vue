@@ -79,15 +79,15 @@ function onAddChunk() {
 .review-original {
   position: relative; padding: 14px 16px; margin-bottom: 14px;
   border-radius: var(--radius);
-  background: linear-gradient(160deg, rgba(110,231,240,.07), rgba(167,139,250,.06));
-  box-shadow: inset 0 0 0 1px rgba(110,231,240,.18);
+  background: var(--accent-soft);
+  border: 1px solid rgba(44,95,232,.18);
 }
 .review-label {
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em;
-  color: var(--text-low); margin-bottom: 6px;
+  color: var(--accent); margin-bottom: 6px;
   display: flex; align-items: center; gap: 6px;
 }
-.review-label svg { width: 12px; height: 12px; stroke: var(--cyan); fill: none; }
+.review-label svg { width: 12px; height: 12px; stroke: var(--accent); fill: none; }
 .review-original-text { font-size: 14px; line-height: 1.8; color: var(--text-hi); white-space: pre-wrap; word-break: break-word; }
 
 .review-list-label {
@@ -109,7 +109,7 @@ function onAddChunk() {
   display: flex; align-items: center; justify-content: center; gap: 7px;
   transition: all .18s;
 }
-.add-chunk-btn:hover { color: var(--cyan); border-color: rgba(110,231,240,.4); }
+.add-chunk-btn:hover { color: var(--accent); border-color: var(--accent); }
 .add-chunk-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
 
 .review-hint {
@@ -117,8 +117,8 @@ function onAddChunk() {
   font-size: 12px; color: var(--text-low); line-height: 1.6;
   padding: 12px 14px; margin-top: 10px;
   border-radius: var(--radius-sm);
-  background: rgba(255,200,98,.06);
-  box-shadow: inset 0 0 0 1px rgba(255,200,98,.15);
+  background: var(--warn-bg);
+  box-shadow: inset 0 0 0 1px rgba(201,138,27,.2);
 }
 .review-hint svg { width: 14px; height: 14px; stroke: var(--warn); fill: none; flex-shrink: 0; margin-top: 2px; }
 </style>

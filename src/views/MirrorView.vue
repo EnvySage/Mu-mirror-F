@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
 import { useRecordsStore } from '@/stores/records'
 import { useToastStore } from '@/stores/toast'
@@ -20,7 +20,26 @@ onMounted(() => {
 const now = new Date()
 const mirrorName = computed(() => `你的镜子 · ${now.getMonth() + 1} 月`)
 
-/** 三格 stats：总记录 / 活跃天 / 日均（从记录本地统计） */
+// ---- 数字滚动（0 → 目标值，JS rAF ~600ms；纯展示层，无数据逻辑） ----
+const statsProgress = ref(0) // 0~1
+
+function animateNumber() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    statsProgress.value = 1
+    return
+  }
+  const start = performance.now()
+  const DUR = 600
+  function frame(t) {
+    const p = Math.min((t - start) / DUR, 1)
+    // easeOutCubic
+    statsProgress.value = 1 - Math.pow(1 - p, 3)
+    if (p < 1) requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+}
+
+/** 三格 stats：总记录 / 活跃天 / 日均（从记录本地统计），num 经滚动插值展示 */
 const stats = computed(() => {
   const rs = recordsStore.records
   const days = new Set(rs.map(r => {
@@ -28,11 +47,29 @@ const stats = computed(() => {
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
   }))
   const activeDays = days.size || 1
-  return [
-    { num: rs.length, label: '条记录' },
-    { num: days.size, label: '活跃天' },
-    { num: (rs.length / activeDays).toFixed(1), label: '日均' },
+  const raw = [
+    { num: rs.length, label: '条记录', decimals: 0 },
+    { num: days.size, label: '活跃天', decimals: 0 },
+    { num: (rs.length / activeDays).toFixed(1), label: '日均', decimals: 1 },
   ]
+  const p = statsProgress.value
+  return raw.map(s => ({
+    ...s,
+    display: (Number(s.num) * p).toFixed(s.decimals),
+  }))
+})
+
+// 镜子页可见 / 记录数据变化时重放数字滚动
+watch(() => recordsStore.records.length, animateNumber, { immediate: true })
+
+// ---- 生成完成：hero 一次轻脉冲 ----
+const justSettled = ref(false)
+let settledTimer = null
+watch(() => mirror.profile, (p) => {
+  if (!p) return
+  justSettled.value = true
+  clearTimeout(settledTimer)
+  settledTimer = setTimeout(() => { justSettled.value = false }, 1200)
 })
 
 /** 情绪分布（从记录 chunks mood 统计，top5） */
@@ -113,8 +150,8 @@ async function onGenerate() {
       </div>
 
       <template v-else-if="mirror.profile">
-        <!-- mirror-hero：sheen 扫光 + 渐变 stats -->
-        <div class="mirror-hero card">
+        <!-- mirror-hero：数字滚动 + 完成轻脉冲 -->
+        <div :class="['mirror-hero', 'card', { settled: justSettled }]">
           <div class="mirror-greeting">这是我在你身上看到的</div>
           <div class="mirror-name">{{ mirrorName }}</div>
           <div v-if="mirror.drift" class="mirror-drift">
@@ -124,7 +161,7 @@ async function onGenerate() {
           <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
           <div class="mirror-stats">
             <div v-for="(s, i) in stats" :key="i" class="mirror-stat">
-              <div class="mirror-stat-num">{{ s.num }}</div>
+              <div class="mirror-stat-num">{{ s.display }}</div>
               <div class="mirror-stat-label">{{ s.label }}</div>
             </div>
           </div>
@@ -138,8 +175,8 @@ async function onGenerate() {
         <div class="portrait-grid">
           <div class="portrait-section card">
             <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:var(--accent-grad)">
-                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              <div class="portrait-section-icon" style="background:var(--accent)">
+                <svg viewBox="0 0 24 24" style="stroke:#fff"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
               </div>
               <div class="portrait-section-title">情绪分布</div>
             </div>
@@ -161,8 +198,8 @@ async function onGenerate() {
 
           <div class="portrait-section card">
             <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#4ADE9C,#6EE7F0)">
-                <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              <div class="portrait-section-icon" style="background:var(--success)">
+                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
               </div>
               <div class="portrait-section-title">学习进展</div>
             </div>
@@ -179,8 +216,8 @@ async function onGenerate() {
 
           <div class="portrait-section card">
             <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#FFC862,#FB923C)">
-                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <div class="portrait-section-icon" style="background:var(--warn)">
+                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
               <div class="portrait-section-title">未完成的事 · {{ todos.length }}</div>
             </div>
@@ -195,8 +232,8 @@ async function onGenerate() {
 
           <div class="portrait-section card">
             <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:linear-gradient(135deg,#E879F9,#A78BFA)">
-                <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <div class="portrait-section-icon" style="background:#8B5CF6">
+                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
               </div>
               <div class="portrait-section-title">个人标签</div>
             </div>
@@ -211,8 +248,8 @@ async function onGenerate() {
         <!-- snapshot-strip 快照轨迹 -->
         <div class="portrait-section card span-2" style="margin-top:12px">
           <div class="portrait-section-header">
-            <div class="portrait-section-icon" style="background:rgba(255,255,255,.14)">
-              <svg viewBox="0 0 24 24" style="stroke:var(--text-hi)"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+            <div class="portrait-section-icon" style="background:var(--ink-2);border:1px solid var(--line)">
+              <svg viewBox="0 0 24 24" style="stroke:var(--accent)"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
             </div>
             <div class="portrait-section-title">快照轨迹（manual 保 2 · monthly 保 12）</div>
           </div>
@@ -247,47 +284,40 @@ async function onGenerate() {
   .page-content { padding: 18px 32px 40px; max-width: 900px; }
 }
 
-/* mirror-hero + sheen 扫光 */
+/* mirror-hero（白卡，无扫光） */
 .mirror-hero { position: relative; overflow: hidden; padding: 26px 22px; margin-top: 8px; text-align: left; }
-.mirror-hero::before {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.07) 46%, rgba(110,231,240,.06) 50%, transparent 66%);
-  background-size: 240% 100%;
-  animation: sheen 7s ease-in-out infinite;
-  pointer-events: none;
-}
-.mirror-greeting { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .22em; color: var(--cyan); margin-bottom: 8px; }
+.mirror-hero.settled { animation: breatheOnce 1.1s ease; }
+.mirror-greeting { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .22em; color: var(--accent); margin-bottom: 8px; }
 .mirror-name { font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.3; }
 .mirror-drift {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
-  font-size: 12px; color: var(--violet);
+  font-size: 12px; color: #8B5CF6;
   padding: 4px 12px; border-radius: var(--radius-full);
-  background: rgba(167,139,250,.1); box-shadow: inset 0 0 0 1px rgba(167,139,250,.3);
+  background: #F3EEFF;
 }
-.mirror-drift svg { width: 12px; height: 12px; stroke: var(--violet); fill: none; }
+.mirror-drift svg { width: 12px; height: 12px; stroke: #8B5CF6; fill: none; }
 .mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; }
 
 .mirror-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
 .mirror-stat {
   text-align: center; padding: 12px 6px; border-radius: var(--radius-sm);
-  background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--ink-2);
 }
 .mirror-stat-num {
   font-family: var(--font-display); font-size: 21px; font-weight: 600;
-  background: var(--accent-grad);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 .mirror-stat-label { font-size: 11px; color: var(--text-low); margin-top: 1px; }
 
 .mirror-generate {
-  margin-top: 16px; width: 100%; padding: 12px; border-radius: 13px;
+  margin-top: 16px; width: 100%; padding: 12px; border-radius: 12px;
   font-size: 14px; font-weight: 600; color: var(--text-mid);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  border: 1px solid var(--line-strong);
   display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: all .2s;
 }
-.mirror-generate:hover:not(:disabled) { color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.mirror-generate:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .mirror-generate:disabled { opacity: .55; cursor: not-allowed; }
 .mirror-generate svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
 
@@ -300,14 +330,14 @@ async function onGenerate() {
 .portrait-section { padding: 16px; }
 .portrait-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .portrait-section-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
-.portrait-section-icon svg { width: 15px; height: 15px; stroke: #0B0E1A; fill: none; stroke-width: 2; }
+.portrait-section-icon svg { width: 15px; height: 15px; fill: none; stroke-width: 2; }
 .portrait-section-title { font-size: 14px; font-weight: 600; }
 .portrait-text { font-size: 13.5px; line-height: 1.8; color: var(--text-mid); }
 .portrait-evidence { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .portrait-evidence-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; color: var(--text-low); margin-bottom: 7px; }
 .portrait-evidence-item { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--text-low); margin-bottom: 5px; }
-.evidence-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); flex-shrink: 0; align-self: center; }
-.evidence-date { font-family: var(--font-mono); font-size: 10.5px; color: var(--cyan); flex-shrink: 0; }
+.evidence-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; align-self: center; }
+.evidence-date { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); flex-shrink: 0; }
 
 /* mood-bar */
 .mood-bar { display: flex; height: 9px; border-radius: 6px; overflow: hidden; gap: 2px; }
@@ -325,7 +355,7 @@ async function onGenerate() {
 .user-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .user-tag {
   font-size: 12.5px; padding: 5px 13px; border-radius: var(--radius-full);
-  background: var(--accent-grad); color: #0B0E1A; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
 }
 
 /* snapshot strip */
@@ -333,16 +363,17 @@ async function onGenerate() {
 .snapshot-chip {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 10.5px;
   padding: 5px 11px; border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px var(--line); color: var(--text-low);
+  border: 1px solid var(--line); color: var(--text-low);
+  background: var(--card);
 }
-.snapshot-chip.current { color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
-.snapshot-chip.compare { color: var(--violet); box-shadow: inset 0 0 0 1px rgba(167,139,250,.4); }
+.snapshot-chip.current { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.snapshot-chip.compare { color: #8B5CF6; border-color: #8B5CF6; background: #F3EEFF; }
 
 /* 生成中视图 */
 .processing-view { text-align: center; padding: 70px 20px; }
 .processing-ring {
   width: 58px; height: 58px; margin: 0 auto 22px; border-radius: 50%;
-  border: 2.5px solid rgba(110,231,240,.15); border-top-color: var(--cyan);
+  border: 2.5px solid var(--processing-bg); border-top-color: var(--processing);
   animation: spin 1.1s linear infinite;
 }
 .processing-title { font-family: var(--font-display); font-size: 17px; }

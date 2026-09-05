@@ -137,7 +137,7 @@ function handleLogout() {
         <div class="settings-card card">
           <SettingsItem
             icon="chat"
-            icon-bg="var(--accent-grad)"
+            icon-bg="var(--accent)"
             label="API Key"
             :description="settingsStore.settings.ai_api_key || '未配置'"
             action="edit"
@@ -155,7 +155,7 @@ function handleLogout() {
           </div>
           <SettingsItem
             icon="link"
-            icon-bg="rgba(167,139,250,.8)"
+            icon-bg="#8B5CF6"
             label="API 地址"
             :description="settingsStore.settings.ai_base_url || '使用默认'"
             action="edit"
@@ -163,7 +163,7 @@ function handleLogout() {
           />
           <SettingsItem
             icon="zap"
-            icon-bg="rgba(74,222,156,.8)"
+            icon-bg="var(--success)"
             label="模型"
             :description="settingsStore.settings.ai_model || '未配置'"
             action="edit"
@@ -184,7 +184,7 @@ function handleLogout() {
         <div class="settings-card card">
           <SettingsItem
             icon="sparkle"
-            icon-bg="rgba(110,231,240,.8)"
+            icon-bg="var(--processing)"
             label="来源"
             :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地 BGE-m3（1024 维）'"
             action="toggle"
@@ -193,7 +193,7 @@ function handleLogout() {
           />
           <SettingsItem
             icon="database"
-            icon-bg="rgba(255,200,98,.8)"
+            icon-bg="var(--warn)"
             label="API 模式地址"
             :description="settingsStore.settings.embedding_base_url || '未启用'"
             action="edit"
@@ -201,7 +201,7 @@ function handleLogout() {
           />
           <SettingsItem
             icon="lock"
-            icon-bg="rgba(232,121,249,.8)"
+            icon-bg="var(--danger)"
             label="API 模式 Key"
             :description="settingsStore.settings.embedding_api_key || '未配置'"
             action="edit"
@@ -219,7 +219,7 @@ function handleLogout() {
         <div class="settings-card card">
           <SettingsItem
             icon="eye"
-            icon-bg="rgba(232,121,249,.8)"
+            icon-bg="var(--processing)"
             label="自动审核（auto）"
             :description="settingsStore.settings.review_mode === 'auto' ? '已开启：跳过审核窗口，AI 直接入库' : '关闭：AI 处理后需手动确认'"
             action="toggle"
@@ -261,7 +261,7 @@ function handleLogout() {
         <div class="settings-card card">
           <SettingsItem
             icon="download"
-            icon-bg="rgba(148,163,184,.8)"
+            icon-bg="#8A8F9C"
             label="导出 JSON"
             description="结构化备份 · 不含向量"
             action="none"
@@ -270,7 +270,7 @@ function handleLogout() {
           </SettingsItem>
           <SettingsItem
             icon="file"
-            icon-bg="rgba(148,163,184,.8)"
+            icon-bg="#8A8F9C"
             label="导出 Markdown"
             description="人可读 · 不含向量"
             action="none"
@@ -279,12 +279,12 @@ function handleLogout() {
           </SettingsItem>
           <SettingsItem
             icon="logout"
-            icon-bg="rgba(255,107,129,.8)"
+            icon-bg="var(--danger)"
             :label="auth.user ? `退出登录（${auth.user.username}）` : '退出登录'"
             action="none"
           >
             <template #append>
-              <button class="test-btn" style="color:var(--danger);box-shadow:inset 0 0 0 1px rgba(255,107,129,.35)" @click="handleLogout">退出</button>
+              <button class="test-btn danger-btn" @click="handleLogout">退出</button>
             </template>
           </SettingsItem>
         </div>
@@ -296,7 +296,9 @@ function handleLogout() {
           <div class="modal-content">
             <div class="modal-header">
               <h3>{{ editLabel }}</h3>
-              <button class="modal-close" @click="showEditModal = false">×</button>
+              <button class="modal-close" title="关闭" @click="showEditModal = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
             </div>
             <div class="modal-body">
               <div v-if="editOptions" class="option-list">
@@ -368,31 +370,34 @@ function handleLogout() {
 .protocol-chips { display: flex; gap: 8px; padding: 4px 16px 14px; }
 
 .test-btn {
-  font-size: 12.5px; color: var(--cyan);
+  font-size: 12.5px; color: var(--accent);
   padding: 5px 13px; border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px rgba(110,231,240,.35);
+  border: 1px solid var(--accent);
   flex-shrink: 0; cursor: pointer;
+  transition: background .15s;
 }
+.test-btn:hover { background: var(--accent-soft); }
 .test-btn:disabled { opacity: .5; cursor: not-allowed; }
+.danger-btn { color: var(--danger); border-color: var(--danger); }
+.danger-btn:hover { background: var(--danger-bg); }
 
 /* half-life */
 .half-life-row { padding: 13px 16px; }
 .half-life-header { display: flex; justify-content: space-between; align-items: baseline; }
 .half-life-label { font-size: 14px; }
-.half-life-value { font-family: var(--font-mono); font-size: 13px; color: var(--cyan); }
-input[type="range"] { width: 100%; margin-top: 10px; accent-color: #A78BFA; background: transparent; }
+.half-life-value { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent); background: transparent; }
 
-/* 编辑弹窗（暗色玻璃） */
+/* 编辑弹窗（白卡） */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(5,7,15,.6);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  position: fixed; inset: 0; background: rgba(26,26,23,.35);
   display: flex; align-items: center; justify-content: center;
   z-index: 50; padding: 20px;
 }
 .modal-content {
-  background: rgba(19,23,44,.96);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  border-radius: 22px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line-strong);
+  background: #FFFFFF;
+  border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-float);
   width: 100%; max-width: 400px; max-height: 80dvh;
   display: flex; flex-direction: column;
 }
@@ -403,9 +408,10 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: #A78BFA; back
 .modal-header h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 .modal-close {
   width: 28px; height: 28px; border-radius: 50%;
-  font-size: 18px; color: var(--text-mid);
+  color: var(--text-mid);
   display: grid; place-items: center;
 }
+.modal-close svg { width: 14px; height: 14px; }
 .modal-body { padding: 20px; overflow-y: auto; }
 .modal-footer {
   display: flex; gap: 12px; padding: 16px 20px;
@@ -414,37 +420,38 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: #A78BFA; back
 .btn-cancel {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
   font-size: 14px; color: var(--text-mid);
-  box-shadow: inset 0 0 0 1px var(--line);
+  border: 1px solid var(--line);
 }
 .btn-save {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
   font-size: 14px; font-weight: 600;
-  background: var(--accent-grad); color: #0B0E1A;
+  background: var(--accent); color: #FFFFFF;
 }
+.btn-save:hover:not(:disabled) { background: var(--accent-hover); }
 .btn-save:disabled { opacity: .5; cursor: not-allowed; }
 
 .modal-input {
-  width: 100%; padding: 12px 14px; border: none;
-  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  width: 100%; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--line);
   border-radius: var(--radius-sm); font-size: 14px; color: var(--text-hi);
 }
-.modal-input:focus { outline: none; box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.modal-input:focus { outline: none; border-color: var(--accent); }
 
 .option-list { display: flex; flex-direction: column; gap: 8px; }
 .option-item {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 14px 16px; border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--line);
+  border: 1px solid var(--line);
   cursor: pointer; transition: all .15s;
 }
-.option-item.active { box-shadow: inset 0 0 0 1.5px rgba(110,231,240,.5); background: rgba(110,231,240,.05); }
+.option-item.active { border: 1.5px solid var(--accent); background: var(--accent-soft); }
 .option-radio {
   width: 18px; height: 18px; border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px var(--line-strong);
   flex-shrink: 0; display: grid; place-items: center; margin-top: 2px;
 }
-.option-item.active .option-radio { box-shadow: inset 0 0 0 1.5px var(--cyan); }
-.option-radio-checked { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); }
+.option-item.active .option-radio { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.option-radio-checked { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .option-label { font-size: 14px; font-weight: 600; }
 .option-desc { font-size: 12px; color: var(--text-low); line-height: 1.4; margin-top: 2px; }
 </style>

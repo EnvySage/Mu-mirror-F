@@ -124,7 +124,10 @@ async function removeSession(id) {
         <div class="sessions-head">
           <span class="sessions-title">历史会话</span>
           <div class="sessions-head-actions">
-            <button class="sessions-new" @click="startNew">+ 新会话</button>
+            <button class="sessions-new" @click="startNew">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg>
+              新会话
+            </button>
             <button class="sessions-close" @click="showSessions = false">关闭</button>
           </div>
         </div>
@@ -153,7 +156,7 @@ async function removeSession(id) {
       <div class="chat-wrap">
         <!-- 空态（含加载中 / 失败兜底） -->
         <div v-if="chat.messages.length === 0" class="chat-empty">
-          <div class="empty-icon" style="width:52px;height:52px;margin:0 auto 14px;border-radius:18px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--line);display:grid;place-items:center">
+          <div class="empty-icon" style="width:52px;height:52px;margin:0 auto 14px;border-radius:16px;background:var(--ink-2);border:1px solid var(--line);display:grid;place-items:center">
             <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--text-low);fill:none;stroke-width:1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
           <div class="empty-title">{{ emptyTitle }}</div>
@@ -170,7 +173,7 @@ async function removeSession(id) {
             <div class="chat-msg-bubble">
               <!-- AI 消息：意图路由眉标 -->
               <div v-if="msg.role !== 'user' && msg.route" class="chat-route">
-                INTENT → <b>{{ msg.route }}</b>
+                INTENT <b>{{ msg.route }}</b>
               </div>
 
               <!-- typing dots -->
@@ -227,11 +230,11 @@ async function removeSession(id) {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12.5px; color: var(--text-mid);
   padding: 6px 14px; border-radius: var(--radius-full);
-  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  background: #FFFFFF; border: 1px solid var(--line);
   cursor: pointer;
 }
 .chat-sessions-btn svg { width: 13px; height: 13px; stroke: currentColor; }
-.chat-sessions-btn:hover { box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); color: var(--cyan); }
+.chat-sessions-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
@@ -246,20 +249,19 @@ async function removeSession(id) {
 .chat-empty { text-align: center; padding: 60px 20px; }
 
 .chat-messages { flex: 1; overflow-y: auto; padding: 14px 4px 10px; }
-.chat-msg { margin-bottom: 14px; display: flex; }
+.chat-msg { margin-bottom: 14px; display: flex; animation: cardIn .28s ease backwards; }
 .chat-msg-user { justify-content: flex-end; }
 .chat-msg-bubble {
   max-width: 84%; padding: 11px 15px; border-radius: 18px;
   font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
 }
 .chat-msg-user .chat-msg-bubble {
-  background: var(--accent-grad); color: #0B0E1A;
+  background: var(--accent); color: #FFFFFF;
   border-bottom-right-radius: 6px; font-weight: 500;
 }
 .chat-msg-ai .chat-msg-bubble {
-  background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  background: #FFFFFF; border: 1px solid var(--line);
   border-bottom-left-radius: 6px;
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 
 /* 意图路由眉标 */
@@ -268,7 +270,7 @@ async function removeSession(id) {
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em;
   color: var(--text-low); margin-bottom: 7px;
 }
-.chat-route b { color: var(--cyan); font-weight: 500; }
+.chat-route b { color: var(--text-mid); font-weight: 500; }
 
 /* sources 引用芯片 */
 .chat-msg-sources {
@@ -277,9 +279,9 @@ async function removeSession(id) {
 }
 .chat-source-link {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11.5px; color: var(--cyan);
+  font-size: 11.5px; color: var(--accent);
   padding: 3px 10px; border-radius: var(--radius-full);
-  background: rgba(110,231,240,.08); box-shadow: inset 0 0 0 1px rgba(110,231,240,.22);
+  background: var(--accent-soft);
   cursor: pointer;
 }
 .chat-source-link svg { width: 11px; height: 11px; stroke: currentColor; fill: none; }
@@ -287,21 +289,21 @@ async function removeSession(id) {
 /* 输入条 */
 .chat-input-bar { display: flex; gap: 10px; align-items: flex-end; padding: 10px 0 4px; }
 .chat-input {
-  flex: 1; background: var(--glass); box-shadow: inset 0 0 0 1px var(--line);
+  flex: 1; background: #FFFFFF; border: 1px solid var(--line);
   border: none; border-radius: 20px; padding: 11px 16px;
   font-size: 14.5px; resize: none; max-height: 110px; color: var(--text-hi);
   overflow: hidden;
 }
-.chat-input:focus { outline: none; box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.chat-input:focus { outline: none; border-color: var(--accent); }
 .chat-input:disabled { opacity: .55; }
 .chat-send {
   width: 42px; height: 42px; border-radius: 50%;
-  background: var(--glass-2); box-shadow: inset 0 0 0 1px var(--line);
+  background: var(--ink-2); border: 1px solid var(--line);
   display: grid; place-items: center; flex-shrink: 0; transition: all .2s;
 }
 .chat-send svg { width: 17px; height: 17px; stroke: var(--text-low); fill: none; }
-.chat-send.enabled { background: var(--accent-grad); }
-.chat-send.enabled svg { stroke: #0B0E1A; }
+.chat-send.enabled { background: var(--accent); border-color: var(--accent); }
+.chat-send.enabled svg { stroke: #FFFFFF; }
 .chat-send:disabled { cursor: not-allowed; }
 
 /* typing dots */
@@ -313,21 +315,19 @@ async function removeSession(id) {
 /* ===== 会话抽屉 ===== */
 .sessions-overlay {
   position: fixed; inset: 0; z-index: 44;
-  background: rgba(5,7,15,.6);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  background: rgba(26,26,23,.35);
 }
 .sessions-drawer {
   position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 0);
   width: 100%; max-width: 640px; max-height: 70dvh; z-index: 45;
-  background: rgba(19,23,44,.95);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -12px 48px rgba(0,0,0,.5), inset 0 1px 0 var(--line-strong);
+  background: #FFFFFF;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 28px rgba(20,20,15,.14);
   display: flex; flex-direction: column;
   padding-bottom: var(--safe-bottom);
 }
 @media (min-width: 900px) {
-  .sessions-drawer { border-radius: 22px; bottom: 8dvh; }
+  .sessions-drawer { border-radius: 20px; bottom: 8dvh; }
 }
 .sessions-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -335,7 +335,11 @@ async function removeSession(id) {
 }
 .sessions-title { font-family: var(--font-display); font-size: 16px; }
 .sessions-head-actions { display: flex; gap: 14px; }
-.sessions-new { font-size: 13px; color: var(--cyan); cursor: pointer; }
+.sessions-new {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; color: var(--accent); cursor: pointer;
+}
+.sessions-new svg { width: 12px; height: 12px; }
 .sessions-close { font-size: 14.5px; color: var(--text-mid); padding: 6px 2px; cursor: pointer; }
 
 .sessions-list { overflow-y: auto; padding: 4px 14px 18px; }
@@ -348,8 +352,8 @@ async function removeSession(id) {
   padding: 12px 8px; border-radius: var(--radius-sm);
   cursor: pointer; transition: background .15s;
 }
-.session-item:hover { background: var(--glass); }
-.session-item.active { box-shadow: inset 0 0 0 1px rgba(110,231,240,.3); }
+.session-item:hover { background: var(--ink-2); }
+.session-item.active { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
 .session-item-main { flex: 1; min-width: 0; }
 .session-item-title {
   font-size: 14px; color: var(--text-hi);

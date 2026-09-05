@@ -3,11 +3,12 @@ import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
 
-const iconMap = {
-  info: '💡',
-  success: '✓',
-  warning: '⚠',
-  error: '✕',
+/** 类型 → SVG path（无 emoji，纯线性图标） */
+const icons = {
+  info: { d: 'M12 16v-4M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', stroke: 'var(--accent)' },
+  success: { d: 'M20 6L9 17l-5-5', stroke: 'var(--success)' },
+  warning: { d: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z', stroke: 'var(--warn)' },
+  error: { d: 'M18 6L6 18M6 6l12 12', stroke: 'var(--danger)' },
 }
 </script>
 
@@ -21,7 +22,9 @@ const iconMap = {
           :class="['toast', `toast-${t.type}`]"
           @click="toast.remove(t.id)"
         >
-          <span class="toast-icon">{{ iconMap[t.type] }}</span>
+          <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" :style="{ stroke: icons[t.type]?.stroke || 'var(--accent)' }">
+            <path :d="icons[t.type]?.d || icons.info.d" />
+          </svg>
           <span class="toast-message">{{ t.message }}</span>
         </div>
       </TransitionGroup>
@@ -47,54 +50,35 @@ const iconMap = {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 20px;
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 12px 18px 12px 15px;
+  border-radius: var(--radius);
+  background: #FFFFFF;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  box-shadow: var(--shadow-float);
   pointer-events: auto;
   cursor: pointer;
   max-width: 360px;
-  animation: toast-in 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+.toast-success { border-left-color: var(--success); }
+.toast-error { border-left-color: var(--danger); }
+.toast-warning { border-left-color: var(--warn); }
+.toast-info { border-left-color: var(--accent); }
+
 .toast-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke-width: 2.2;
   flex-shrink: 0;
 }
 
 .toast-message {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text-hi);
   line-height: 1.4;
-}
-
-/* 类型样式 */
-.toast-info .toast-icon {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--accent);
-}
-
-.toast-success .toast-icon {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10B981;
-}
-
-.toast-warning .toast-icon {
-  background: rgba(245, 158, 11, 0.1);
-  color: #F59E0B;
-}
-
-.toast-error .toast-icon {
-  background: rgba(239, 68, 68, 0.1);
-  color: #EF4444;
 }
 
 /* 动画 */

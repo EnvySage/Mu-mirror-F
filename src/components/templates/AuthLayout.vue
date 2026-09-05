@@ -10,22 +10,23 @@
 </template>
 
 <style scoped>
-/* 浅色例外（mirror-auth.html 权威）：独立浅色，不套深色玻璃 */
+/* 晨纸浅色（与全站统一）：暖白纸底 + 白卡细边 */
 .auth-layout {
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: #F5F5F7;
+  background: var(--ink);
 }
 
 .auth-container {
   width: 100%;
   max-width: 420px;
-  background: #FFFFFF;
-  border-radius: 20px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.1);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-float);
   overflow: hidden;
   animation: fadeInUp 0.4s ease;
 }

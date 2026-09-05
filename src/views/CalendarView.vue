@@ -65,7 +65,7 @@ function openRecord(id) {
       <div v-if="selectedDate" class="calendar-records">
         <div v-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
           <div class="empty-title">这一天没有记录</div>
-          <div class="empty-desc">点下方 ✎ 补一条</div>
+          <div class="empty-desc">点下方写日记按钮补一条</div>
         </div>
         <template v-else>
           <div class="calendar-records-header">
@@ -109,6 +109,6 @@ function openRecord(id) {
   display: flex; align-items: center; gap: 8px;
 }
 .calendar-records-count {
-  font-family: var(--font-mono); font-size: 11px; color: var(--cyan); font-weight: 400;
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-weight: 400;
 }
 </style>

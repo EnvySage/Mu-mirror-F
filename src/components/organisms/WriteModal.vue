@@ -105,8 +105,7 @@ function onClose() {
 <style scoped>
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(5,7,15,.6);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  background: rgba(26,26,23,.35);
   z-index: 40;
 }
 
@@ -115,16 +114,15 @@ function onClose() {
   /* 屏内位为默认态：Transition 结束移除 enter 类后停留在此（此前基础态是屏外 110%，动画结束瞬间弹走） */
   transform: translate(-50%, 0);
   width: 100%; max-width: 640px; z-index: 41;
-  background: rgba(19,23,44,.92);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -12px 48px rgba(0,0,0,.5), inset 0 1px 0 var(--line-strong);
+  background: #FFFFFF;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 28px rgba(20,20,15,.14);
   padding-bottom: var(--safe-bottom);
 }
 .write-modal.show { transform: translate(-50%, 0); }
 
 @media (min-width: 900px) {
-  .write-modal { border-radius: 22px; bottom: 8dvh; }
+  .write-modal { border-radius: 20px; bottom: 8dvh; }
 }
 
 .write-header {
@@ -138,9 +136,9 @@ function onClose() {
   padding: 7px 16px; border-radius: var(--radius-full); transition: all .2s;
 }
 .write-submit.enabled {
-  color: #0B0E1A; background: var(--accent-grad);
-  box-shadow: 0 4px 16px rgba(110,231,240,.3);
+  color: #FFFFFF; background: var(--accent);
 }
+.write-submit.enabled:hover { background: var(--accent-hover); }
 .write-submit:disabled { cursor: not-allowed; }
 
 .write-body { padding: 4px 20px 20px; }
@@ -161,7 +159,7 @@ function onClose() {
   display: flex; justify-content: space-between; align-items: center; margin-top: 10px;
 }
 .write-hint { font-size: 12px; color: var(--text-low); display: flex; align-items: center; gap: 6px; }
-.write-hint svg { width: 13px; height: 13px; stroke: var(--cyan); fill: none; flex-shrink: 0; }
+.write-hint svg { width: 13px; height: 13px; stroke: var(--accent); fill: none; flex-shrink: 0; }
 .write-counter { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); }
 
 /* sheet 过渡：基础态=屏内，enter-from/leave-to=屏外，过渡完成后自然停留屏内 */

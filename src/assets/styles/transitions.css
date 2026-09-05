@@ -1,10 +1,25 @@
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { to { opacity: .5; } }
-@keyframes sheen { 0%, 55% { background-position: 130% 0; } 85%, 100% { background-position: -60% 0; } }
 @keyframes chunkIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes blink { 0%, 70%, 100% { opacity: .25; } 35% { opacity: 1; } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* 记录列表瀑布入场（stagger 由调用处设 animation-delay） */
+@keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* 生成完成：一次轻脉冲（box-shadow 呼吸） */
+@keyframes breatheOnce {
+  0% { box-shadow: var(--shadow); }
+  45% { box-shadow: 0 0 0 4px rgba(44,95,232,.14), var(--shadow-hover); }
+  100% { box-shadow: var(--shadow); }
+}
+
+/* 日历月切换内容淡入 */
+@keyframes monthIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* 日历选中弹性（scale 0.92 → 1） */
+@keyframes dayPop { 0% { transform: scale(.92); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 
 /* Page transitions */
 .page-enter-active { transition: opacity .2s ease, transform .2s ease; }

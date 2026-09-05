@@ -213,10 +213,10 @@ async function deleteRecord() {
               {{ record.fail_reason || '处理失败（可能是模型配置问题或内容被判定无意义）' }}
             </div>
             <div class="failed-actions">
-              <button class="chip" style="color:var(--cyan)" :disabled="submitting" @click="retryProcessing">
+              <button class="chip chip-accent" :disabled="submitting" @click="retryProcessing">
                 {{ submitting ? '重试中…' : '重试' }}
               </button>
-              <button class="chip" style="color:var(--danger)" :disabled="submitting" @click="deleteRecord">删除</button>
+              <button class="chip chip-danger" :disabled="submitting" @click="deleteRecord">删除</button>
             </div>
           </div>
 
@@ -231,13 +231,13 @@ async function deleteRecord() {
 <style scoped>
 .detail-page {
   position: fixed; inset: 0; z-index: 30;
-  background: var(--ink);
+  background: var(--ink-2);
   display: flex; flex-direction: column;
 }
 @media (min-width: 900px) {
   .detail-page {
     left: var(--sidebar-width);
-    box-shadow: -20px 0 60px rgba(0,0,0,.5);
+    box-shadow: -12px 0 32px rgba(20,20,15,.1);
     border-left: 1px solid var(--line);
   }
 }
@@ -249,7 +249,7 @@ async function deleteRecord() {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255,255,255,.02);
+  background: var(--card);
 }
 .detail-back {
   display: flex; align-items: center; gap: 4px;
@@ -258,11 +258,13 @@ async function deleteRecord() {
 .detail-back svg { width: 17px; height: 17px; stroke: currentColor; fill: none; }
 .detail-title { font-size: 14px; color: var(--text-mid); }
 .detail-confirm {
-  font-size: 13.5px; font-weight: 600; color: #0B0E1A;
-  background: var(--accent-grad);
+  font-size: 13.5px; font-weight: 600; color: #FFFFFF;
+  background: var(--accent);
   padding: 7px 18px; border-radius: var(--radius-full);
-  box-shadow: 0 4px 14px rgba(110,231,240,.25);
+  transition: background .15s, transform .1s;
 }
+.detail-confirm:hover { background: var(--accent-hover); }
+.detail-confirm:active { transform: scale(.97); }
 .detail-confirm:disabled { opacity: .55; cursor: not-allowed; }
 
 .detail-content {
@@ -281,22 +283,22 @@ async function deleteRecord() {
 .review-original {
   position: relative; padding: 14px 16px; margin-bottom: 14px;
   border-radius: var(--radius);
-  background: linear-gradient(160deg, rgba(110,231,240,.07), rgba(167,139,250,.06));
-  box-shadow: inset 0 0 0 1px rgba(110,231,240,.18);
+  background: var(--accent-soft);
+  border: 1px solid rgba(44,95,232,.18);
 }
 .review-label {
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em;
-  color: var(--text-low); margin-bottom: 6px;
+  color: var(--accent); margin-bottom: 6px;
   display: flex; align-items: center; gap: 6px;
 }
-.review-label svg { width: 12px; height: 12px; stroke: var(--cyan); fill: none; }
+.review-label svg { width: 12px; height: 12px; stroke: var(--accent); fill: none; }
 .review-original-text { font-size: 14px; line-height: 1.8; color: var(--text-hi); white-space: pre-wrap; word-break: break-word; }
 
 /* 处理中视图 */
 .processing-view { text-align: center; padding: 70px 20px; }
 .processing-ring {
   width: 58px; height: 58px; margin: 0 auto 22px; border-radius: 50%;
-  border: 2.5px solid rgba(110,231,240,.15); border-top-color: var(--cyan);
+  border: 2.5px solid var(--processing-bg); border-top-color: var(--processing);
   animation: spin 1.1s linear infinite;
 }
 .processing-title { font-family: var(--font-display); font-size: 17px; }
@@ -308,11 +310,13 @@ async function deleteRecord() {
 }
 .processing-step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); transition: all .3s; }
 .processing-step.active { color: var(--text-hi); }
-.processing-step.active .processing-step-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: pulse 1s infinite alternate; }
+.processing-step.active .processing-step-dot { background: var(--accent); animation: pulse 1s infinite alternate; }
 .processing-step.done { color: var(--text-mid); }
 .processing-step.done .processing-step-dot { background: var(--success); }
 
 .failed-view { text-align: center; }
 .failed-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .failed-actions .chip { cursor: pointer; }
+.chip-accent { color: var(--accent); }
+.chip-danger { color: var(--danger); }
 </style>

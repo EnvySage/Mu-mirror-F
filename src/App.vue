@@ -1,5 +1,4 @@
 <template>
-  <div class="aurora" aria-hidden="true" />
   <RouterView />
 </template>
 

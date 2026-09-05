@@ -110,23 +110,21 @@ function genTime(dateStr) {
 <style scoped>
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(5,7,15,.6);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  background: rgba(26,26,23,.35);
   z-index: 44;
 }
 
 .sheet {
   position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 0);
   width: 100%; max-width: 640px; max-height: 78dvh; z-index: 45;
-  background: rgba(19,23,44,.95);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -12px 48px rgba(0,0,0,.5), inset 0 1px 0 var(--line-strong);
+  background: #FFFFFF;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 28px rgba(20,20,15,.14);
   display: flex; flex-direction: column;
   padding-bottom: var(--safe-bottom);
 }
 @media (min-width: 900px) {
-  .sheet { border-radius: 22px; bottom: 8dvh; }
+  .sheet { border-radius: 20px; bottom: 8dvh; }
 }
 
 .sheet-header {
@@ -147,9 +145,9 @@ function genTime(dateStr) {
 .summary-item:last-child { border-bottom: none; margin-bottom: 0; }
 
 .summary-tag {
-  display: inline-flex; font-size: 11px; color: var(--cyan);
+  display: inline-flex; font-size: 11px; color: var(--accent);
   padding: 3px 10px; border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px rgba(110,231,240,.25); margin-bottom: 12px;
+  background: var(--accent-soft); margin-bottom: 12px;
 }
 .summary-meta {
   font-family: var(--font-mono); font-size: 11px; color: var(--text-low);
@@ -161,7 +159,7 @@ function genTime(dateStr) {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .summary-expand {
-  margin-top: 8px; font-size: 12.5px; color: var(--cyan); cursor: pointer;
+  margin-top: 8px; font-size: 12.5px; color: var(--accent); cursor: pointer;
   padding: 2px 0;
 }
 .summary-expand:hover { text-decoration: underline; }

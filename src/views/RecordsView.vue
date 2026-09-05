@@ -105,6 +105,16 @@ function openRecord(id) {
   ui.showDetail = true
 }
 
+/** 瀑布入场：分组的全局序号（前序组卡片数累计），供 40ms 递增 delay */
+function groupIndex(group) {
+  let n = 0
+  for (const g of grouped.value) {
+    if (g.dateKey === group.dateKey) break
+    n += g.items.length
+  }
+  return n
+}
+
 /** 列表内软删除（REVIEWING / FAILED） */
 async function onDeleteRecord(record) {
   if (!window.confirm('确定删除这条记录？软删除后不可恢复。')) return
@@ -139,7 +149,7 @@ async function onRetryRecord(record) {
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         </div>
         <div class="empty-title">还没有记录</div>
-        <div class="empty-desc">点下方 ✎，随手记点什么</div>
+        <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
       </div>
 
       <!-- 日期分组列表 -->
@@ -147,10 +157,11 @@ async function onRetryRecord(record) {
         <template v-for="group in grouped" :key="group.dateKey">
           <div class="date-separator">{{ group.label }}</div>
           <RecordCard
-            v-for="record in group.items"
+            v-for="(record, i) in group.items"
             :key="record.id"
             :record="record"
             :active="ui.selectedRecordId === record.id"
+            :style="{ animationDelay: `${(groupIndex(group) + i) * 40}ms` }"
             @open="openRecord(record.id)"
             @delete="onDeleteRecord"
             @retry="onRetryRecord"

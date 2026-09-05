@@ -54,7 +54,7 @@ const processingPreview = computed(() => {
   <div v-else-if="status === 'failed'" class="record-card card failed" @click="emit('open')">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
-      <span class="tag" style="color:var(--danger);box-shadow:inset 0 0 0 1px rgba(255,107,129,.35)">失败</span>
+      <span class="tag" style="color:var(--danger);background:var(--danger-bg)">失败</span>
     </div>
     <div class="record-summary">{{ record.content }}</div>
     <div class="status-failed-row">
@@ -62,8 +62,8 @@ const processingPreview = computed(() => {
       {{ record.fail_reason || '处理失败' }}
     </div>
     <div class="failed-ops">
-      <button class="chip" style="color:var(--cyan)" @click.stop="emit('retry', record)">重试</button>
-      <button class="chip" style="color:var(--danger)" @click.stop="emit('delete', record)">删除</button>
+      <button class="chip chip-accent" @click.stop="emit('retry', record)">重试</button>
+      <button class="chip chip-danger" @click.stop="emit('delete', record)">删除</button>
     </div>
   </div>
 
@@ -100,19 +100,22 @@ const processingPreview = computed(() => {
 <style scoped>
 .record-card {
   padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
-  transition: all .18s; position: relative; overflow: hidden;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  position: relative; overflow: hidden;
+  animation: cardIn .3s ease backwards;
 }
-/* 左缘渐变光条 */
+/* 左缘墨蓝条 */
 .record-card::before {
   content: ""; position: absolute; left: 0; top: 12px; bottom: 12px;
-  width: 2.5px; border-radius: 3px; background: var(--accent-grad);
+  width: 3px; border-radius: 2px; background: var(--accent);
   opacity: 0; transition: opacity .18s;
 }
-.record-card:hover { background: var(--glass-2); }
 .record-card:active { transform: scale(.985); }
 .record-card.active::before,
 .record-card.reviewing::before { opacity: 1; }
 .record-card.processing::before, .record-card.failed::before { background: none; }
+.record-card.processing { border-color: var(--processing); }
+.record-card.failed { border-color: var(--danger); }
 
 .record-meta {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;
@@ -127,11 +130,13 @@ const processingPreview = computed(() => {
 .record-keywords { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .record-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .chunk-count {
-  font-family: var(--font-mono); font-size: 11px; color: var(--violet);
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent);
   display: inline-flex; align-items: center; gap: 5px;
 }
-.chunk-count svg { width: 12px; height: 12px; stroke: var(--violet); fill: none; stroke-width: 2; }
+.chunk-count svg { width: 12px; height: 12px; stroke: var(--accent); fill: none; stroke-width: 2; }
 
 .failed-ops { display: flex; gap: 8px; margin-top: 10px; }
 .failed-ops .chip { cursor: pointer; }
+.chip-accent { color: var(--accent); }
+.chip-danger { color: var(--danger); }
 </style>

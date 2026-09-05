@@ -221,19 +221,19 @@ async function removeChunk() {
   position: relative;
   padding: 16px 16px 14px 20px; margin-bottom: 12px;
 }
-/* "镜面反射"左缘光条 */
+/* 左缘墨蓝实线条 */
 .chunk-card::before {
   content: ""; position: absolute; left: 0; top: 14px; bottom: 14px;
-  width: 3px; border-radius: 3px; background: var(--accent-grad); opacity: .85;
+  width: 3px; border-radius: 2px; background: var(--accent); opacity: .9;
 }
 .chunk-card.adding { animation: chunkIn .3s ease; }
 
 .chunk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.chunk-index { font-family: var(--font-mono); font-size: 10.5px; color: var(--violet); letter-spacing: .1em; }
+.chunk-index { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); letter-spacing: .1em; }
 .chunk-actions { display: flex; gap: 4px; }
-.chunk-icon-btn { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; transition: background .15s; }
+.chunk-icon-btn { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; transition: background .15s; }
 .chunk-icon-btn svg { width: 14px; height: 14px; stroke: var(--text-low); fill: none; }
-.chunk-icon-btn:hover { background: var(--glass-2); }
+.chunk-icon-btn:hover { background: var(--ink-2); }
 .chunk-icon-btn.danger:hover svg { stroke: var(--danger); }
 
 .chunk-segment {
@@ -251,11 +251,11 @@ async function removeChunk() {
 }
 
 .keywords-input {
-  width: 100%; background: var(--glass); border: none;
+  width: 100%; background: var(--card); border: none;
   border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px var(--line);
   padding: 8px 12px; font-size: 13px; color: var(--text-hi);
 }
-.keywords-input:focus { outline: none; box-shadow: inset 0 0 0 1px rgba(110,231,240,.4); }
+.keywords-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
 .record-keywords { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 </style>
