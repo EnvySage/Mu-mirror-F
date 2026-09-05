@@ -3,7 +3,7 @@
  * KeywordBars —— 关键词 Top10 横向条形（纯 HTML/CSS 渲染，DOM 结构即条形图）
  *
  * 名称 + 条（墨蓝，宽 = count/max 占比）+ 数值；最长条满宽。
- * 条宽 CSS transition 0.4s。>10 项截断为 10（组件职责边界）。
+ * 行级 title 悬浮显示「出现 N 次」；条宽 CSS transition 0.4s。>10 项截断为 10（组件职责边界）。
  */
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
@@ -26,8 +26,8 @@ const items = computed(() => {
 <template>
   <ChartEmpty v-if="!data.length" />
   <div v-else class="kw-bars" role="img" aria-label="关键词 Top 10">
-    <div v-for="it in items" :key="it.keyword" class="kw-row">
-      <span class="kw-name" :title="it.keyword">{{ it.keyword }}</span>
+    <div v-for="it in items" :key="it.keyword" class="kw-row" :title="`「${it.keyword}」出现 ${it.count} 次`">
+      <span class="kw-name">{{ it.keyword }}</span>
       <span class="kw-track">
         <span class="kw-fill" :style="{ width: it.pct + '%' }" />
       </span>
@@ -38,7 +38,7 @@ const items = computed(() => {
 
 <style scoped>
 .kw-bars { display: flex; flex-direction: column; gap: 7px; }
-.kw-row { display: flex; align-items: center; gap: 9px; }
+.kw-row { display: flex; align-items: center; gap: 9px; cursor: default; }
 .kw-name {
   flex: 0 0 31%; min-width: 0;
   font-size: 12px; color: var(--text-mid);

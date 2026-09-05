@@ -4,7 +4,8 @@
  *
  * 每天一根竖条，条内按当日各情绪 count 占比分色段（moodColor 13 色）。
  * viewBox 30×40：条宽 1 - gap 0.08，y 轴按总 count 等比切段（自上而下）。
- * hover 原生 <title>：日期 + 各情绪明细；CSS transition 0.4s。
+ * hover 原生 <title>：整条显示日期+各情绪明细，单色段 title 显示当天单一情绪；
+ * CSS transition 0.4s。图例行（实际出现过的情绪色点+中文名）由宿主页渲染。
  */
 import { computed } from 'vue'
 import { MOOD_COLOR } from '@/constants/moodColor'
@@ -23,7 +24,7 @@ const VIEW_H = 40
 const bars = computed(() => props.data.map((d, i) => {
   const total = d.moods.reduce((a, m) => a + (m.count || 0), 0)
   const title = total
-    ? `${d.date}  ` + d.moods.map(m => `${moodMap[m.mood] || m.mood} ${m.count}`).join(' · ')
+    ? `${d.date}  共 ${total} 条：` + d.moods.map(m => `${moodMap[m.mood] || m.mood} ${m.count}`).join(' · ')
     : `${d.date}  无记录`
   let y = 0
   const segs = total
@@ -31,7 +32,7 @@ const bars = computed(() => props.data.map((d, i) => {
         .filter(m => m.count > 0)
         .map(m => {
           const h = (m.count / total) * VIEW_H
-          const rect = { y, h, color: MOOD_COLOR[m.mood] || '#A8A8A0' }
+          const rect = { y, h, color: MOOD_COLOR[m.mood] || '#A8A8A0', mood: m.mood, count: m.count }
           y += h
           return rect
         })
@@ -64,7 +65,9 @@ const bars = computed(() => props.data.map((d, i) => {
         :x="bar.x" :y="seg.y" :width="bar.w" :height="seg.h"
         :fill="seg.color"
         style="transition: y .4s ease, height .4s ease"
-      />
+      >
+        <title>{{ `${bar.title.split('  ')[0]} · ${moodMap[seg.mood] || seg.mood} ${seg.count} 条` }}</title>
+      </rect>
     </g>
   </svg>
 </template>

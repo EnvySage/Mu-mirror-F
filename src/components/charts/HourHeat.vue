@@ -46,7 +46,7 @@ const tickX = b => b * (CELL + GAP) + (b === 23 ? CELL : CELL / 2)
         :x="c.x" y="0" :width="CELL" :height="CELL_H" rx="2"
         :fill="`rgba(44, 95, 232, ${c.alpha})`"
       >
-        <title>{{ String(i).padStart(2, '0') }} 时 · {{ c.count }} 条</title>
+        <title>{{ `${String(i).padStart(2, '0')}:00 时段 · ${c.count} 条记录` }}</title>
       </rect>
     </svg>
     <div class="hour-ticks" aria-hidden="true">

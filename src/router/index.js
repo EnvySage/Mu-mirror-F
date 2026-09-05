@@ -53,8 +53,8 @@ const router = createRouter({
   ],
 })
 
-// Navigation guard
-router.beforeEach(async (to, from, next) => {
+// Navigation guard（vue-router 4 返回值风格：弃用第三参数 next()）
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
 
   // 初始化认证状态（仅首次）
@@ -64,12 +64,13 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next({ name: 'login' })
-  } else if (to.path.startsWith('/auth') && authStore.isAuthenticated) {
-    next({ name: 'records' })
-  } else {
-    next()
+    return { name: 'login' }
   }
+  if (to.path.startsWith('/auth') && authStore.isAuthenticated) {
+    return { name: 'records' }
+  }
+  // 放行：返回 undefined / true 均可，显式 true 更可读
+  return true
 })
 
 export default router

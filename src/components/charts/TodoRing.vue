@@ -57,6 +57,7 @@ const dash = computed(() => `${pct.value} ${C - pct.value}`)
       <span class="ring-legend-item"><i class="dot dot-hollow" />未开始 {{ norm.notStarted }}</span>
       <span class="ring-legend-item"><i class="dot dot-half" />进行中 {{ norm.inProgress }}</span>
     </div>
+    <div class="ring-note">仅统计 todo / plan 类型片段</div>
   </div>
 </template>
 
@@ -80,4 +81,7 @@ const dash = computed(() => `${pct.value} ${C - pct.value}`)
 .dot-hollow { box-shadow: inset 0 0 0 1.5px var(--text-low); }
 /* 进行中：半圆（conic 硬切，无渐变） */
 .dot-half { background: conic-gradient(var(--accent) 0 50%, transparent 50% 100%); box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* 口径注释（任务 B）：低重小字 */
+.ring-note { font-size: 10.5px; color: var(--text-low); margin-top: -2px; }
 </style>

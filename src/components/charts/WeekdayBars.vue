@@ -3,7 +3,7 @@
  * WeekdayBars —— 一周节奏柱状（纯 SVG）
  *
  * 7 根小柱（周一~周日，bucket 周一=0），柱高 = count/max 占比，墨蓝填充。
- * hover 原生 <title> 数值；柱高 CSS transition 0.4s。
+ * hover 原生 <title> 周X全称 + 数值；柱下 一~日 单字标签；柱高 CSS transition 0.4s。
  */
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
@@ -14,6 +14,7 @@ const props = defineProps({
 })
 
 const LABELS = ['一', '二', '三', '四', '五', '六', '日']
+const LABELS_FULL = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const BAR_W = 10
 const GAP = 8
 const VIEW_H = 40
@@ -26,7 +27,7 @@ const bars = computed(() => {
     const d = props.data.find(x => x.bucket === i)
     const count = d?.count || 0
     const h = max ? (count / max) * (VIEW_H - 2) : 0
-    return { label, count, h, x: i * (BAR_W + GAP) + GAP / 2, y: VIEW_H - h }
+    return { label, labelFull: LABELS_FULL[i], count, h, x: i * (BAR_W + GAP) + GAP / 2, y: VIEW_H - h }
   })
 })
 
@@ -44,7 +45,7 @@ const width = 7 * (BAR_W + GAP)
         :x="b.x" :y="b.y" :width="BAR_W" :height="b.h" rx="2.5"
         fill="var(--accent)"
       >
-        <title>周{{ b.label }} · {{ b.count }} 条</title>
+        <title>{{ `${b.labelFull} · ${b.count} 条记录` }}</title>
       </rect>
     </svg>
     <div class="wd-labels" aria-hidden="true">

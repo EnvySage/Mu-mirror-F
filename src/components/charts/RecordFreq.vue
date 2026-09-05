@@ -4,7 +4,9 @@
  *
  * 每天 1 柱，高 = count/max 占比；无记录天 0 高但保留 1px 底座感。
  * hover 原生 <title>：日期 + 条数；柱高 CSS transition 0.4s。
+ * range 暴露窗口首尾日期（MM-DD / MM-DD）供宿主页图例行展示。
  */
+defineExpose({ range })
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
 
@@ -36,6 +38,14 @@ const bars = computed(() => {
 function shortDate(date) {
   return typeof date === 'string' ? date.slice(5) : date
 }
+
+/** 窗口首尾日期标注（MM-DD），由宿主页图例行展示也可用本组件内建 */
+const range = computed(() => {
+  if (!props.data.length) return null
+  const first = props.data[0]?.date
+  const last = props.data[props.data.length - 1]?.date
+  return first && last ? `${shortDate(first)} / ${shortDate(last)}` : null
+})
 </script>
 
 <template>
@@ -56,7 +66,7 @@ function shortDate(date) {
       :x="b.x" :y="b.y" :width="b.w" :height="b.h"
       rx="0.3"
     >
-      <title>{{ shortDate(b.date) }} · {{ b.count }} 条</title>
+      <title>{{ `${shortDate(b.date)} · ${b.count} 条记录` }}</title>
     </rect>
   </svg>
 </template>

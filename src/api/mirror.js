@@ -33,3 +33,31 @@ export function generateMirror() {
 export function getStats(days) {
   return request.get('/mirror/stats', { params: days ? { days } : {} })
 }
+
+/**
+ * 快照历史列表（GET /mirror/snapshots）
+ *
+ * 当前用户全量快照（manual 保 2 + monthly 保 12，上限 14），按时间倒序。
+ * 轻量结构：{ id, snapshotType, createdAt, driftDistance, overallSummary(前 50 字截断) }。
+ * driftDistance 仅 monthly 快照有值，manual 无对比基线为 null（响应里字段可能缺省）。
+ *
+ * 注意：camelCase 经响应拦截器统一转 snake_case（snapshot_type / created_at / drift_distance）。
+ *
+ * @returns {Promise<{ code: number, data: Array<{ id: number, snapshot_type: string, created_at: string, drift_distance: number|null, overall_summary: string }> }>}
+ */
+export function getSnapshots() {
+  return request.get('/mirror/snapshots')
+}
+
+/**
+ * 单份完整快照（GET /mirror/snapshots/{id}）
+ *
+ * 结构与 GET /mirror 的 MirrorProfileVO 一致（含 id/snapshotType/driftDistance 等字段）。
+ * 后端做归属校验：不存在或非本人快照一律 RECORD_NOT_FOUND。
+ *
+ * @param {number|string} id - 快照 ID
+ * @returns {Promise<{ code: number, data: import('@/stores/mirror').MirrorProfile }>}
+ */
+export function getSnapshot(id) {
+  return request.get(`/mirror/snapshots/${id}`)
+}
