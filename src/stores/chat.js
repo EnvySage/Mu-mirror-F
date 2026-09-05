@@ -11,11 +11,18 @@ import {
  * 对话 store（T-B-4 已就绪：POST /api/mirror/chat SSE 流式 + 会话 CRUD）
  *
  * SSE 消费用 fetch + ReadableStream（POST 不能用原生 EventSource）：
- *   meta    → { sessionId, route }            意图路由（眉标 + 会话归属）
- *   delta   → { content }                     回答增量（逐块追加渲染）
- *   sources → [{ record_id, quote, date }]    来源追溯（引用芯片，点击跳详情）
- *   done    → { sessionId, route, fallback }  结束标志（fallback=true 为兜底文案）
- *   error   → { message }                     AI 失败兜底（展示"暂时无法回答"类文案）
+ *   meta       → { sessionId, route, tools_used? }    意图路由 + 工具轨迹（E6）
+ *   delta      → { content }                          回答增量（逐块追加渲染）
+ *   sources    → [{ record_id, quote, date }]         来源追溯（引用芯片，点击跳详情）
+ *   vault_refs → [{ n, vault_item_id, display_name, file_type, size_bytes,
+ *                   digest_status, quote, category?, created_at? }]  对话文件卡（4.1）
+ *   done       → { sessionId, route, fallback }       结束标志（fallback=true 为兜底文案）
+ *   error      → { message }                          AI 失败兜底（展示"暂时无法回答"类文案）
+ *
+ * vault_refs 归一化（VaultRefCard 三档口径）：
+ *   有 quote → strength='strong' 完整卡；无 quote → 'weak' 芯片；
+ *   后端无法定位具体文件（"昨天传的图片"）→ vague=true 芯片点开确认。
+ *   同 vault_item_id 同气泡多引用 → 去重保第一条（含 quote 的强引用优先保留）。
  *
  * 后端 data 是 JSON 字符串（SseEmitter .data(objectMapper.writeValueAsString(...))），
  * 且 Spring 会在 JSON 内含换行时按 SSE 规范拆成多行 data:，此处按 "\n\n" 分帧、
@@ -28,6 +35,8 @@ import {
  * @property {string} [route] - 意图路由（INTENT → HYBRID 等）
  * @property {boolean} [typing] - 是否正在打字
  * @property {{ recordId: number|string, quote: string, date: string }[]} [sources]
+ * @property {{ id: string, tool: string, summary: string }[]} [toolsUsed] 工具轨迹（气泡上方芯片行）
+ * @property {Array} [vaultRefs] 对话文件卡引用（已去重归一化）
  */
 
 /** @typedef {{ id: string, title: string, created_at: string, updated_at: string }} ChatSession */
@@ -77,9 +86,63 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function pushAiPlaceholder(route) {
-    const msg = { id: String(++msgId), role: 'ai', content: '', route: route || null, typing: true, sources: [] }
+    const msg = { id: String(++msgId), role: 'ai', content: '', route: route || null, typing: true, sources: [], toolsUsed: [], vaultRefs: [] }
     messages.value.push(msg)
     return msg
+  }
+
+  /**
+   * 归一化 vault_refs 事件载荷 → VaultRefCard 口径（三档 + 同气泡去重）
+   * 有 quote=强引用（完整卡）；无 quote=弱引用（芯片）；vague=模糊提及（芯片点开确认）
+   * @param {Array} refs
+   * @returns {Array}
+   */
+  function normalizeVaultRefs(refs) {
+    const seen = new Map()
+    for (const r of refs) {
+      if (!r || (r.vault_item_id == null && !r.vague)) continue
+      const key = r.vague ? `vague:${r.display_name || r.query || ''}` : String(r.vault_item_id)
+      const item = {
+        id: key,
+        vaultItemId: r.vault_item_id ?? null,
+        displayName: r.display_name || r.original_name || '未命名文件',
+        category: r.category || null,
+        fileType: r.file_type || r.fileType || '',
+        sizeBytes: r.size_bytes ?? r.sizeBytes ?? null,
+        digestStatus: r.digest_status || r.digestStatus || 'done',
+        quote: r.quote || '',
+        createdAt: r.created_at || '',
+        deleted: !!r.deleted,
+        vague: !!r.vague,
+        strength: r.quote ? 'strong' : (r.vague ? 'vague' : 'weak'),
+      }
+      // 同 vault_item_id 多引用同气泡单卡：强引用优先保留
+      const prev = seen.get(key)
+      if (!prev || (prev.strength !== 'strong' && item.strength === 'strong')) seen.set(key, item)
+    }
+    return [...seen.values()]
+  }
+
+  /**
+   * 归一化 meta.tools_used（["search_records:12条"] 或 [{tool, summary}]）
+   * → [{ id, tool, summary }]（气泡上方工具轨迹芯片行）
+   */
+  function normalizeToolsUsed(list) {
+    if (!Array.isArray(list)) return []
+    return list
+      .map((t, i) => {
+        if (typeof t === 'string') {
+          const idx = t.indexOf(':')
+          return idx > -1
+            ? { id: `t${i}`, tool: t.slice(0, idx), summary: t.slice(idx + 1) }
+            : { id: `t${i}`, tool: t, summary: '' }
+        }
+        if (t && typeof t === 'object') {
+          return { id: `t${i}`, tool: t.tool || t.name || '', summary: t.summary || t.result_summary || '' }
+        }
+        return null
+      })
+      .filter(Boolean)
   }
 
   /**
@@ -185,6 +248,8 @@ export const useChatStore = defineStore('chat', () => {
       case 'meta':
         if (payload) {
           aiMsg.route = payload.route || aiMsg.route
+          // 工具轨迹（E6）：meta.tools_used ["search_records:12条"] → 气泡上方芯片行
+          if (payload.tools_used) aiMsg.toolsUsed = normalizeToolsUsed(payload.tools_used)
           if (payload.sessionId) {
             sessionId.value = payload.sessionId
             activeSessionId.value = payload.sessionId
@@ -204,6 +269,12 @@ export const useChatStore = defineStore('chat', () => {
           aiMsg.sources = payload
             .filter(s => s && s.record_id > 0)
             .map(s => ({ recordId: s.record_id, quote: s.quote || '', date: s.date || '' }))
+        }
+        break
+      case 'vault_refs':
+        // 对话文件卡（4.1）：Java 解析 AI 输出 [n] 标记后下发，此处归一化 + 同气泡去重
+        if (Array.isArray(payload)) {
+          aiMsg.vaultRefs = normalizeVaultRefs(payload)
         }
         break
       case 'done':
@@ -282,6 +353,9 @@ export const useChatStore = defineStore('chat', () => {
         sources: (m.sources || [])
           .filter(s => s && s.record_id > 0)
           .map(s => ({ recordId: s.record_id, quote: s.quote || '', date: s.date || '' })),
+        // 历史回放：B 在消息 VO 带出 tools_used / vault_refs 才有值，缺省空数组不渲染
+        toolsUsed: normalizeToolsUsed(m.tools_used || []),
+        vaultRefs: normalizeVaultRefs(m.vault_refs || []),
       }))
       messages.value = list
       activeSessionId.value = id
@@ -404,6 +478,67 @@ export const useChatStore = defineStore('chat', () => {
     clearSavedSessionId()
   }
 
+  /**
+   * 注入演示消息（mock 态：对话文件卡三档 + 工具轨迹芯片演示）。
+   * B 的 vault_refs / tools_used 事件就绪后此函数仅作演示入口保留
+   * （ChatView 空态引导按钮调用；真链路数据全部走 SSE 事件解析）。
+   */
+  function pushDemoVaultMessage() {
+    if (sending.value) return
+    messages.value.push({ id: String(++msgId), role: 'user', content: '我的论文咋样了？顺便看看昨天传的东西' })
+    messages.value.push({
+      id: String(++msgId),
+      role: 'ai',
+      content: '根据你的开题报告，毕设目前推进到检索评测阶段：骨架已定型，接下来两周主要补三档消融实验。'
+        + '\n\n昨天传的东西我找到了：一份文档和一张合照。合照我认不出来内容，你可以在资产页补充一句描述，以后就好找了。',
+      route: 'HYBRID',
+      typing: false,
+      sources: [],
+      // 工具轨迹芯片（meta.tools_used 同构）
+      toolsUsed: [
+        { id: 'd1', tool: 'find_item', summary: '开题报告' },
+        { id: 'd2', tool: 'search_records', summary: '9 月记录 · 12 条' },
+      ],
+      // 三档演示：强引用完整卡（quote）/ 弱引用芯片 / 模糊提及芯片
+      vaultRefs: normalizeVaultRefs([
+        {
+          vault_item_id: 7001,
+          display_name: '毕业论文-开题报告',
+          category: 'document',
+          file_type: 'pdf',
+          size_bytes: 2.1 * 1024 * 1024,
+          digest_status: 'done',
+          created_at: daysAgoLocal(4),
+          quote: '…本课题采用 Planner-Executor 双层架构，检索评测选用 Recall@K 与 MRR 双指标，消融实验覆盖词典加权与时间衰减两个维度…',
+        },
+        {
+          vault_item_id: 7002,
+          display_name: 'IMG_0901 宿舍合照',
+          category: 'image',
+          file_type: 'jpg',
+          size_bytes: 3.4 * 1024 * 1024,
+          digest_status: 'done',
+          created_at: daysAgoLocal(3),
+        },
+        {
+          vault_item_id: null,
+          display_name: '昨天传的图片',
+          vague: true,
+          category: 'image',
+          digest_status: 'done',
+          created_at: daysAgoLocal(1),
+        },
+      ]),
+    })
+  }
+
+  /** n 天前 yyyy-MM-dd（demo 引用存入日期） */
+  function daysAgoLocal(n) {
+    const d = new Date()
+    d.setDate(d.getDate() - n)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   return {
     messages,
     sending,
@@ -415,6 +550,7 @@ export const useChatStore = defineStore('chat', () => {
     historyLoading,
     historyError,
     sendMessage,
+    pushDemoVaultMessage,
     fetchSessions,
     loadSession,
     removeSession,

@@ -32,6 +32,11 @@ const router = createRouter({
           component: () => import('@/views/ChatView.vue'),
         },
         {
+          path: 'vault',
+          name: 'vault',
+          component: () => import('@/views/VaultView.vue'),
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/SettingsView.vue'),

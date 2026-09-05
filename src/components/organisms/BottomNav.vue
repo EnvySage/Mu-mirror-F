@@ -7,11 +7,12 @@ const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
 
-/** 顺序对齐原型：记录 / 日历 / [写日记凸钮] / 镜子 / 对话 */
+/** 顺序对齐原型：记录 / 日历 / [写日记凸钮] / 资产 / 镜子 / 对话（资产= vault 页入口） */
 const NAV = [
   { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
   { page: 'calendar', label: '日历', icon: 'calendar' },
   { action: 'write', label: '写日记', icon: 'M12 5v14M5 12h14' },
+  { page: 'vault', label: '资产', icon: 'archive' },
   { page: 'mirror', label: '镜子', icon: 'clock' },
   { page: 'chat', label: '对话', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
 ]
@@ -45,6 +46,9 @@ function handleNav(item) {
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <template v-if="item.icon === 'calendar'">
             <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </template>
+          <template v-else-if="item.icon === 'archive'">
+            <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>
           </template>
           <template v-else-if="item.icon === 'clock'">
             <circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/>

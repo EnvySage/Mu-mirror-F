@@ -1,0 +1,23 @@
+{
+  "steps": [
+    "进入应用 | http://localhost:5199/records",
+    "R1 切到 记录 | 2040ms url=http://localhost:5199/records",
+    "R1 切到 日历 | 2020ms url=http://localhost:5199/calendar",
+    "R1 切到 对话 | 2021ms url=http://localhost:5199/chat",
+    "R1 切到 镜子 | 2033ms url=http://localhost:5199/mirror",
+    "R1 切到 设置 | 2019ms url=http://localhost:5199/settings",
+    "R2 切到 记录 | 2031ms url=http://localhost:5199/records",
+    "R2 切到 日历 | 2023ms url=http://localhost:5199/calendar",
+    "R2 切到 对话 | 2022ms url=http://localhost:5199/chat",
+    "R2 切到 镜子 | 2030ms url=http://localhost:5199/mirror",
+    "R2 切到 设置 | 2026ms url=http://localhost:5199/settings",
+    "R3 切到 记录 | 2021ms url=http://localhost:5199/records",
+    "R3 切到 日历 | 2023ms url=http://localhost:5199/calendar",
+    "R3 切到 对话 | 2024ms url=http://localhost:5199/chat",
+    "R3 切到 镜子 | 2025ms url=http://localhost:5199/mirror",
+    "R3 切到 设置 | 2028ms url=http://localhost:5199/settings"
+  ],
+  "errors": [],
+  "pageErrors": [],
+  "warnings": []
+}

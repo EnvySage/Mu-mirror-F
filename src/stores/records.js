@@ -164,7 +164,7 @@ export const useRecordsStore = defineStore('records', () => {
 
   /**
    * 将扁平字段合并进本地缓存的 chunk.metadata
-   * taskStatus 传 null（审核阶段点已选项清空）→ 从 metadata 删除该字段；
+   * taskStatus 传空串 ""（清空语义，null 会被 Jackson 忽略）→ 从 metadata 删除该字段；
    * mood 传空数组 → 覆盖为空数组（后端空数组契约已验证）。
    * @param {string|number} chunkId
    * @param {Object} data
@@ -177,11 +177,10 @@ export const useRecordsStore = defineStore('records', () => {
       if (data.segment !== undefined) chunk.segment = data.segment
       const meta = { ...(chunk.metadata || {}) }
       for (const key of ['title', 'summary', 'contentType', 'mood', 'keywords', 'taskStatus']) {
-        if (data[key] !== undefined) meta[key] = data[key]
+        if (data[key] !== undefined && data[key] !== '') meta[key] = data[key]
       }
-      // taskStatus=null 表示"取消选择"：本地删除该字段（后端 ChunkDTO 无此字段，null 被忽略，
-      // 本地先行清理让 UI 即时反映；后端 metadata 里的旧值会在 confirm 补分类时覆盖）
-      if (data.taskStatus === null) delete meta.taskStatus
+      // taskStatus="" 表示"取消选择"（清空语义）：本地删除该字段让 UI 即时反映
+      if (data.taskStatus === '') delete meta.taskStatus
       chunk.metadata = meta
       return
     }

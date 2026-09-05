@@ -1,0 +1,28 @@
+{
+  "steps": [
+    "PASS | 375px 设置页无横向溢出 | overflowX=0px",
+    "PASS | 移动端设置图标 pending 角标 | badge=3",
+    "PASS | 词典卡渲染",
+    "PASS | 词条卡不超屏（≤375px） | x=35.0 w=305.0",
+    "PASS | 警示语条不超屏 | w=275.0",
+    "PASS | 新增表单不超屏 | w=305.0",
+    "PASS | 原地编辑框不超屏 | w=275.0",
+    "PASS | 移动端每日总结 sheet 打开",
+    "PASS | sheet 打开后无横向溢出 | overflowX=0px",
+    "PASS | 候选分区渲染",
+    "PASS | 候选分区不超屏 | w=335.0",
+    "PASS | 三按钮行不超屏 | w=305.0",
+    "PASS | sheet 内确认 toast | 「论文」已生效 · 下次对话开始使用",
+    "PASS | 依据 → 记录详情（375px）",
+    "PASS | 记录页 375px 无溢出 0 error | overflowX=0px",
+    "PASS | 日历页 375px 无溢出 0 error | overflowX=0px",
+    "PASS | 对话页 375px 无溢出 0 error | overflowX=0px",
+    "PASS | 镜子页 375px 无溢出 0 error | overflowX=0px"
+  ],
+  "errors": [],
+  "pageErrors": [],
+  "summary": {
+    "pass": 18,
+    "fail": 0
+  }
+}

@@ -86,13 +86,14 @@ function selectType(t) {
   if (!canEdit.value) return
   edit.contentType = t
   if (!showTaskStatus.value) edit.taskStatus = ''
-  save({ contentType: t, ...(showTaskStatus.value && edit.taskStatus ? { taskStatus: edit.taskStatus } : { taskStatus: null }) })
+  // taskStatus 清空语义 = 空串 ""（null 被 Jackson 忽略，B 侧 taskStatus 为空串时清空）
+  save({ contentType: t, ...(showTaskStatus.value && edit.taskStatus ? { taskStatus: edit.taskStatus } : { taskStatus: '' }) })
 }
 
 function selectTask(t) {
   if (!canEdit.value) return
   edit.taskStatus = edit.taskStatus === t ? '' : t
-  save({ taskStatus: edit.taskStatus || null })
+  save({ taskStatus: edit.taskStatus || '' })
 }
 
 async function onKeywordsBlur() {

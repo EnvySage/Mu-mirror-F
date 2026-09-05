@@ -1,0 +1,23 @@
+{
+  "steps": [
+    "进入应用 | http://localhost:5199/records",
+    "R1 切到 记录 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '记录' }).first()\u001b[22",
+    "R1 切到 日历 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '日历' }).first()\u001b[22",
+    "R1 切到 对话 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '对话' }).first()\u001b[22",
+    "R1 切到 镜子 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '镜子' }).first()\u001b[22",
+    "R1 切到 设置 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '设置' }).first()\u001b[22",
+    "R2 切到 记录 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '记录' }).first()\u001b[22",
+    "R2 切到 日历 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '日历' }).first()\u001b[22",
+    "R2 切到 对话 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '对话' }).first()\u001b[22",
+    "R2 切到 镜子 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '镜子' }).first()\u001b[22",
+    "R2 切到 设置 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '设置' }).first()\u001b[22",
+    "R3 切到 记录 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '记录' }).first()\u001b[22",
+    "R3 切到 日历 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '日历' }).first()\u001b[22",
+    "R3 切到 对话 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '对话' }).first()\u001b[22",
+    "R3 切到 镜子 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '镜子' }).first()\u001b[22",
+    "R3 切到 设置 失败 | locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('a').filter({ hasText: '设置' }).first()\u001b[22"
+  ],
+  "errors": [],
+  "pageErrors": [],
+  "warnings": []
+}

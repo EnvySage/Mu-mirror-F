@@ -24,7 +24,7 @@ const glossary = useGlossaryStore()
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
-  const names = { records: '记录', calendar: '日历', chat: '对话', mirror: '镜子', settings: '设置' }
+  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', settings: '设置' }
   return names[route.name] || ''
 })
 
