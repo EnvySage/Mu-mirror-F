@@ -152,6 +152,7 @@ async function onGenerate() {
       <template v-else-if="mirror.profile">
         <!-- mirror-hero：数字滚动 + 完成轻脉冲 -->
         <div :class="['mirror-hero', 'card', { settled: justSettled }]">
+          <div class="mirror-hero-inner">
           <div class="mirror-greeting">这是我在你身上看到的</div>
           <div class="mirror-name">{{ mirrorName }}</div>
           <div v-if="mirror.drift" class="mirror-drift">
@@ -169,6 +170,7 @@ async function onGenerate() {
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
             {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
           </button>
+          </div>
         </div>
 
         <!-- portrait-grid 四卡 -->
@@ -270,7 +272,7 @@ async function onGenerate() {
 <style scoped>
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-.page-header { display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px; }
+.page-header { display: none; padding: 26px clamp(32px, 4vw, 72px) 0; align-items: baseline; gap: 14px; }
 @media (min-width: 900px) { .page-header { display: flex; } }
 .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
 .page-subtitle { font-size: 13px; color: var(--text-low); }
@@ -281,11 +283,14 @@ async function onGenerate() {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+  /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
+  .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
 /* mirror-hero（白卡，无扫光） */
 .mirror-hero { position: relative; overflow: hidden; padding: 26px 22px; margin-top: 8px; text-align: left; }
+/* 超宽屏限文本行长（卡做全宽背景，内容限宽），避免 overall 总结一行拉太长 */
+.mirror-hero-inner { max-width: 720px; }
 .mirror-hero.settled { animation: breatheOnce 1.1s ease; }
 .mirror-greeting { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .22em; color: var(--accent); margin-bottom: 8px; }
 .mirror-name { font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.3; }

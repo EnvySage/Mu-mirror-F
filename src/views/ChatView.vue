@@ -299,7 +299,7 @@ const groupedSessions = computed(() => {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 20px; max-width: 880px; margin: 0 auto; }
+  .page-content { padding: 18px 32px 20px; max-width: 820px; margin: 0 auto; }
 }
 
 .chat-wrap { display: flex; flex-direction: column; height: 100%; }

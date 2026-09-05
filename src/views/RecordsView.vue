@@ -176,7 +176,7 @@ async function onRetryRecord(record) {
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .page-header {
-  display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px;
+  display: none; padding: 26px clamp(32px, 4vw, 72px) 0; align-items: baseline; gap: 14px;
 }
 @media (min-width: 900px) { .page-header { display: flex; } }
 .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
@@ -188,7 +188,8 @@ async function onRetryRecord(record) {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+  /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
+  .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
 /* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */

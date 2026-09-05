@@ -351,7 +351,7 @@ function handleLogout() {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+  .page-content { padding: 18px 32px 40px; max-width: 760px; margin: 0 auto; }
 }
 
 .settings-group { margin-bottom: 20px; }

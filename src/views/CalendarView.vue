@@ -90,7 +90,7 @@ function openRecord(id) {
 <style scoped>
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-.page-header { display: none; padding: 26px 32px 0; align-items: baseline; gap: 14px; }
+.page-header { display: none; padding: 26px clamp(32px, 4vw, 72px) 0; align-items: baseline; gap: 14px; }
 @media (min-width: 900px) { .page-header { display: flex; } }
 .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
 .page-subtitle { font-size: 13px; color: var(--text-low); }
@@ -101,7 +101,8 @@ function openRecord(id) {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+  /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
+  .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
 /* 日历左右布局（≥1200px）：日历卡固定左列 340px，当日记录右侧流式填充 */
@@ -109,7 +110,7 @@ function openRecord(id) {
 .calendar-records { margin-top: 16px; }
 @media (min-width: 1200px) {
   .calendar-layout { display: flex; align-items: flex-start; gap: 16px; }
-  .calendar-full { width: 340px; flex-shrink: 0; align-self: flex-start; }
+  .calendar-full { width: 380px; flex-shrink: 0; align-self: flex-start; }
   .calendar-records { flex: 1; min-width: 0; margin-top: 0; }
 }
 
