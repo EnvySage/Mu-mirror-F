@@ -33,6 +33,8 @@ const mirrorName = computed(() => `你的镜子 · ${now.getMonth() + 1} 月`)
 
 // ---- 数字滚动（0 → 目标值，JS rAF ~600ms；纯展示层，无数据逻辑） ----
 const statsProgress = ref(0) // 0~1
+/** 组件卸载标志：卸载后 rAF/watcher 不得再写响应式状态（防 __vnode null 报错） */
+let isUnmounted = false
 
 function animateNumber() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -41,13 +43,17 @@ function animateNumber() {
   }
   const start = performance.now()
   const DUR = 600
+  let cancelled = false
   function frame(t) {
+    // 组件卸载后停止 rAF 循环：继续写 ref 会触发已卸载组件更新（__vnode null 报错）
+    if (cancelled || isUnmounted) return
     const p = Math.min((t - start) / DUR, 1)
     // easeOutCubic
     statsProgress.value = 1 - Math.pow(1 - p, 3)
     if (p < 1) requestAnimationFrame(frame)
   }
   requestAnimationFrame(frame)
+  onBeforeUnmount(() => { cancelled = true })
 }
 
 /** 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） */
@@ -75,10 +81,10 @@ watch(() => statsStore.record_daily.length, animateNumber, { immediate: true })
 const justSettled = ref(false)
 let settledTimer = null
 watch(() => mirror.profile, (p) => {
-  if (!p) return
+  if (!p || isUnmounted) return
   justSettled.value = true
   clearTimeout(settledTimer)
-  settledTimer = setTimeout(() => { justSettled.value = false }, 1200)
+  settledTimer = setTimeout(() => { if (!isUnmounted) justSettled.value = false }, 1200)
 })
 
 /** 情绪分布（从记录 chunks mood 统计，top5） */
@@ -254,7 +260,10 @@ async function onGenerate() {
   else toast.error(mirror.error || '生成失败，请重试')
 }
 
-onBeforeUnmount(() => clearTimeout(settledTimer))
+onBeforeUnmount(() => {
+  isUnmounted = true
+  clearTimeout(settledTimer)
+})
 </script>
 
 <template>
