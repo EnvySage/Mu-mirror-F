@@ -53,6 +53,8 @@ const stats = computed(() => {
 })
 
 // ---- 生成完成：hero 一次轻脉冲 ----
+/** 组件卸载标志：卸载后 watcher/timer 不得再写响应式状态 */
+let isUnmounted = false
 const justSettled = ref(false)
 let settledTimer = null
 watch(() => mirror.profile, (p) => {
