@@ -45,6 +45,7 @@ function openWrite() {
         :title="mobileTitle"
         @write="openWrite"
         @summary="ui.openSummarySheet()"
+        @sessions="ui.requestChatSessions()"
       />
       <RouterView v-slot="{ Component }">
         <Transition name="page" mode="out-in">

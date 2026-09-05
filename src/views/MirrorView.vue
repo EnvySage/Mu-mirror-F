@@ -281,7 +281,7 @@ async function onGenerate() {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 900px; }
+  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
 }
 
 /* mirror-hero（白卡，无扫光） */
@@ -326,6 +326,10 @@ async function onGenerate() {
 @media (min-width: 900px) {
   .portrait-grid { grid-template-columns: repeat(2, 1fr); }
   .portrait-grid .card.span-2 { grid-column: span 2; }
+}
+@media (min-width: 1200px) {
+  .portrait-grid { grid-template-columns: repeat(4, 1fr); }
+  .portrait-grid .card.span-2 { grid-column: span 4; }
 }
 .portrait-section { padding: 16px; }
 .portrait-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

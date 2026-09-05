@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getStorage, removeStorage } from '@/utils/storage'
+import { getStorage, setStorage, removeStorage as removeAppStorage } from '@/utils/storage'
 import {
   getSessions as apiGetSessions,
   getSession as apiGetSession,
@@ -33,6 +33,9 @@ import {
 /** @typedef {{ id: string, title: string, created_at: string, updated_at: string }} ChatSession */
 
 const FALLBACK_TEXT = '暂时无法回答'
+
+/** localStorage 存档 key（utils/storage 统一加 mirror_ 前缀） */
+const LAST_SESSION_KEY = 'last_chat_session'
 
 let msgId = 0
 
@@ -185,6 +188,8 @@ export const useChatStore = defineStore('chat', () => {
           if (payload.sessionId) {
             sessionId.value = payload.sessionId
             activeSessionId.value = payload.sessionId
+            // 后端建会话（首条消息）→ 写入存档
+            saveSessionId(payload.sessionId)
           }
         }
         break
@@ -220,8 +225,26 @@ export const useChatStore = defineStore('chat', () => {
     if (!aiMsg.content) aiMsg.content = text
   }
 
-  // ==================== 会话列表 / 历史 / 删除 ====================
+  // ==================== 会话存档（localStorage） ====================
 
+  /** 读取上次会话存档 id（无 / 非法返回 null） */
+  function getSavedSessionId() {
+    const id = getStorage(LAST_SESSION_KEY)
+    return id && typeof id === 'string' && id.trim() ? id.trim() : null
+  }
+
+  /** 会话 id 写入存档 */
+  function saveSessionId(id) {
+    if (id) setStorage(LAST_SESSION_KEY, id)
+    else removeAppStorage(LAST_SESSION_KEY)
+  }
+
+  /** 清除会话存档 */
+  function clearSavedSessionId() {
+    removeAppStorage(LAST_SESSION_KEY)
+  }
+
+  // ==================== 会话列表 / 历史 / 删除 ====================
   /**
    * 拉取会话列表（GET /api/mirror/sessions，updated_at 倒序）
    */
@@ -263,10 +286,14 @@ export const useChatStore = defineStore('chat', () => {
       messages.value = list
       activeSessionId.value = id
       sessionId.value = id
+      // 历史会话设为当前会话 → 同步写入存档
+      saveSessionId(id)
       return true
     } catch (err) {
       console.error('Failed to load session:', err)
       historyError.value = true
+      // 失败归因：err.code 为数字 = 后端明确报错（404 已删 / 业务码）；否则是网络层失败（后端未起/超时）
+      lastLoadFailureKind = (typeof err?.code === 'number') ? 'missing' : 'network'
       return false
     } finally {
       historyLoading.value = false
@@ -284,6 +311,10 @@ export const useChatStore = defineStore('chat', () => {
       // 删的是当前打开的会话 → 回到新会话空态
       if (activeSessionId.value === id) {
         clearMessages()
+      }
+      // 删的是存档会话 → 清存档（下次进页不再尝试恢复）
+      if (getSavedSessionId() === id) {
+        clearSavedSessionId()
       }
       return true
     } catch (err) {
@@ -307,11 +338,70 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = false
   }
 
+  // ==================== 进页自动恢复 ====================
+
+  /** 最近一次 loadSession 失败归因：null / 'missing'（会话已删等后端明确报错）/ 'network'（网络层失败） */
+  let lastLoadFailureKind = null
+
+  /**
+   * 进页恢复流程（ChatView onMounted 调用）：
+   *   1. 有存档 id → loadSession 恢复消息流；后端明确报错（已删/404）→ 清存档继续；
+   *      网络层失败 → 保留存档下次再试
+   *   2. 无存档 → 今天有历史会话则自动恢复最近一个（updated_at 最新）
+   *   3. 今天没有会话 → 不预建（首条消息时后端自动建），保持空态引导文案
+   * @returns {Promise<boolean>} 是否成功恢复了某个会话
+   */
+  async function restoreLastSession() {
+    // 流进行中不碰消息流
+    if (sending.value) return false
+
+    // 1. localStorage 存档
+    const savedId = getSavedSessionId()
+    if (savedId) {
+      const ok = await loadSession(savedId)
+      if (ok) return true
+      // 网络层失败（后端未起/超时）：保留存档下次再试，空态有兜底文案
+      if (lastLoadFailureKind === 'network') return false
+      // 后端明确报错（会话已删/404/无权限）→ 清存档，继续尝试今天的会话
+      clearSavedSessionId()
+    }
+
+    // 2. 今天最近一个会话（created_at 为北京时间字符串 yyyy-MM-dd HH:mm:ss，取日期段与本地今天比对）
+    if (!sessionsLoaded.value) {
+      await fetchSessions()
+      // 会话列表也拉不到（后端未起）：不继续，空态兜底
+      if (!sessionsLoaded.value) return false
+    }
+    const todayKey = localDateKey(new Date())
+    const todaySession = sessions.value
+      .filter(s => localDateKey(s.created_at) === todayKey)
+      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0]
+    if (todaySession) {
+      return loadSession(todaySession.id)
+    }
+
+    // 3. 今天还没有会话：不预建，等首条消息时后端自动建
+    return false
+  }
+
+  /** 本地日期 key（yyyy-MM-dd），兼容 "yyyy-MM-dd HH:mm:ss" 与 ISO 字符串 */
+  function localDateKey(dateLike) {
+    if (!dateLike) return ''
+    if (typeof dateLike === 'string') {
+      const m = dateLike.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`
+      dateLike = new Date(dateLike.replace(' ', 'T'))
+    }
+    if (!(dateLike instanceof Date) || Number.isNaN(dateLike.getTime())) return ''
+    return `${dateLike.getFullYear()}-${String(dateLike.getMonth() + 1).padStart(2, '0')}-${String(dateLike.getDate()).padStart(2, '0')}`
+  }
+
   function clearMessages() {
     messages.value = []
     sessionId.value = null
     activeSessionId.value = null
     historyError.value = false
+    clearSavedSessionId()
   }
 
   return {
@@ -331,5 +421,7 @@ export const useChatStore = defineStore('chat', () => {
     newConversation,
     abort,
     clearMessages,
+    restoreLastSession,
+    getSavedSessionId,
   }
 })

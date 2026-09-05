@@ -1,14 +1,29 @@
 <script setup>
+import { useRoute } from 'vue-router'
+
 defineProps({
   title: { type: String, default: '' },
 })
-const emit = defineEmits(['write', 'summary'])
+const emit = defineEmits(['write', 'summary', 'sessions'])
+
+/** 历史会话入口仅对话页展示（桌面 header 会话按钮在 900px 以下隐藏，移动端靠这里） */
+const route = useRoute()
 </script>
 
 <template>
   <div class="mobile-header">
     <div class="page-title-sm">{{ title }}</div>
     <div class="header-actions">
+      <button
+        v-if="route.name === 'chat'"
+        class="header-icon-btn"
+        title="历史会话"
+        @click="emit('sessions')"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M3 12h18M3 18h12"/>
+        </svg>
+      </button>
       <button class="header-icon-btn" title="每日总结" @click="emit('summary')">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>

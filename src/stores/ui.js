@@ -23,6 +23,19 @@ export const useUIStore = defineStore('ui', () => {
 
   const showDetail = ref(false)
 
+  /** 请求对话页打开历史会话抽屉（MobileHeader → ChatView 的跨层通知，ChatView 消费后复位） */
+  const chatSessionsRequested = ref(false)
+
+  /** MobileHeader 历史按钮：置位请求标志（MainLayout 中转 emit，也供直接调用） */
+  function requestChatSessions() {
+    chatSessionsRequested.value = true
+  }
+
+  /** ChatView 消费后复位 */
+  function consumeChatSessionsRequest() {
+    chatSessionsRequested.value = false
+  }
+
   function switchPage(page) {
     currentPage.value = page
     showDetail.value = false
@@ -61,10 +74,13 @@ export const useUIStore = defineStore('ui', () => {
     selectedRecordId,
     detailMode,
     showDetail,
+    chatSessionsRequested,
     switchPage,
     openWriteModal,
     closeWriteModal,
     openSummarySheet,
     closeSummarySheet,
+    requestChatSessions,
+    consumeChatSessionsRequest,
   }
 })

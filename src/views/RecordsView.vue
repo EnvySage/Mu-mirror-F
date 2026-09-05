@@ -152,8 +152,8 @@ async function onRetryRecord(record) {
         <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
       </div>
 
-      <!-- 日期分组列表 -->
-      <template v-else>
+      <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
+      <div v-else class="records-grid">
         <template v-for="group in grouped" :key="group.dateKey">
           <div class="date-separator">{{ group.label }}</div>
           <RecordCard
@@ -167,7 +167,7 @@ async function onRetryRecord(record) {
             @retry="onRetryRecord"
           />
         </template>
-      </template>
+      </div>
     </div>
   </div>
 </template>
@@ -188,7 +188,16 @@ async function onRetryRecord(record) {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 760px; }
+  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+}
+
+/* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */
+.records-grid { display: grid; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 1200px) {
+  /* 卡片自带 margin-bottom 改由 row-gap 提供（间距 12px），避免双倍间距 */
+  .records-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .records-grid .record-card { margin-bottom: 0; }
+  .records-grid .date-separator { grid-column: 1 / -1; margin-bottom: -4px; }
 }
 
 .loading-state { display: flex; justify-content: center; padding: 60px 0; }

@@ -25,7 +25,7 @@ const showSessions = ref(false)
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
 
 /** 空态文案：加载中 / 历史加载失败（后端未起）/ 正常引导 */
-const emptyTitle = computed(() => (chat.historyLoading ? '加载会话中…' : '问我任何关于你的事'))
+const emptyTitle = computed(() => (chat.historyLoading ? '加载会话中…' : '开始今天的对话吧'))
 const emptyDesc = computed(() => {
   if (chat.historyLoading) return '正在从服务器拉取历史消息'
   if (chat.historyError) return '历史加载失败 · 请检查服务是否可用'
@@ -33,8 +33,17 @@ const emptyDesc = computed(() => {
 })
 
 onMounted(() => {
-  if (chat.sessionsLoaded) return
-  chat.fetchSessions()
+  // 进页自动恢复：存档会话 → 今天最近会话 → 都没有则保持空态
+  chat.restoreLastSession()
+})
+
+// MobileHeader 历史按钮 → ui store 请求标志 → 打开抽屉（打开时刷新列表，恢复流程可能跳过了列表拉取）
+watch(() => ui.chatSessionsRequested, (v) => {
+  if (v) {
+    ui.consumeChatSessionsRequest()
+    chat.fetchSessions()
+    showSessions.value = true
+  }
 })
 
 onBeforeUnmount(() => {
@@ -102,6 +111,49 @@ async function removeSession(id) {
   await chat.removeSession(id)
   chat.fetchSessions()
 }
+
+// ==================== 抽屉日期分组：今天 / 昨天 / 更早 ====================
+
+/** 按本地日期归类（yyyy-MM-dd），与后端北京时间字符串直接比对 */
+function localDateKey(value) {
+  if (!value) return ''
+  if (typeof value === 'string') {
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`
+    value = new Date(value.replace(' ', 'T'))
+  }
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return ''
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+}
+
+function dayKeyOffset(offset) {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const todayKey = dayKeyOffset(0)
+const yesterdayKey = dayKeyOffset(-1)
+
+/** 分组后的会话列表：组间按 今天 → 昨天 → 更早，组内 updated_at 倒序 */
+const groupedSessions = computed(() => {
+  const groups = [
+    { key: 'today', label: '今天', items: [] },
+    { key: 'yesterday', label: '昨天', items: [] },
+    { key: 'earlier', label: '更早', items: [] },
+  ]
+  const byKey = Object.fromEntries(groups.map(g => [g.key, g]))
+  const sorted = [...chat.sessions].sort((a, b) =>
+    String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
+  )
+  for (const s of sorted) {
+    const k = localDateKey(s.updated_at || s.created_at)
+    if (k === todayKey) byKey.today.items.push(s)
+    else if (k === yesterdayKey) byKey.yesterday.items.push(s)
+    else byKey.earlier.items.push(s)
+  }
+  return groups.filter(g => g.items.length > 0)
+})
 </script>
 
 <template>
@@ -134,20 +186,25 @@ async function removeSession(id) {
         <div class="sessions-list">
           <div v-if="chat.sessionsLoading" class="sessions-empty">加载中…</div>
           <div v-else-if="!chat.sessions.length" class="sessions-empty">还没有会话 · 开始第一次提问吧</div>
-          <div
-            v-for="s in chat.sessions"
-            :key="s.id"
-            :class="['session-item', { active: s.id === chat.activeSessionId }]"
-            @click="openSession(s.id)"
-          >
-            <div class="session-item-main">
-              <div class="session-item-title">{{ s.title || '未命名会话' }}</div>
-              <div class="session-item-time">{{ timeAgo(s.updated_at) }}</div>
-            </div>
-            <button class="session-item-del" title="删除会话" @click.stop="removeSession(s.id)">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
-            </button>
-          </div>
+          <template v-else>
+            <section v-for="group in groupedSessions" :key="group.key" class="session-group">
+              <div class="session-group-label">{{ group.label }}</div>
+              <div
+                v-for="s in group.items"
+                :key="s.id"
+                :class="['session-item', { active: s.id === chat.activeSessionId }]"
+                @click="openSession(s.id)"
+              >
+                <div class="session-item-main">
+                  <div class="session-item-title">{{ s.title || '未命名会话' }}</div>
+                  <div class="session-item-time">{{ timeAgo(s.updated_at) }}</div>
+                </div>
+                <button class="session-item-del" title="删除会话" @click.stop="removeSession(s.id)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+                </button>
+              </div>
+            </section>
+          </template>
         </div>
       </div>
     </Transition>
@@ -242,7 +299,7 @@ async function removeSession(id) {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 20px; max-width: 760px; }
+  .page-content { padding: 18px 32px 20px; max-width: 880px; margin: 0 auto; }
 }
 
 .chat-wrap { display: flex; flex-direction: column; height: 100%; }
@@ -347,6 +404,15 @@ async function removeSession(id) {
   text-align: center; color: var(--text-low); font-size: 13px;
   padding: 30px 0;
 }
+.session-group { margin-bottom: 6px; }
+.session-group-label {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em;
+  color: var(--text-low);
+  margin: 14px 8px 4px;
+  display: flex; align-items: center; gap: 10px;
+}
+.session-group-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.session-group:first-child .session-group-label { margin-top: 6px; }
 .session-item {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 8px; border-radius: var(--radius-sm);

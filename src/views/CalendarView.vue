@@ -53,33 +53,35 @@ function openRecord(id) {
       <div class="page-subtitle">{{ filterInfo }}</div>
     </div>
     <div class="page-content">
-      <div class="calendar-full card">
-        <CalendarWidget
-          mode="full"
-          :model-value="selectedDate"
-          @select-date="onDateSelect"
-          @pick-date="onDateDouble"
-        />
-      </div>
-
-      <div v-if="selectedDate" class="calendar-records">
-        <div v-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
-          <div class="empty-title">这一天没有记录</div>
-          <div class="empty-desc">点下方写日记按钮补一条</div>
-        </div>
-        <template v-else>
-          <div class="calendar-records-header">
-            当天记录
-            <span class="calendar-records-count">{{ filteredRecords.length }} 条</span>
-          </div>
-          <RecordCard
-            v-for="r in filteredRecords"
-            :key="r.id"
-            :record="r"
-            :active="ui.selectedRecordId === r.id"
-            @open="openRecord(r.id)"
+      <div class="calendar-layout">
+        <div class="calendar-full card">
+          <CalendarWidget
+            mode="full"
+            :model-value="selectedDate"
+            @select-date="onDateSelect"
+            @pick-date="onDateDouble"
           />
-        </template>
+        </div>
+
+        <div v-if="selectedDate" class="calendar-records">
+          <div v-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
+            <div class="empty-title">这一天没有记录</div>
+            <div class="empty-desc">点下方写日记按钮补一条</div>
+          </div>
+          <template v-else>
+            <div class="calendar-records-header">
+              当天记录
+              <span class="calendar-records-count">{{ filteredRecords.length }} 条</span>
+            </div>
+            <RecordCard
+              v-for="r in filteredRecords"
+              :key="r.id"
+              :record="r"
+              :active="ui.selectedRecordId === r.id"
+              @open="openRecord(r.id)"
+            />
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -99,11 +101,19 @@ function openRecord(id) {
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 760px; }
+  .page-content { padding: 18px 32px 40px; max-width: 880px; margin: 0 auto; }
+}
+
+/* 日历左右布局（≥1200px）：日历卡固定左列 340px，当日记录右侧流式填充 */
+.calendar-layout { display: block; }
+.calendar-records { margin-top: 16px; }
+@media (min-width: 1200px) {
+  .calendar-layout { display: flex; align-items: flex-start; gap: 16px; }
+  .calendar-full { width: 340px; flex-shrink: 0; align-self: flex-start; }
+  .calendar-records { flex: 1; min-width: 0; margin-top: 0; }
 }
 
 .calendar-full { padding: 16px; }
-.calendar-records { margin-top: 16px; }
 .calendar-records-header {
   font-size: 13.5px; font-weight: 600; margin-bottom: 10px;
   display: flex; align-items: center; gap: 8px;
