@@ -31,30 +31,9 @@ onMounted(() => {
 const now = new Date()
 const mirrorName = computed(() => `你的镜子 · ${now.getMonth() + 1} 月`)
 
-// ---- 数字滚动（0 → 目标值，JS rAF ~600ms；纯展示层，无数据逻辑） ----
-const statsProgress = ref(0) // 0~1
-/** 组件卸载标志：卸载后 rAF/watcher 不得再写响应式状态（防 __vnode null 报错） */
-let isUnmounted = false
-
-function animateNumber() {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    statsProgress.value = 1
-    return
-  }
-  const start = performance.now()
-  const DUR = 600
-  let cancelled = false
-  function frame(t) {
-    // 组件卸载后停止 rAF 循环：继续写 ref 会触发已卸载组件更新（__vnode null 报错）
-    if (cancelled || isUnmounted) return
-    const p = Math.min((t - start) / DUR, 1)
-    // easeOutCubic
-    statsProgress.value = 1 - Math.pow(1 - p, 3)
-    if (p < 1) requestAnimationFrame(frame)
-  }
-  requestAnimationFrame(frame)
-  onBeforeUnmount(() => { cancelled = true })
-}
+// ---- 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） ----
+// 注：原 JS rAF 数字滚动动画已移除——卸载竞态（__vnode null）反复复发，稳定性优先于装饰性动效。
+// 入场视觉由 hero 卡的 cardIn CSS 动画承担，无 JS 状态写入。
 
 /** 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） */
 const stats = computed(() => {
@@ -67,15 +46,11 @@ const stats = computed(() => {
     { num: activeDays, label: '活跃天', decimals: 0 },
     { num: avg, label: '日均', decimals: 1 },
   ]
-  const p = statsProgress.value
   return raw.map(s => ({
     ...s,
-    display: (Number(s.num) * p).toFixed(s.decimals),
+    display: Number(s.num).toFixed(s.decimals),
   }))
 })
-
-// 三格口径为「近 30 天实时统计」，窗口随 statsStore 数据就绪重放滚动
-watch(() => statsStore.record_daily.length, animateNumber, { immediate: true })
 
 // ---- 生成完成：hero 一次轻脉冲 ----
 const justSettled = ref(false)
