@@ -2,18 +2,28 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
 import { useRecordsStore } from '@/stores/records'
+import { useStatsStore } from '@/stores/stats'
 import { useToastStore } from '@/stores/toast'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap, taskStatusMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
+import MoodBand from '@/components/charts/MoodBand.vue'
+import HourHeat from '@/components/charts/HourHeat.vue'
+import WeekdayBars from '@/components/charts/WeekdayBars.vue'
+import KeywordBars from '@/components/charts/KeywordBars.vue'
+import TodoRing from '@/components/charts/TodoRing.vue'
+import RecordFreq from '@/components/charts/RecordFreq.vue'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
+const statsStore = useStatsStore()
 const toast = useToastStore()
 
 onMounted(() => {
   mirror.fetchMirror()
   if (recordsStore.records.length === 0) recordsStore.fetchRecords()
+  // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
+  stats.fetchStats()
 })
 
 /** 镜子名：当前月份 */
@@ -173,7 +183,61 @@ async function onGenerate() {
           </div>
         </div>
 
-        <!-- portrait-grid 四卡 -->
+        <!-- ===== 统计图区（R6 重排：色带全宽 → 三小卡 → 两卡 → portrait → 快照） ===== -->
+
+        <!-- 情绪趋势 30 天堆叠色带（全宽大图） -->
+        <div class="portrait-section card chart-card span-all" style="margin-top:12px">
+          <div class="chart-head">
+            <span class="section-label">MOOD TREND · 30D</span>
+            <span class="chart-head-note">每天一根 · 按当日情绪占比分色</span>
+          </div>
+          <MoodBand :data="statsStore.mood_daily" />
+        </div>
+
+        <!-- 三小卡一行：活跃时段 / 待办完成度 / 周节奏（≥1200px 三列，窄屏堆叠） -->
+        <div class="chart-row-3">
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">HOUR HEAT</span>
+              <span class="chart-head-note">记录时段分布</span>
+            </div>
+            <HourHeat :data="statsStore.hour_dist" />
+          </div>
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">TODO</span>
+              <span class="chart-head-note">近 30 天完成度</span>
+            </div>
+            <TodoRing :todo="statsStore.todo" />
+          </div>
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">WEEKDAY</span>
+              <span class="chart-head-note">一周节奏</span>
+            </div>
+            <WeekdayBars :data="statsStore.weekday_dist" />
+          </div>
+        </div>
+
+        <!-- 两卡一行：关键词 Top10 / 记录频率 -->
+        <div class="chart-row-2">
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">KEYWORDS</span>
+              <span class="chart-head-note">Top 10</span>
+            </div>
+            <KeywordBars :data="statsStore.keyword_top" />
+          </div>
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">FREQUENCY</span>
+              <span class="chart-head-note">每天记录数</span>
+            </div>
+            <RecordFreq :data="statsStore.record_daily" />
+          </div>
+        </div>
+
+        <!-- portrait-grid 四卡（现有 AI 分析） -->
         <div class="portrait-grid">
           <div class="portrait-section card">
             <div class="portrait-section-header">
@@ -325,6 +389,22 @@ async function onGenerate() {
 .mirror-generate:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .mirror-generate:disabled { opacity: .55; cursor: not-allowed; }
 .mirror-generate svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
+
+/* ===== 统计图区布局 ===== */
+.chart-card { min-width: 0; }
+.chart-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 14px;
+}
+.chart-head-note { font-size: 11px; color: var(--text-low); }
+
+/* 三小卡：≥1200px 一行三列，窄屏堆叠 */
+.chart-row-3 { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+@media (min-width: 700px) { .chart-row-3 { grid-template-columns: repeat(3, 1fr); } }
+
+/* 两卡：≥900px 一行两列（关键词列稍宽），窄屏堆叠 */
+.chart-row-2 { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+@media (min-width: 900px) { .chart-row-2 { grid-template-columns: 1.2fr 1fr; } }
 
 /* portrait grid */
 .portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px; }

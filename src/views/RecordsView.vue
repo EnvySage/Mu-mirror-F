@@ -2,9 +2,14 @@
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { useSummariesStore } from '@/stores/summaries'
+import { useStatsStore } from '@/stores/stats'
 import { useToastStore } from '@/stores/toast'
+import { MOOD_COLOR } from '@/constants/moodColor'
+import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
 import { dateLabel, formatFullDate } from '@/utils/time'
 import RecordCard from '@/components/molecules/RecordCard.vue'
+import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
 
 const props = defineProps({
   date: { type: String, default: null },
@@ -12,6 +17,8 @@ const props = defineProps({
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
+const summariesStore = useSummariesStore()
+const statsStore = useStatsStore()
 const toast = useToastStore()
 
 /** 按日期分组（倒序） */
@@ -61,6 +68,9 @@ function loadAll() {
 
 onMounted(() => {
   filterDate.value ? loadByDate(filterDate.value) : loadAll()
+  // 侧栏数据源：每日总结列表 + stats（stats store 内 30s 缓存，两页共用）
+  summariesStore.fetchList()
+  statsStore.fetchStats()
 })
 
 watch(() => props.date, (d) => {
@@ -105,6 +115,18 @@ function openRecord(id) {
   ui.showDetail = true
 }
 
+/** 侧栏 todo 项点击 → 打开来源记录详情 */
+function openTodoRecord(recordId) {
+  if (!recordId) return
+  ui.selectedRecordId = recordId
+  ui.showDetail = true
+}
+
+/** 侧栏「查看全部」→ 打开全局每日总结 sheet（复用现有入口） */
+function openSummarySheet() {
+  ui.openSummarySheet()
+}
+
 /** 瀑布入场：分组的全局序号（前序组卡片数累计），供 40ms 递增 delay */
 function groupIndex(group) {
   let n = 0
@@ -138,35 +160,45 @@ async function onRetryRecord(record) {
       <div class="page-subtitle">{{ subtitle }}</div>
     </div>
     <div class="page-content">
-      <!-- 加载状态 -->
-      <div v-if="recordsStore.loading && !recordsStore.records.length" class="loading-state">
-        <span class="spinner" style="width:22px;height:22px" />
-      </div>
+      <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
+      <div class="records-layout">
+        <div class="records-main">
+          <!-- 加载状态 -->
+          <div v-if="recordsStore.loading && !recordsStore.records.length" class="loading-state">
+            <span class="spinner" style="width:22px;height:22px" />
+          </div>
 
-      <!-- 空状态 -->
-      <div v-else-if="grouped.length === 0" class="empty-state">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <!-- 空状态 -->
+          <div v-else-if="grouped.length === 0" class="empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            </div>
+            <div class="empty-title">还没有记录</div>
+            <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
+          </div>
+
+          <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
+          <div v-else class="records-grid">
+            <template v-for="group in grouped" :key="group.dateKey">
+              <div class="date-separator">{{ group.label }}</div>
+              <RecordCard
+                v-for="(record, i) in group.items"
+                :key="record.id"
+                :record="record"
+                :active="ui.selectedRecordId === record.id"
+                :style="{ animationDelay: `${(groupIndex(group) + i) * 40}ms` }"
+                @open="openRecord(record.id)"
+                @delete="onDeleteRecord"
+                @retry="onRetryRecord"
+              />
+            </template>
+          </div>
         </div>
-        <div class="empty-title">还没有记录</div>
-        <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
-      </div>
 
-      <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
-      <div v-else class="records-grid">
-        <template v-for="group in grouped" :key="group.dateKey">
-          <div class="date-separator">{{ group.label }}</div>
-          <RecordCard
-            v-for="(record, i) in group.items"
-            :key="record.id"
-            :record="record"
-            :active="ui.selectedRecordId === record.id"
-            :style="{ animationDelay: `${(groupIndex(group) + i) * 40}ms` }"
-            @open="openRecord(record.id)"
-            @delete="onDeleteRecord"
-            @retry="onRetryRecord"
-          />
-        </template>
+        <RecordsSidebar
+          @open-record="openTodoRecord"
+          @open-summaries="openSummarySheet"
+        />
       </div>
     </div>
   </div>
@@ -190,6 +222,15 @@ async function onRetryRecord(record) {
 @media (min-width: 900px) {
   /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
+}
+
+/* ===== 双栏：主列 fluid + 右侧栏 320px（≥1440px） ===== */
+.records-layout { display: block; }
+.records-sidebar { display: none; }
+@media (min-width: 1440px) {
+  .records-layout { display: flex; align-items: flex-start; gap: 18px; }
+  .records-main { flex: 1; min-width: 0; }
+  .records-sidebar { display: block; flex: 0 0 320px; width: 320px; position: sticky; top: 18px; }
 }
 
 /* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */
