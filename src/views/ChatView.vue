@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
+import ChatSessionsPanel from '@/components/organisms/ChatSessionsPanel.vue'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻）

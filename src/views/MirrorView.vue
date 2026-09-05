@@ -23,7 +23,7 @@ onMounted(() => {
   mirror.fetchMirror()
   if (recordsStore.records.length === 0) recordsStore.fetchRecords()
   // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
-  stats.fetchStats()
+  statsStore.fetchStats()
 })
 
 /** 镜子名：当前月份 */
