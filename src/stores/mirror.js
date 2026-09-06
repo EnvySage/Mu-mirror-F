@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   getMirror as apiGetMirror,
   generateMirror as apiGenerateMirror,
+  generateMonthly as apiGenerateMonthly,
   getSnapshots as apiGetSnapshots,
   getSnapshot as apiGetSnapshot,
 } from '@/api/mirror'
@@ -30,6 +31,13 @@ import {
  * 置 true 可临时回落 mock（后端未启动/联调时用），与 stats store 同模式。
  */
 const USE_MOCK = false
+
+/**
+ * mock 开关（独立）：POST /mirror/generate-monthly（DB Agent 任务 2b）后端
+ * 部署节奏晚于前端——独立开关让时间线幽灵卡可先行走查；B 就绪后置 false
+ * 即切真接口，mock/真接口两路数据结构一致（与 USE_MOCK 同模式）。
+ */
+const USE_MOCK_MONTHLY = true
 
 /** 快照详情缓存（id → MirrorProfile），避免重复拉取已看过的快照 */
 const CACHE_TTL = 60_000
@@ -60,6 +68,56 @@ function mockSnapshotDetail(id) {
     userTags: ['技术学习', '夜猫子', '跑步新人'],
   }
   return base
+}
+
+/** mock 自增 id 起点（避开真 id） */
+let mockMonthlySeq = 9000
+
+/** mock monthly 生成延迟（ms）——任务书要求 ~1.5s，让 loading 态可走查 */
+const MOCK_MONTHLY_DELAY = 1500
+
+/**
+ * mock：为指定月份造一份 monthly 快照（贴 otaku_it 人设弧线）
+ * @param {string} month "2026-08"
+ */
+function mockMonthlySnapshot(month) {
+  const [, mm] = month.split('-')
+  const presets = {
+    '07': {
+      summary: '七月：暑期实训冲刺期，Java 二手交易平台赶工，情绪压力较大，深夜记录居多。',
+      mood: '情绪以 stressed 与 exhausted 为主，答辩周焦虑到达峰值。',
+      learning: '学习集中在 Java Web 与 MySQL 事务，企业导师评审带来大量补课。',
+      todo: '待办完成率不足四成，实训周报与答辩 PPT 长期挂起。',
+      rhythm: '记录集中在 22-23 点，凌晨偶有返工，节奏被实训排期牵引。',
+    },
+    '08': {
+      summary: '八月：从实训回归个人项目，追番管理工具推进与开题报告并线，整体回暖。',
+      mood: '情绪以 satisfied 与 calm 为主，中下旬因跑步受挫短暂 exhausted。',
+      learning: '学习主线是 Spring Boot + Vue3 实战与 RAG 检索调研，产出密度高。',
+      todo: '待办完成率约五成，开题报告两版迭代后定稿，跑步计划重启。',
+      rhythm: '记录集中在上午 9-11 点与晚上 21-23 点，深夜记录较上月减少。',
+    },
+  }
+  const p = presets[mm] || {
+    summary: `${month.replace('-', ' 年 ')} 月：这是一份 mock 月度画像，用于走查生成链路。`,
+    mood: '情绪平稳，以 calm 为主。',
+    learning: '学习节奏稳定。',
+    todo: '待办略有积压。',
+    rhythm: '记录集中在晚间。',
+  }
+  return {
+    id: ++mockMonthlySeq,
+    snapshot_type: 'monthly',
+    // 月度快照语义上归属该月（B 侧以 created_at 落在该月判定月份归属）
+    created_at: `${month}-01 02:00:00`,
+    drift_distance: 0.18,
+    overall_summary: p.summary,
+    mood_analysis: p.mood,
+    learning_analysis: p.learning,
+    todo_analysis: p.todo,
+    rhythm_analysis: p.rhythm,
+    user_tags: ['技术学习', '夜猫子'],
+  }
 }
 
 export const useMirrorStore = defineStore('mirror', () => {
@@ -210,6 +268,107 @@ export const useMirrorStore = defineStore('mirror', () => {
     }
   }
 
+  /** 生成中防重复提交标记（monthly 与 manual 各自独立，互不阻塞） */
+  const generatingMonthly = ref(false)
+
+  /**
+   * 按月生成 monthly 快照（POST /mirror/generate-monthly?month=YYYY-MM）
+   *
+   * 成功后：重拉快照列表（本地 prepend 会缺 drift/截断摘要，用接口口径）+
+   * viewSnapshot 定位新快照（hero 切换为该月画像）。
+   * 失败（400 当前月/未来月、409 已存在等）：error 透出后端 message，调用方 toast。
+   *
+   * @param {string} [month] "2026-08"；空 = 上个月
+   * @returns {Promise<{ ok: boolean, snapshotId?: number }>}
+   */
+  async function generateForMonth(month) {
+    if (generatingMonthly.value) return { ok: false }
+    generatingMonthly.value = true
+    error.value = null
+    try {
+      let data
+      if (USE_MOCK_MONTHLY) {
+        await new Promise(r => setTimeout(r, MOCK_MONTHLY_DELAY))
+        data = mockMonthlySnapshot(month || defaultMockMonth())
+        // mock 快照进 60s 详情缓存 + 本地列表：viewSnapshot/时间线/月份候选
+        // 全部走同一数据源（真接口路径下这三者由后端承载，行为同构）
+        snapshotCache.set(data.id, { data, at: Date.now() })
+      } else {
+        const res = await apiGenerateMonthly(month)
+        data = res.data || null
+      }
+      if (!data || data.id === null || data.id === undefined) {
+        throw new Error('生成结果为空')
+      }
+      // 新快照入库：重拉列表（保持列表/时间线/月份候选集合同一数据源）
+      await fetchSnapshots()
+      if (USE_MOCK_MONTHLY) {
+        // 真库不含 mock id：重拉后把本地生成的快照按 created_at 归位插入列表
+        const list = snapshots.value || []
+        if (!list.some(s => s.id === data.id)) {
+          list.push({ id: data.id, snapshot_type: 'monthly', created_at: data.created_at, drift_distance: data.drift_distance, overall_summary: data.overall_summary })
+          list.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+          snapshots.value = list
+        }
+      }
+      // hero 定位到新快照（不依赖 fetchSnapshots 结果，id 已知）
+      const okView = await viewSnapshot(data.id)
+      if (!okView) currentSnapshotId.value = data.id
+      return { ok: true, snapshotId: data.id }
+    } catch (err) {
+      error.value = err.message || '月度画像生成失败'
+      console.error('Failed to generate monthly mirror:', err)
+      return { ok: false }
+    } finally {
+      generatingMonthly.value = false
+    }
+  }
+
+  /** mock 兜底月份：上个月 "YYYY-MM"（与后端 month 可空语义一致） */
+  function defaultMockMonth() {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  /**
+   * 可生成月份候选集：min~max 快照月份区间内，有区间但无 monthly 的历史月份
+   * （当前月/未来月剔除——后端 400，前端不给出选项）。
+   * 快照区间只覆盖"已有过快照的月份"；无任何快照时回落到上个月。
+   * @returns {string[]} "2026-08" 升序
+   */
+  const generatableMonths = computed(() => {
+    const list = snapshots.value || []
+    const monthRe = /^\d{4}-\d{2}/
+    const months = []
+    for (const s of list) {
+      const m = String(s.created_at || '').slice(0, 7)
+      if (monthRe.test(m)) months.push(m)
+    }
+    if (!months.length) return [defaultMockMonth()]
+    months.sort()
+    const min = months[0]
+    const now = new Date()
+    const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const max = months[months.length - 1] > currentYm ? currentYm : months[months.length - 1]
+    // 已有 monthly 的月份集合（monthly 快照 created_at 落在该月 = 该月画像）
+    const hasMonthly = new Set(
+      list.filter(s => s.snapshot_type === 'monthly').map(s => String(s.created_at || '').slice(0, 7)),
+    )
+    // min~max 逐月展开，剔除已有 monthly 与当前/未来月份
+    const out = []
+    let [y, m] = min.split('-').map(Number)
+    const [maxY, maxM] = max.split('-').map(Number)
+    while (y < maxY || (y === maxY && m <= maxM)) {
+      const ym = `${y}-${String(m).padStart(2, '0')}`
+      if (!hasMonthly.has(ym) && ym < currentYm) out.push(ym)
+      m += 1
+      if (m > 12) { m = 1; y += 1 }
+    }
+    return out
+  })
+
   /** 漂移展示（余弦距离 0~2 → 0~100% + 程度词） */
   const drift = computed(() => {
     const d = profile.value?.drift_distance
@@ -245,12 +404,15 @@ export const useMirrorStore = defineStore('mirror', () => {
     snapshotsLoading,
     snapshotsError,
     currentSnapshotId,
+    generatingMonthly,
+    generatableMonths,
     fetchMirror,
     fetchSnapshots,
     fetchSnapshotDetail,
     viewSnapshot,
     backToLatest,
     generate,
+    generateForMonth,
     driftLevel,
   }
 })

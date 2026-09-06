@@ -35,6 +35,25 @@ export function getStats(days) {
 }
 
 /**
+ * 按月生成 monthly 画像快照（POST /mirror/generate-monthly?month=YYYY-MM）
+ *
+ * month 可空 = 上个月（与月度定时任务同语义）。指定月份需早于当前月：
+ * 当前月用 POST /generate（manual 语义），未来月份无数据，二者后端均返回 400。
+ * 同 (user, month) 重复调用为重生成（替换该月旧 monthly 快照），无 409 幂等冲突。
+ * 阻塞数秒到数十秒（该月五维统计 + LLM + Embedding），调用方需 loading 态并放宽超时。
+ *
+ * @param {string} [month] - 目标月份 "2026-08"；缺省 = 上个月
+ * @returns {Promise<{ code: number, data: import('@/stores/mirror').MirrorProfile }>}
+ */
+export function generateMonthly(month) {
+  // 与 generateMirror 同口径：阻塞数十秒，绕开 axios 全局 15s 超时
+  return request.post('/mirror/generate-monthly', null, {
+    params: month ? { month } : {},
+    timeout: 120000,
+  })
+}
+
+/**
  * 快照历史列表（GET /mirror/snapshots）
  *
  * 当前用户全量快照（manual 保 2 + monthly 保 12，上限 14），按时间倒序。

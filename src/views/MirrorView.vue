@@ -245,6 +245,37 @@ async function onGenerate() {
   else toast.error(mirror.error || '生成失败，请重试')
 }
 
+// ===== 任务：按月生成镜子快照（时间线尾部"幽灵卡"入口） =====
+
+/** 幽灵卡选中的目标月份（默认取最早一个可生成月份，生成顺序 = 时间线自然走向） */
+const ghostMonth = ref('')
+
+/** 月份选项变化时回落到第一个候选（候选集为空则空串 → 淡态卡片） */
+watch(() => mirror.generatableMonths, (list) => {
+  if (!list.includes(ghostMonth.value)) ghostMonth.value = list[0] || ''
+}, { immediate: true })
+
+/** "2026-08" → "8 月"（幽灵卡与 toast 共用的月份口语化） */
+function monthLabel(ym) {
+  const m = Number(String(ym || '').slice(5, 7))
+  return m ? `${m} 月` : String(ym || '')
+}
+
+/**
+ * 生成该月 monthly 快照：
+ * 成功 → toast「N 月的镜子已生成」+ store 内已 fetchSnapshots + viewSnapshot 定位新快照；
+ * 失败 → toast 后端 message（400 当前/未来月、幂等替换失败等）。
+ * 卸载守卫与其他长时操作同口径：卸载后不弹 toast。
+ */
+async function onGenerateMonthly() {
+  const month = ghostMonth.value
+  if (!month || mirror.generatingMonthly) return
+  const res = await mirror.generateForMonth(month)
+  if (isUnmounted) return
+  if (res.ok) toast.success(`${monthLabel(month)}的镜子已生成`)
+  else toast.error(mirror.error || '生成失败，请重试')
+}
+
 onBeforeUnmount(() => {
   isUnmounted = true
   clearTimeout(settledTimer)
@@ -314,6 +345,26 @@ onBeforeUnmount(() => {
             </button>
             <span v-if="!compareMode" class="compare-hint">对比 overall 总结与六维分析的变化</span>
           </div>
+
+          <!-- 按月生成入口（幽灵卡）：只列"有区间但无 monthly"的历史月份 -->
+          <div v-if="mirror.generatableMonths.length" class="ghost-card">
+            <div class="ghost-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              为没有镜子的月份照一镜
+            </div>
+            <div class="ghost-actions">
+              <select v-model="ghostMonth" class="ghost-select" aria-label="选择要生成月度画像的月份">
+                <option v-for="ym in mirror.generatableMonths" :key="ym" :value="ym">{{ monthLabel(ym) }}</option>
+              </select>
+              <button type="button" class="ghost-btn" :disabled="mirror.generatingMonthly || !ghostMonth" @click="onGenerateMonthly">
+                <svg v-if="!mirror.generatingMonthly" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                {{ mirror.generatingMonthly ? '照镜中…' : '生成' }}
+              </button>
+            </div>
+            <div v-if="mirror.generatingMonthly" class="ghost-loading">照镜中…约需十几秒</div>
+          </div>
+          <!-- 淡态：无可生成月份 -->
+          <div v-else-if="timeline.length" class="ghost-card ghost-idle">近两个月都已有镜子</div>
         </div>
 
         <!-- ===== 对比区（compareMode 开启时插入 hero 上方） ===== -->
@@ -684,6 +735,56 @@ onBeforeUnmount(() => {
 .compare-toggle:hover { color: var(--accent); border-color: var(--accent); }
 .compare-toggle.on { color: #FFFFFF; background: var(--accent); border-color: var(--accent); }
 .compare-hint { font-size: 11.5px; color: var(--text-low); }
+
+/* ===== 按月生成幽灵卡（时间线尾部入口，虚线同 dropzone 视觉） ===== */
+.ghost-card {
+  margin-top: 10px; padding: 10px 14px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  transition: border-color .18s, background .18s;
+}
+.ghost-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+.ghost-head {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-mid);
+  min-width: 0;
+}
+.ghost-head svg { width: 14px; height: 14px; color: var(--text-low); flex-shrink: 0; }
+.ghost-card:hover .ghost-head { color: var(--accent); }
+.ghost-card:hover .ghost-head svg { color: var(--accent); }
+.ghost-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ghost-select {
+  font-size: 12.5px; color: var(--text-hi);
+  padding: 5px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--card);
+  max-width: 100%; font-variant-numeric: tabular-nums;
+}
+.ghost-select:focus { outline: none; border-color: var(--accent); }
+.ghost-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; font-weight: 600; color: var(--accent);
+  padding: 5px 13px; border-radius: var(--radius-full);
+  border: 1px solid var(--accent); background: var(--card);
+  transition: all .15s; white-space: nowrap;
+}
+.ghost-btn svg { width: 12px; height: 12px; stroke: currentColor; }
+.ghost-btn:hover:not(:disabled) { color: #FFFFFF; background: var(--accent); }
+.ghost-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ghost-loading {
+  flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-low); animation: blink 1.2s ease infinite;
+}
+.ghost-idle {
+  justify-content: center; font-size: 12px; color: var(--text-low);
+  cursor: default;
+}
+.ghost-idle:hover { border-color: var(--line-strong); background: transparent; }
+@media (max-width: 420px) {
+  .ghost-card { padding: 10px 12px; gap: 8px; }
+  .ghost-actions { margin-left: 0; width: 100%; }
+  .ghost-select { flex: 1; min-width: 0; }
+}
 
 /* ===== 对比区 ===== */
 .compare-card { margin-top: 12px; padding: 16px; border-color: var(--accent); }
