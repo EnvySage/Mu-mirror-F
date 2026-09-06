@@ -74,28 +74,32 @@ const metaLine = computed(() => {
   return parts.join(' · ')
 })
 
-/** 消化状态段（含边界态：pending=索引中可下载不可问答） */
+/** 消化状态段（五态 · fix-batch B7：extracted=待确认检索不到，confirmed=已可检索） */
 const digestLabel = computed(() => {
   if (f.value.deleted) return '已删除'
   const s = f.value.digestStatus
-  if (s === 'pending') return '索引中…'
-  if (s === 'done') return props.refItem.chunk_count ? `已可检索 · ${props.refItem.chunk_count} 段` : '已可检索'
+  if (s === 'pending') return '排队中'
+  if (s === 'extracted') return '待确认 · 检索不到'
+  if (s === 'confirmed') return props.refItem.chunk_count ? `已可检索 · ${props.refItem.chunk_count} 段` : '已可检索'
   if (s === 'failed') return '读取失败 · 按文件名可找'
   if (s === 'skipped') return '仅保管'
+  if (s === 'done') return '已可检索'
   return '已可检索'
 })
 
-/** 状态色点：done=绿 pending=黄 failed=红 skipped=灰 */
+/** 状态色点：confirmed=绿 extracted=蓝 pending=灰 failed=红 skipped=灰 */
 const digestDotClass = computed(() => {
   const s = f.value.digestStatus
-  if (s === 'pending') return 'dot-pending'
+  if (s === 'confirmed' || s === 'done') return 'dot-done'
+  if (s === 'extracted') return 'dot-extracted'
   if (s === 'failed') return 'dot-failed'
-  if (s === 'skipped') return 'dot-skipped'
-  return 'dot-done'
+  return 'dot-skipped'
 })
 
 const isDeleted = computed(() => f.value.deleted)
 const isDigesting = computed(() => f.value.digestStatus === 'pending' && !isDeleted.value)
+/** extracted 未确认：可下载预览（保管完整），对话引用标注检索不到 */
+const isUnconfirmed = computed(() => f.value.digestStatus === 'extracted' && !isDeleted.value)
 
 /** mock 门：预览/下载按钮置灰（交互态由父级传 mockGate=false） */
 const actionsDisabled = computed(() => props.mockGate || isDeleted.value)
@@ -153,8 +157,10 @@ function onDownload() {
 
       <!-- 边界态：已删除 -->
       <div v-if="isDeleted" class="vref-boundary vref-boundary-danger">文件已删除 · 无法预览或下载</div>
-      <!-- 边界态：索引中 -->
-      <div v-else-if="isDigesting" class="vref-boundary">索引中…可下载，暂不能就此文件问答</div>
+      <!-- 边界态：排队消化 -->
+      <div v-else-if="isDigesting" class="vref-boundary">排队消化中…可下载，稍后可检索</div>
+      <!-- 边界态：未确认（确认门禁） -->
+      <div v-else-if="isUnconfirmed" class="vref-boundary">未确认 · 检索不到（可在资产页确认让它可被找到）</div>
 
       <div class="vref-actions">
         <button class="vref-btn" :disabled="previewDisabled" @click="onPreview">预览</button>
@@ -174,7 +180,8 @@ function onDownload() {
       <FileTypeIcon :kind="f.category || 'file'" />
       <span class="vref-chip-name">{{ f.displayName }}</span>
       <span v-if="isDeleted" class="vref-chip-tag">文件已删除</span>
-      <span v-else-if="isDigesting" class="vref-chip-tag">索引中…</span>
+      <span v-else-if="isDigesting" class="vref-chip-tag">排队中</span>
+      <span v-else-if="isUnconfirmed" class="vref-chip-tag">待确认 · 检索不到</span>
       <span v-else-if="f.vague" class="vref-chip-tag">可能指的是它</span>
       <svg v-if="!isDeleted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="vref-chip-caret"><path d="M9 18l6-6-6-6"/></svg>
     </button>
@@ -220,7 +227,8 @@ function onDownload() {
 }
 .vref-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .dot-done { background: var(--success); }
-.dot-pending { background: var(--warn); }
+.dot-extracted { background: var(--accent); }
+.dot-pending { background: var(--text-low); }
 .dot-failed { background: var(--danger); }
 .dot-skipped { background: var(--text-low); }
 

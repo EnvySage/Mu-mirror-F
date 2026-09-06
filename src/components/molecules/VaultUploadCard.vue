@@ -34,6 +34,14 @@ const description = ref('')
 const displayName = computed(() => (editing.value ? draftName.value.trim() : props.pending.displayName) || props.pending.file.name)
 const sizeLabel = computed(() => formatBytes(props.pending.file.size))
 
+/** 图片类必须写一句描述（任务 4 / Y4：图片无内容可索引，描述是可检索的唯一途径） */
+const isImage = computed(() => props.pending.category === 'image')
+const descPlaceholder = computed(() => (isImage.value
+  ? '图片必须写一句描述，否则无法被找到'
+  : '以后想怎么找到它？（可不填）'))
+/** 确认按钮禁用：图片空描述 → 「就这样存」禁用 */
+const canConfirm = computed(() => !isImage.value || description.value.trim().length > 0)
+
 function startRename() {
   draftName.value = props.pending.displayName || props.pending.file.name
   editing.value = true
@@ -45,6 +53,7 @@ function saveRename() {
 }
 
 function confirm() {
+  if (!canConfirm.value) return
   emit('confirm', {
     description: description.value.trim(),
     displayName: editing.value ? draftName.value.trim() : '',
@@ -86,13 +95,14 @@ function cancel() {
       <span>AI 已识别：{{ displayName }} · {{ mockCategoryTag(pending.category) }}</span>
     </div>
 
-    <!-- 可空描述框（key 三层第 3 层：用户补正） -->
+    <!-- 描述框（图片必填强提示；非图片可空轻口径——key 三层第 3 层：用户补正） -->
     <input
       v-model="description"
-      class="up-desc-input"
-      placeholder="以后想怎么找到它？（可不填）"
+      :class="['up-desc-input', { 'up-desc-required': isImage }]"
+      :placeholder="descPlaceholder"
       maxlength="100"
     >
+    <div v-if="isImage" class="up-desc-note">图片内容镜子读不到，一句描述是它被找到的唯一途径</div>
 
     <div class="up-actions">
       <button class="up-btn up-btn-ghost" :disabled="uploading" @click="editing ? (editing = false) : cancel()">
@@ -105,7 +115,7 @@ function cancel() {
         :disabled="!draftName.trim()"
         @click="saveRename"
       >用这个名字</button>
-      <button v-if="!editing" class="up-btn up-btn-primary" :disabled="uploading" @click="confirm">
+      <button v-if="!editing" class="up-btn up-btn-primary" :disabled="uploading || !canConfirm" @click="confirm">
         {{ uploading ? '存入中…' : '就这样存' }}
       </button>
     </div>
@@ -153,6 +163,8 @@ function cancel() {
   background: var(--ink-2); font-size: 13px;
 }
 .up-desc-input:focus { outline: none; border-color: var(--accent); background: #FFFFFF; }
+.up-desc-required { border-color: var(--warn); background: var(--warn-bg); }
+.up-desc-note { margin-top: 6px; font-size: 11px; line-height: 1.6; color: var(--warn); }
 
 .up-actions { display: flex; gap: 8px; margin-top: 11px; justify-content: flex-end; flex-wrap: wrap; }
 .up-btn {

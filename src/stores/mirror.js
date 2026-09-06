@@ -33,11 +33,10 @@ import {
 const USE_MOCK = false
 
 /**
- * mock 开关（独立）：POST /mirror/generate-monthly（DB Agent 任务 2b）后端
- * 部署节奏晚于前端——独立开关让时间线幽灵卡可先行走查；B 就绪后置 false
- * 即切真接口，mock/真接口两路数据结构一致（与 USE_MOCK 同模式）。
+ * mock 开关（独立）：POST /mirror/generate-monthly 已上线（B 递归镜子轮交付，
+ * 真库实测 8 月累计镜子通过），置 false 走真接口；mock/真接口两路数据结构一致。
  */
-const USE_MOCK_MONTHLY = true
+const USE_MOCK_MONTHLY = false
 
 /** 快照详情缓存（id → MirrorProfile），避免重复拉取已看过的快照 */
 const CACHE_TTL = 60_000

@@ -33,8 +33,9 @@ import {
  * @property {'pending'|'confirmed'|'dismissed'} status
  */
 
-/** mock 开关：B Agent 接口就绪（GET /api/glossary 返回 200）后置 false */
-const USE_MOCK = true
+/** mock 开关：B 词典七端点已上线（GET/POST/PUT/DELETE/confirm/dismiss/extract，
+ *  extract 已按 fix-batch C5 对齐 {candidates:[...]} 契约），置 false 走真接口 */
+const USE_MOCK = false
 
 /** mock 延迟（ms），模拟网络 + 让 loading 态可见 */
 const MOCK_DELAY = 160

@@ -1,46 +1,61 @@
 <script setup>
 /**
- * 资产文件卡（任务 4 · 「我的资产」页行卡）
+ * 资产文件卡（任务 3/4 · 「我的资产」页行卡，确认门禁版）
  *
- * 与 VaultRefCard（对话内只读引用）不同：资产页管理卡，可编辑可删除。
+ * 与 VaultRefCard（对话内只读引用）不同：资产页管理卡，可编辑可删除可补确认。
  * - 编辑 = 原地展开（display_name/description/category，同回执编辑心智）
- * - 删除 = 内联二次确认（"确认删除？不可恢复"）→ 淡出
- * - digest_status 透明四态：done=绿点"可检索" / pending=黄点"索引中" /
- *   failed=红点"读取失败，仅按文件名可找" / skipped=灰点"仅保管"
- * - 低信息文件（description 空）→ 高亮提示"请描述一下，方便日后找它"，有描述后归位
+ * - 补确认 = extracted 态直接展开确认表单（低信息置顶区入口）→ confirm 门禁动作
+ * - 删除 = 后四位输入确认（Q2 资产页路径：输文件名后四位才能删；后端 confirm_name
+ *   校验，前端先本地预校验减少无谓请求）+ toast 5 秒撤销窗（真删推迟 5 秒）
+ * - digest_status 透明五态：pending 灰"排队中" / extracted 蓝"待确认 · 检索不到" /
+ *   confirmed 绿"已可检索" / skipped 灰"仅保管" / failed 红"读取失败"
+ * - 未确认文件灰标"未确认 · 检索不到"（§3.3b 资产页低信息置顶区）
  */
 import { ref, computed } from 'vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { formatBytes, CATEGORY_LABELS } from '@/constants/fileTypes'
+import { CONTENT_TYPES } from '@/constants/tags'
 
 const props = defineProps({
   /** vault item（snake_case，见 vault store typedef） */
   item: { type: Object, required: true },
   busy: { type: Boolean, default: false },
   /** mock 门（下载按钮置灰提示 B 接口就绪后可用） */
-  mockGate: { type: Boolean, default: true },
+  mockGate: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['save', 'remove', 'download'])
+const emit = defineEmits(['save', 'confirm', 'remove', 'download'])
 
 const editing = ref(false)
 const confirmingDelete = ref(false)
+const confirmInput = ref('')
 const leaving = ref(false)
 const draft = ref({ display_name: '', description: '', category: 'document' })
 
-/** digest 四态点 + 文案 */
+/** digest 五态点 + 文案（任务 1：四态改五态） */
 const digest = computed(() => {
   const map = {
-    done: { cls: 'dot-done', label: '可检索' },
-    pending: { cls: 'dot-pending', label: '索引中' },
-    failed: { cls: 'dot-failed', label: '读取失败，仅按文件名可找' },
+    pending: { cls: 'dot-skipped', label: '排队中' },
+    extracted: { cls: 'dot-extracted', label: '待确认 · 检索不到' },
+    confirmed: { cls: 'dot-done', label: '已可检索' },
     skipped: { cls: 'dot-skipped', label: '仅保管' },
+    failed: { cls: 'dot-failed', label: '读取失败 · 告诉镜子这是什么' },
   }
-  return map[props.item.digest_status] || map.done
+  return map[props.item.digest_status] || map.confirmed
 })
 
-/** 低信息：无描述（failed 同样视为低信息——只按文件名可找） */
-const lowInfo = computed(() => !props.item.deleted && !(props.item.description || '').trim())
+/** 未确认（extracted）：灰标"未确认 · 检索不到"，可下载预览但检索不到 */
+const unconfirmed = computed(() => props.item.digest_status === 'extracted')
+
+/** 未确认卡淡化（保管完整但未进记忆——§3.3b 未确认置灰语义） */
+const dimmed = computed(() => unconfirmed.value && !editing.value && !confirmingDelete.value)
+
+/** 低信息：未确认且无描述（低信息置顶区同口径） */
+const lowInfo = computed(() =>
+  !props.item.deleted
+  && !(props.item.description || '').trim()
+  && (props.item.digest_status === 'extracted' || props.item.digest_status === 'failed')
+)
 
 const metaLine = computed(() => {
   const parts = [props.item.file_type?.toUpperCase() || 'FILE', formatBytes(props.item.size_bytes)]
@@ -49,11 +64,30 @@ const metaLine = computed(() => {
   return parts.join(' · ')
 })
 
+/** 后四位预校验（Q2：本地先拦一道，匹配才发 DELETE；后端 confirm_name 是最终防线） */
+const tail4 = computed(() => {
+  const name = String(props.item.original_name || props.item.display_name || '')
+  return name.slice(-4)
+})
+const confirmTail = computed(() => {
+  const name = String(props.item.original_name || props.item.display_name || '')
+  return name.length <= 4 ? name : name.slice(-4)
+})
+const tail4Ok = computed(() => confirmTail.value && confirmInput.value.trim().toUpperCase() === confirmTail.value.toUpperCase())
+
+const categoryOptions = CONTENT_TYPES.filter(t => ['learning', 'note', 'work', 'thought'].includes(t.key))
+
+/** 当前 category 归一到 contentType 口径选择（display 用，选择存 contentType） */
+const draftCategory = computed(() => draft.value.category)
+
 function startEdit() {
+  // 大类 → contentType 近似回填（document→learning / 其他→note）
+  const fallback = props.item.category === 'document' ? 'learning' : 'note'
+  const current = CONTENT_TYPES.some(t => t.key === props.item.category) ? props.item.category : fallback
   draft.value = {
     display_name: props.item.display_name || '',
     description: props.item.description || '',
-    category: props.item.category || 'document',
+    category: current,
   }
   editing.value = true
 }
@@ -63,18 +97,61 @@ function saveEdit() {
   emit('save', {
     display_name: draft.value.display_name.trim(),
     description: draft.value.description.trim(),
-    category: draft.value.category,
+    category: draftCategory.value,
   })
   editing.value = false
 }
 
+/** 补确认（extracted/failed）：直接展开确认表单（同回执编辑心智，确认即进检索） */
+function startConfirm() {
+  const fallback = props.item.category === 'document' ? 'learning' : 'note'
+  draft.value = {
+    display_name: props.item.display_name || '',
+    description: props.item.description || '',
+    category: CONTENT_TYPES.some(t => t.key === props.item.category) ? props.item.category : fallback,
+  }
+  editing.value = true
+}
+
+/** 编辑态保存时若原状态是 extracted/failed → 走 confirm 门禁动作（key/description/category） */
+function saveOrConfirm() {
+  if (!draft.value.display_name.trim()) return
+  const data = {
+    display_name: draft.value.display_name.trim(),
+    description: draft.value.description.trim(),
+    category: draftCategory.value,
+  }
+  if (unconfirmed.value || props.item.digest_status === 'failed') {
+    if (!data.description.trim()) return // 确认门禁：确认必须带一句描述（Y4 图片强制描述同口径）
+    emit('confirm', { key: data.display_name, description: data.description, category: data.category })
+  } else {
+    emit('save', data)
+  }
+  editing.value = false
+}
+
+/** 编辑/确认态按钮文案与禁用逻辑 */
+const saveLabel = computed(() => {
+  if (props.busy) return '保存中…'
+  if (unconfirmed.value || props.item.digest_status === 'failed') return '确认，让它可被检索'
+  return '保存'
+})
+const saveDisabled = computed(() => {
+  if (props.busy || !draft.value.display_name.trim()) return true
+  if (unconfirmed.value || props.item.digest_status === 'failed') return !draft.value.description.trim()
+  return false
+})
+
 function askDelete() {
+  confirmInput.value = ''
   confirmingDelete.value = true
 }
 
+/** 后四位匹配才 emit remove（父级弹 5 秒撤销 toast，5 秒后才真删） */
 function onConfirmDelete() {
-  leaving.value = true
-  setTimeout(() => emit('remove'), 220)
+  if (!tail4Ok.value) return
+  confirmingDelete.value = false
+  emit('remove', { confirmName: confirmTail.value })
 }
 
 function onDownload() {
@@ -84,8 +161,8 @@ function onDownload() {
 </script>
 
 <template>
-  <div :class="['asset-card', { 'asset-leaving': leaving, 'asset-low': lowInfo && !editing && !confirmingDelete }]">
-    <!-- 原地编辑 -->
+  <div :class="['asset-card', { 'asset-leaving': leaving, 'asset-low': lowInfo && !editing && !confirmingDelete, 'asset-unconfirmed': dimmed }]">
+    <!-- 原地编辑（confirmed/skipped=保存编辑；extracted/failed=确认门禁动作） -->
     <template v-if="editing">
       <div class="as-fields">
         <label class="as-field">
@@ -94,29 +171,31 @@ function onDownload() {
         </label>
         <label class="as-field">
           <span class="as-field-label">描述</span>
-          <textarea v-model="draft.description" class="as-input as-textarea" rows="2" placeholder="以后想怎么找到它？" />
+          <textarea v-model="draft.description" class="as-input as-textarea" rows="2"
+            :placeholder="unconfirmed || item.digest_status === 'failed' ? '告诉镜子这是什么，才能被找到' : '以后想怎么找到它？'" />
         </label>
         <div class="as-field">
-          <span class="as-field-label">分类</span>
+          <span class="as-field-label">属于哪类</span>
           <div class="as-cat-row">
             <button
-              v-for="(label, key) in CATEGORY_LABELS"
-              :key="key"
-              :class="['as-cat', { selected: draft.category === key }]"
-              @click="draft.category = key"
-            >{{ label }}</button>
+              v-for="t in categoryOptions"
+              :key="t.key"
+              :class="['as-cat', { selected: draft.category === t.key }]"
+              @click="draft.category = t.key"
+            >{{ t.label }}</button>
           </div>
         </div>
       </div>
+      <div v-if="unconfirmed || item.digest_status === 'failed'" class="as-confirm-note">
+        确认后镜子才能凭描述找到它；未确认只是保管，检索不到
+      </div>
       <div class="as-actions">
         <button class="as-btn as-btn-ghost" :disabled="busy" @click="editing = false">取消</button>
-        <button class="as-btn as-btn-primary" :disabled="busy || !draft.display_name.trim()" @click="saveEdit">
-          {{ busy ? '保存中…' : '保存' }}
-        </button>
+        <button class="as-btn as-btn-primary" :disabled="saveDisabled" @click="saveOrConfirm">{{ saveLabel }}</button>
       </div>
     </template>
 
-    <!-- 删除二次确认 -->
+    <!-- 删除确认：输入文件名后四位（Q2 资产页路径） -->
     <template v-else-if="confirmingDelete">
       <div class="as-head">
         <span class="as-icon"><FileTypeIcon :kind="item.category || 'file'" /></span>
@@ -127,11 +206,15 @@ function onDownload() {
       </div>
       <div class="as-delete-warn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-        确认删除？不可恢复，关联的可检索内容一并清除
+        确认删除「{{ item.display_name }}」？此操作不可恢复，关联的可检索内容一并清除
       </div>
+      <label class="as-tail-field">
+        <span class="as-tail-label">输入文件名最后 4 位以确认（{{ confirmTail }}）</span>
+        <input v-model="confirmInput" class="as-input as-tail-input" placeholder="最后 4 位" maxlength="8">
+      </label>
       <div class="as-actions">
         <button class="as-btn as-btn-ghost" :disabled="busy" @click="confirmingDelete = false">再想想</button>
-        <button class="as-btn as-btn-danger" :disabled="busy" @click="onConfirmDelete">确认删除</button>
+        <button class="as-btn as-btn-danger" :disabled="busy || !tail4Ok" @click="onConfirmDelete">确认删除</button>
       </div>
     </template>
 
@@ -153,14 +236,19 @@ function onDownload() {
 
       <div v-if="item.description" class="as-desc">{{ item.description }}</div>
 
-      <!-- 低信息文件提示（B2 认知边界透明在 vault 的应用） -->
+      <!-- 未确认灰标（§3.3b：未确认文件检索不到，认知边界透明） -->
+      <div v-if="unconfirmed" class="as-unconfirmed-tag">未确认 · 检索不到</div>
+
+      <!-- 低信息文件提示 -->
       <div v-if="lowInfo" class="as-lowinfo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-        未能识别内容 · 请描述一下，方便日后找它
+        未能识别内容 · 描述一下并确认，它才能被找到
       </div>
 
       <div class="as-actions">
-        <button class="as-btn as-btn-ghost" :disabled="busy" @click="startEdit">编辑</button>
+        <button class="as-btn as-btn-ghost" :disabled="busy" @click="unconfirmed || item.digest_status === 'failed' ? startConfirm() : startEdit()">
+          {{ unconfirmed || item.digest_status === 'failed' ? '补确认' : '编辑' }}
+        </button>
         <button class="as-btn as-btn-ghost" :disabled="busy || mockGate || item.deleted" @click="onDownload">下载</button>
       </div>
     </template>
@@ -178,6 +266,7 @@ function onDownload() {
 .asset-card + .asset-card { margin-top: 8px; }
 .asset-leaving { opacity: 0; transform: translateY(-4px); }
 .asset-low { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn-bg); }
+.asset-unconfirmed { opacity: .78; }
 
 .as-head { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
 .as-icon {
@@ -194,7 +283,7 @@ function onDownload() {
 }
 .as-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .dot-done { background: var(--success); }
-.dot-pending { background: var(--warn); }
+.dot-extracted { background: var(--accent); }
 .dot-failed { background: var(--danger); }
 .dot-skipped { background: var(--text-low); }
 
@@ -208,6 +297,14 @@ function onDownload() {
 .as-del svg { width: 14px; height: 14px; }
 
 .as-desc { font-size: 12.5px; line-height: 1.7; color: var(--text-mid); margin-top: 8px; overflow-wrap: anywhere; }
+
+.as-unconfirmed-tag {
+  display: inline-block;
+  margin-top: 8px; padding: 2px 9px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+  color: var(--text-mid); background: var(--ink-2);
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-full);
+}
 
 .as-lowinfo {
   display: flex; align-items: flex-start; gap: 7px;
@@ -239,7 +336,9 @@ function onDownload() {
 }
 .as-cat.selected { background: var(--accent); color: #FFFFFF; box-shadow: none; font-weight: 600; }
 
-/* 删除确认 */
+.as-confirm-note { margin-top: 9px; font-size: 11px; line-height: 1.6; color: var(--text-low); }
+
+/* 删除确认（后四位） */
 .as-delete-warn {
   display: flex; align-items: flex-start; gap: 7px;
   margin-top: 9px; padding: 8px 10px;
@@ -247,6 +346,9 @@ function onDownload() {
   font-size: 11.5px; line-height: 1.6; color: var(--danger);
 }
 .as-delete-warn svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; }
+.as-tail-field { display: flex; flex-direction: column; gap: 4px; margin-top: 9px; }
+.as-tail-label { font-size: 11.5px; color: var(--text-mid); }
+.as-tail-input { max-width: 180px; font-family: var(--font-mono); }
 
 .as-actions { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
 .as-btn {
@@ -259,5 +361,6 @@ function onDownload() {
 .as-btn-ghost { color: var(--text-mid); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .as-btn-ghost:hover:not(:disabled) { background: var(--ink-2); color: var(--text-hi); }
 .as-btn-danger { color: var(--danger); }
+.as-btn-danger:disabled { color: var(--text-low); box-shadow: inset 0 0 0 1px var(--line); background: transparent; }
 .as-btn-danger:hover:not(:disabled) { background: var(--danger-bg); }
 </style>

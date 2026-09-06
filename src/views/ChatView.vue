@@ -39,9 +39,9 @@ const showSessions = ref(false)
 
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
 
-/** 消化完成待回执的条目（vault store 消化完成置 _receiptOpen=true → 消息流末尾展示回执卡） */
+/** 消化完成待回执的条目（消化到 extracted 即出回执卡——确认门禁：等用户确认/补描述才可检索） */
 const receiptItems = computed(() =>
-  vault.items.filter(i => i.digest_status === 'done' && i._receiptOpen)
+  vault.items.filter(i => i.digest_status === 'extracted' && i._receiptOpen)
 )
 
 /** mock 门（B /api/vault + vault_refs 就绪前预览/下载置灰） */
@@ -188,44 +188,73 @@ async function confirmUpload({ description, displayName }) {
     toast.error(res.error || '上传失败')
     return
   }
-  if (displayName && res.item) {
-    await vault.update(res.item.id, { display_name: displayName })
-    res.item.display_name = displayName
-  }
+  // 注意：上传卡里改的名只更新本地显示，不发 PUT——B 的 PUT /vault/{id} 是全字段
+  // updateById，会把并发消化管道刚写的 digest_status 用过期快照覆盖回 pending（实测复现）。
+  // 用户改的名字在回执卡确认时作为 key 提交（confirm 契约支持改名）。
+  if (displayName && res.item) res.item.display_name = displayName
   pendingUpload.value = null
-  toast.success(`已存入 · ${formatBytes(file.size)} · 消化中，稍后给你回执`)
+  toast.success(`已存入 · ${formatBytes(file.size)} · 提取后回执卡等你确认`, 4200)
 }
 
 function cancelUpload() {
   pendingUpload.value = null
 }
 
-// ==================== 消化回执（任务 3） ====================
+// ==================== 消化回执（任务 2：确认门禁版） ====================
 
 const busyReceiptId = ref(null)
 
-/** 对的 → 定稿 toast，回执关闭 */
+/**
+ * 「对的，确认」→ confirm 门禁动作：key/description/category 提交后端，
+ * 后端生成 key chunk 进 embedding，状态 → confirmed（已可检索）。回执关闭。
+ */
 async function onReceiptConfirm(item) {
   busyReceiptId.value = item.id
-  await vault.confirmDigest(item.id)
+  const ok = await vault.confirmDigest(item.id, {
+    key: item.display_name,
+    description: item.description,
+    category: item.category === 'document' ? 'learning' : 'note',
+  })
   busyReceiptId.value = null
   item._receiptOpen = false
-  toast.success(`「${item.display_name}」没问题 · 以后就这么找它`)
+  if (ok) toast.success('已可检索', 3600)
+  else toast.error(vault.error || '确认失败')
 }
 
-/** 改一改 → 保存（VaultDigestReceipt emit save） */
+/**
+ * 改一改 → 确认（确认门禁版：原地编辑 key/description/category 后直接提交 confirm，
+ * 一次动作同时完成「改 + 确认」，不拆两步）
+ */
 async function onReceiptSave(item, data) {
   busyReceiptId.value = item.id
-  const ok = await vault.update(item.id, data)
+  const ok = await vault.confirmDigest(item.id, {
+    key: data.display_name,
+    description: data.description,
+    category: data.category === 'document' ? 'learning' : (data.category || 'note'),
+  })
   busyReceiptId.value = null
-  if (ok) toast.success('已更新 · 以后按新的理解找它')
+  item._receiptOpen = false
+  if (ok) toast.success('已更新 · 已可检索', 3600)
   else toast.error(vault.error || '保存失败')
 }
 
-/** 不是这个，删了 → 内联二次确认后触发；淡出动画在回执卡内，此处删除数据 */
+/**
+ * 仅保管，不检索（skipped 路径；任务 2 次按钮）——不进 embedding，可下载预览检索不到
+ */
+async function onReceiptSkip(item) {
+  busyReceiptId.value = item.id
+  const ok = await vault.update(item.id, { description: item.description })
+  busyReceiptId.value = null
+  item._receiptOpen = false
+  item.digest_status = 'skipped'
+  if (ok) toast.info('好的 · 仅保管，需要时可再确认让它可检索', 4200)
+  else toast.error(vault.error || '操作失败')
+}
+
+/** 不是这个，删了 → 内联二次确认后触发（对话内路径：X-Confirm-Skip: inline 免后四位） */
 async function onReceiptRemove(item) {
   busyReceiptId.value = item.id
-  const ok = await vault.remove(item.id)
+  const ok = await vault.remove(item.id, { inline: true })
   busyReceiptId.value = null
   if (ok) toast.info(`「${item.display_name}」已删除`)
   else toast.error(vault.error || '删除失败')
@@ -354,6 +383,7 @@ async function onRemoveSession(id) {
                   :busy="busyReceiptId === item.id"
                   @confirm="() => onReceiptConfirm(item)"
                   @save="(d) => onReceiptSave(item, d)"
+                  @skip="() => onReceiptSkip(item)"
                   @remove="() => onReceiptRemove(item)"
                 />
               </div>
