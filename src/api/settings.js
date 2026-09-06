@@ -19,6 +19,7 @@ export function getSettings() {
  * @param {string} [data.embeddingApiKey] - Embedding API Key
  * @param {string} [data.embeddingModel] - Embedding 模型名
  * @param {string} [data.reviewMode] - 审核模式：manual/auto
+ * @param {number} [data.mirrorLookback] - 镜子原文回看深度 0-3（默认 1；B 侧列上线前 PUT 可能被忽略，前端不报错）
  * @returns {Promise<{ code: number, data: SettingsVO }>}
  */
 export function updateSettings(data) {

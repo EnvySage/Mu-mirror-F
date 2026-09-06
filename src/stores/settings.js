@@ -22,6 +22,7 @@ import {
  * @property {string} embedding_model - Embedding 模型名
  * @property {string} review_mode - 审核模式（manual / auto）
  * @property {number} [rag_half_life] - 检索时间衰减半衰期（7-365 天，默认 30）
+ * @property {number} [mirror_lookback] - 镜子原文回看深度（0-3，默认 1，rolling-mirror-design.md §2）
  * @property {string} [created_at]
  * @property {string} [updated_at]
  */
@@ -40,6 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
     embedding_model: 'BAAI/bge-m3',
     review_mode: 'manual',
     rag_half_life: 30,
+    mirror_lookback: 1,
   })
 
   const loading = ref(false)
@@ -56,6 +58,9 @@ export const useSettingsStore = defineStore('settings', () => {
       const res = await apiGetSettings()
       if (res.data) {
         settings.value = res.data
+        // mirror_lookback 列由 B 侧并行加（rolling-mirror-design.md §2）：GET 未透出时前端按默认 1 兜底，
+        // 不阻塞 UI；B 上线后此行自然失效（真值覆盖兜底）
+        if (settings.value.mirror_lookback == null) settings.value.mirror_lookback = 1
         settingsLoaded.value = true
       }
     } catch (err) {
@@ -83,6 +88,11 @@ export const useSettingsStore = defineStore('settings', () => {
       }
       const res = await apiUpdateSettings(camelData)
       if (res.data) {
+        // 后端未上线 mirror_lookback 列时 PUT 静默忽略该字段（不回传）：本地合并提交值，
+        // UI 保持用户所选（B 上线后真值覆盖）；其余字段仍以后端返回为准
+        if (res.data.mirror_lookback == null && data.mirror_lookback != null) {
+          res.data.mirror_lookback = data.mirror_lookback
+        }
         settings.value = res.data
       } else {
         // 后端部分更新可能不回传全量，本地合并已提交字段

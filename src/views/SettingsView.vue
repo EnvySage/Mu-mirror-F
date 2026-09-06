@@ -110,7 +110,31 @@ const halfLifeEditing = ref(false)
 const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
 const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
 
-// ==================== 设置项编辑弹窗（既有逻辑） ====================
+/** mirror_lookback 回看深度（0-3，默认 1，rolling-mirror-design.md §2）：select 即时保存（同 chips/toggle 模式） */
+const lookbackOptions = [
+  { value: 0, label: '只继承上月镜子', desc: '最省 · 生成时只带上月镜子全文，不翻原文' },
+  { value: 1, label: '带上月原文', desc: '推荐 · 上月镜子 + 上月原文一起给 AI' },
+  { value: 2, label: '带近三月原文', desc: '上月镜子 + 近三个月的原文' },
+  { value: 3, label: '全部原文', desc: '慢 · 带全部历史原文，记录多时消耗大' },
+]
+const lookbackSaving = ref(false)
+const lookbackValue = computed(() => {
+  const raw = settingsStore.settings.mirror_lookback
+  if (raw == null) return 1 // Number(null)=0 的坑：null/undefined 直接走默认，不进数值判定
+  const n = Number(raw)
+  return Number.isFinite(n) && n >= 0 && n <= 3 ? n : 1
+})
+
+async function saveLookback(e) {
+  const val = Number(e.target.value)
+  if (val === lookbackValue.value || lookbackSaving.value) return
+  lookbackSaving.value = true
+  const ok = await settingsStore.updateSettings({ mirror_lookback: val })
+  lookbackSaving.value = false
+  if (ok) toast.success('已保存回看深度')
+  else toast.error(settingsStore.error || '保存失败')
+}
+
 const showEditModal = ref(false)
 const editField = ref('')
 const editLabel = ref('')
@@ -429,10 +453,26 @@ function handleLogout() {
         </div>
       </div>
 
-      <!-- RAG 时间衰减 -->
+      <!-- 镜子引擎（rolling-mirror-design.md §2：回看深度 + 时间衰减同组） -->
       <div class="settings-group">
-        <div class="settings-group-title">RAG 时间衰减</div>
+        <div class="settings-group-title">镜子引擎（RAG · 回看深度）</div>
         <div class="settings-card card">
+          <div class="lookback-row">
+            <div class="lookback-head">
+              <span class="lookback-label">原文回看深度</span>
+              <span class="lookback-value">{{ lookbackValue }}</span>
+            </div>
+            <select
+              class="lookback-select"
+              aria-label="生成镜子时带多少原文回看"
+              :value="lookbackValue"
+              :disabled="lookbackSaving"
+              @change="saveLookback"
+            >
+              <option v-for="opt in lookbackOptions" :key="opt.value" :value="opt.value">{{ opt.value }} = {{ opt.label }}</option>
+            </select>
+            <div v-if="lookbackValue === 3" class="lookback-warn">记录多时生成会变慢且消耗更多 token</div>
+          </div>
           <div class="half-life-row">
             <div class="half-life-header">
               <span class="half-life-label">半衰期</span>
@@ -449,6 +489,9 @@ function handleLogout() {
             >
             <div class="settings-note" style="padding:8px 0 0">{{ halfLifePreview }}</div>
           </div>
+        </div>
+        <div class="settings-note">
+          生成镜子时带多少原文回看：0=只继承上月镜子（最省） / 1=上月原文（推荐，默认） / 2=近三月原文 / 3=全部原文（慢，消耗大）。
         </div>
       </div>
 
@@ -584,6 +627,27 @@ function handleLogout() {
 .half-life-label { font-size: 14px; }
 .half-life-value { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
 input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent); background: transparent; }
+
+/* lookback（回看深度，rolling-mirror-design.md §2） */
+.lookback-row {
+  padding: 13px 16px; border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lookback-head { display: flex; justify-content: space-between; align-items: baseline; }
+.lookback-label { font-size: 14px; }
+.lookback-value { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+.lookback-select {
+  width: 100%; font-size: 13px; color: var(--text-hi);
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--card);
+}
+.lookback-select:focus { outline: none; border-color: var(--accent); }
+.lookback-select:disabled { opacity: .55; }
+.lookback-warn {
+  font-size: 11.5px; color: var(--warn); line-height: 1.6;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--ink-2); border: 1px solid var(--line);
+}
 
 /* 编辑弹窗（白卡） */
 .modal-overlay {
