@@ -12,6 +12,8 @@ import {
  *
  * SSE 消费用 fetch + ReadableStream（POST 不能用原生 EventSource）：
  *   meta       → { sessionId, route, tools_used? }    意图路由 + 工具轨迹（E6）
+ *   thinking   → { content }                          思考增量（与 delta 同构，流式多次到达；
+ *                                                     模型不支持思考时该事件完全不出现）
  *   delta      → { content }                          回答增量（逐块追加渲染）
  *   sources    → [{ record_id, quote, date }]         来源追溯（引用芯片，点击跳详情）
  *   vault_refs → [{ n, vault_item_id, display_name, file_type, size_bytes,
@@ -32,6 +34,7 @@ import {
  * @property {string} id
  * @property {'user' | 'ai'} role
  * @property {string} content
+ * @property {string} [thinking] 思考过程累积文本（仅本轮流式产生；历史消息永远没有）
  * @property {string} [route] - 意图路由（INTENT → HYBRID 等）
  * @property {boolean} [typing] - 是否正在打字
  * @property {{ recordId: number|string, quote: string, date: string }[]} [sources]
@@ -86,7 +89,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function pushAiPlaceholder(route) {
-    const msg = { id: String(++msgId), role: 'ai', content: '', route: route || null, typing: true, sources: [], toolsUsed: [], vaultRefs: [] }
+    const msg = { id: String(++msgId), role: 'ai', content: '', thinking: '', route: route || null, typing: true, sources: [], toolsUsed: [], vaultRefs: [] }
     messages.value.push(msg)
     return msg
   }
@@ -258,6 +261,12 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         break
+      case 'thinking':
+        // 思考增量（与 delta 同构；parseData 失败已静默返回 null → 半包/坏帧直接忽略）
+        if (payload && typeof payload.content === 'string') {
+          aiMsg.thinking = (aiMsg.thinking || '') + payload.content
+        }
+        break
       case 'delta':
         if (payload && typeof payload.content === 'string') {
           aiMsg.typing = false
@@ -278,8 +287,9 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'done':
-        // done: { sessionId, route, fallback } —— 结束标志，无需额外处理
-        // （fallback=true 的兜底文案已通过 delta 推送过，error 走 error 事件）
+        // done: { sessionId, route, fallback } —— 结束标志。
+        // 思考收尾：done 即流式结束，ThinkingPanel 据 typing 翻转自动折叠（答完收起可回看）
+        aiMsg.typing = false
         break
       case 'error':
         aiMsg.typing = false
@@ -356,6 +366,8 @@ export const useChatStore = defineStore('chat', () => {
         // 历史回放：B 在消息 VO 带出 tools_used / vault_refs 才有值，缺省空数组不渲染
         toolsUsed: normalizeToolsUsed(m.tools_used || []),
         vaultRefs: normalizeVaultRefs(m.vault_refs || []),
+        // thinking 不落 conversation_history——历史消息永远没有思考面板（契约）
+        thinking: '',
       }))
       messages.value = list
       activeSessionId.value = id
@@ -493,6 +505,10 @@ export const useChatStore = defineStore('chat', () => {
         + '\n\n昨天传的东西我找到了：一份文档和一张合照。合照还没确认，我检索不到它的内容——你可以在回执卡或资产页补一句描述并确认，以后就好找了。',
       route: 'HYBRID',
       typing: false,
+      // 思考面板演示（SSE thinking 事件同构：thinking 为字符串累积）
+      thinking: '用户问论文进度 → 先检索 records 拿近期记录，再查 vault 找开题报告。'
+        + '\n开题报告命中强引用（quote 命中），摘要出推进阶段结论。'
+        + '\n合照 digest_status=extracted 未确认 → 检索不到内容，提醒用户补确认。',
       sources: [],
       // 工具轨迹芯片（meta.tools_used 同构）
       toolsUsed: [

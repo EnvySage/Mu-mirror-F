@@ -82,6 +82,23 @@ export function downloadVaultItem(id) {
 }
 
 /**
+ * 拉取预览内嵌流（blob；FilePreviewModal 用）
+ * 走既有 request 封装自动带 Authorization。注意：响应拦截器 return response.data ——
+ * responseType:'blob' 时返回值就是 Blob 本身（headers 不经手），mime 以 blob.type 为准；
+ * Content-Disposition 文件名在拦截器链路拿不到（如需精确文件名请直连 axios）。
+ * @param {number|string} id
+ * @returns {Promise<Blob>}
+ */
+export async function fetchPreviewBlob(id) {
+  const blob = await request.get(`/vault/${id}/preview`, {
+    responseType: 'blob',
+    // 预览大文件放宽超时（默认 15s 对 20MB 上限文件边缘）
+    timeout: 60000,
+  })
+  return blob instanceof Blob ? blob : new Blob([blob])
+}
+
+/**
  * 预览地址（图片/PDF 内嵌 <img>/<iframe> 用；带 token 的请求走 axios，
  * 此处返回相对路径供直接拼接——真接口已就绪，window.open 自动带 cookie 场景外
  * 需 blob 方案时可切 downloadVaultItem）

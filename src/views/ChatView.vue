@@ -5,11 +5,14 @@ import { useChatStore } from '@/stores/chat'
 import { useVaultStore } from '@/stores/vault'
 import { useToastStore } from '@/stores/toast'
 import ChatSessionsPanel from '@/components/organisms/ChatSessionsPanel.vue'
+import FilePreviewModal from '@/components/organisms/FilePreviewModal.vue'
 import VaultRefCard from '@/components/molecules/VaultRefCard.vue'
 import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
 import ToolTrail from '@/components/molecules/ToolTrail.vue'
+import ThinkingPanel from '@/components/molecules/ThinkingPanel.vue'
 import { validateVaultFile, deriveMockDisplayName, formatBytes } from '@/constants/fileTypes'
+import request from '@/api/request'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -46,6 +49,39 @@ const receiptItems = computed(() =>
 
 /** mock 门（B /api/vault + vault_refs 就绪前预览/下载置灰） */
 const vaultMockGate = computed(() => vault.source === 'mock')
+
+/** 预览模态当前条目（null=关闭；VaultRefCard 预览按钮 → FilePreviewModal） */
+const previewItem = ref(null)
+
+/**
+ * 对话内文件下载（blob fetch 走 request 封装带鉴权，触发浏览器保存）
+ * 注意：digest_status 不设门禁——pending/extracted/skipped/failed 保管完整都可下载
+ */
+const downloadingRef = ref(false)
+
+async function downloadRef(item) {
+  if (downloadingRef.value) return
+  downloadingRef.value = true
+  try {
+    // 拦截器 return response.data —— responseType:'blob' 时直接就是 Blob
+    const blob = await request.get(`/vault/${item.vaultItemId ?? item.id}/download`, { responseType: 'blob', timeout: 60000 })
+    const realBlob = blob instanceof Blob ? blob : new Blob([blob])
+    const name = item.displayName || item.display_name || `file-${item.vaultItemId ?? item.id}`
+    const url = URL.createObjectURL(realBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+  } catch (err) {
+    console.error('Ref download failed:', err)
+    toast.error(err?.message || '下载失败')
+  } finally {
+    downloadingRef.value = false
+  }
+}
 
 /** 常驻栏当前会话标题（空 = 新话题草稿） */
 const activeSessionTitle = computed(() => {
@@ -91,9 +127,9 @@ async function scrollToBottom() {
 
 watch(() => chat.messages.length, scrollToBottom)
 watch(() => chat.sending, scrollToBottom)
-// 流式逐字上屏时跟随滚动
+// 流式逐字上屏时跟随滚动（thinking 增量同样跟随）
 watch(
-  () => chat.messages.map(m => m.content.length).join(','),
+  () => chat.messages.map(m => (m.content || '').length + (m.thinking || '').length).join(','),
   scrollToBottom,
 )
 // 回执卡出现（消化完成）也滚到底
@@ -341,14 +377,21 @@ async function onRemoveSession(id) {
                 <!-- AI 消息：工具轨迹芯片（E6，气泡上方） -->
                 <ToolTrail v-if="msg.role !== 'user' && msg.toolsUsed && msg.toolsUsed.length" :tools="msg.toolsUsed" />
 
+                <!-- AI 消息：思考过程折叠条（SSE thinking 事件；历史消息无 thinking 不渲染） -->
+                <ThinkingPanel
+                  v-if="msg.role !== 'user' && msg.thinking"
+                  :thinking="msg.thinking"
+                  :streaming="!!msg.typing"
+                />
+
                 <!-- AI 消息：意图路由眉标 -->
                 <div v-if="msg.role !== 'user' && msg.route" class="chat-route">
                   INTENT <b>{{ msg.route }}</b>
                 </div>
 
-                <!-- typing dots -->
-                <span v-if="msg.typing" class="typing-dots"><i /><i /><i /></span>
-                <template v-else>{{ msg.content }}</template>
+                <!-- typing dots（thinking 进行中不出打字点，思考面板已表达"进行中"） -->
+                <span v-if="msg.typing && !msg.thinking" class="typing-dots"><i /><i /><i /></span>
+                <template v-else-if="!msg.typing">{{ msg.content }}</template>
 
                 <!-- sources 引用芯片 -->
                 <div v-if="msg.sources && msg.sources.length" class="chat-msg-sources">
@@ -370,6 +413,8 @@ async function onRemoveSession(id) {
                     :key="vr.id"
                     :ref-item="vr"
                     :mock-gate="vaultMockGate"
+                    @preview="(it) => (previewItem = it)"
+                    @download="downloadRef"
                   />
                 </div>
               </div>
@@ -441,6 +486,13 @@ async function onRemoveSession(id) {
         </aside>
       </div>
     </div>
+
+    <!-- 文件预览模态（Teleport to body；对话内文件卡预览入口） -->
+    <FilePreviewModal
+      v-if="previewItem"
+      :item="previewItem"
+      @close="previewItem = null"
+    />
   </div>
 </template>
 

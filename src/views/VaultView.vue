@@ -14,6 +14,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useVaultStore } from '@/stores/vault'
 import { useToastStore } from '@/stores/toast'
 import AssetCard from '@/components/molecules/AssetCard.vue'
+import FilePreviewModal from '@/components/organisms/FilePreviewModal.vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import {
   validateVaultFile,
@@ -21,9 +22,22 @@ import {
   deriveMockDisplayName,
   mockCategoryTag,
 } from '@/constants/fileTypes'
+import request from '@/api/request'
 
 const vault = useVaultStore()
 const toast = useToastStore()
+
+/** 下载中的条目 id（防重复点击） */
+const downloadingId = ref(null)
+
+/** 预览模态当前条目（null=关闭；资产卡文件名点击 → FilePreviewModal） */
+const previewItem = ref(null)
+
+/** 资产卡文件名点击 → 预览（deleted 置灰；digest 状态不拦——保管完整就可看 §3.3b） */
+function openPreview(item) {
+  if (item.deleted) return
+  previewItem.value = item
+}
 
 /** mock 门（B /api/vault 已就绪；store.source==='mock' 时下载置灰） */
 const mockGate = computed(() => vault.source === 'mock')
@@ -202,13 +216,32 @@ function flushAllPendingDeletes() {
   pendingDeletes.value = new Map()
 }
 
-/** 下载（mock 态按钮已置灰，此处防御性兜底） */
-function onDownload(item) {
+/** 下载（AssetCard 下载按钮；blob fetch 走 request 封装带鉴权，触发保存） */
+async function onDownload(item) {
   if (mockGate.value) {
     toast.info('下载将在 mock 关闭后可用')
     return
   }
-  window.open(`/api/vault/${item.id}/download`, '_blank')
+  downloadingId.value = item.id
+  try {
+    // 拦截器 return response.data —— responseType:'blob' 时直接就是 Blob
+    const blob = await request.get(`/vault/${item.id}/download`, { responseType: 'blob', timeout: 60000 })
+    const realBlob = blob instanceof Blob ? blob : new Blob([blob])
+    const name = item.original_name || item.display_name || `file-${item.id}`
+    const url = URL.createObjectURL(realBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+  } catch (err) {
+    console.error('Download failed:', err)
+    toast.error(err?.message || '下载失败')
+  } finally {
+    downloadingId.value = null
+  }
 }
 
 /** 置顶区"去描述"→ 直接展开对应卡补确认（同卡就地编辑，保存后归位） */
@@ -354,6 +387,7 @@ const digestSummary = computed(() => {
           :item="item"
           :busy="busyId === item.id"
           :mock-gate="mockGate"
+          @preview="openPreview"
           @save="(d) => onSave(item, d)"
           @confirm="(d) => onConfirm(item, d)"
           @remove="() => onRemove(item)"
@@ -367,6 +401,13 @@ const digestSummary = computed(() => {
 
       <!-- 加载失败兜底 -->
       <div v-if="vault.error" class="vault-error">{{ vault.error }}</div>
+
+      <!-- 文件预览模态（Teleport to body；资产卡预览入口） -->
+      <FilePreviewModal
+        v-if="previewItem"
+        :item="previewItem"
+        @close="previewItem = null"
+      />
     </div>
   </div>
 </template>

@@ -24,7 +24,7 @@ const props = defineProps({
   mockGate: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['save', 'confirm', 'remove', 'download'])
+const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview'])
 
 const editing = ref(false)
 const confirmingDelete = ref(false)
@@ -158,6 +158,12 @@ function onDownload() {
   if (props.mockGate || props.item.deleted) return
   emit('download', props.item)
 }
+
+/** 文件名点击 → 预览模态（deleted 不可；digest 状态不拦——保管完整就可看） */
+function onPreview() {
+  if (props.item.deleted) return
+  emit('preview', props.item)
+}
 </script>
 
 <template>
@@ -233,6 +239,12 @@ function onDownload() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>
       </div>
+      <div class="as-name-row">
+        <button class="as-preview-link" :disabled="busy || item.deleted" title="预览" @click="onPreview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          预览
+        </button>
+      </div>
 
       <div v-if="item.description" class="as-desc">{{ item.description }}</div>
 
@@ -297,6 +309,18 @@ function onDownload() {
 .as-del svg { width: 14px; height: 14px; }
 
 .as-desc { font-size: 12.5px; line-height: 1.7; color: var(--text-mid); margin-top: 8px; overflow-wrap: anywhere; }
+
+/* 预览入口（文件名下轻量文字按钮；无 emoji 全 SVG） */
+.as-name-row { margin-top: 6px; }
+.as-preview-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; color: var(--text-mid);
+  padding: 2px 8px; border-radius: var(--radius-full);
+  transition: color .15s, background .15s;
+}
+.as-preview-link:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.as-preview-link:disabled { opacity: .4; cursor: not-allowed; }
+.as-preview-link svg { width: 12px; height: 12px; }
 
 .as-unconfirmed-tag {
   display: inline-block;

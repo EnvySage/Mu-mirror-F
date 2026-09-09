@@ -13,8 +13,8 @@
  *  - digesting（pending）→ "索引中…"可下载不可预览问答
  *  - 同 vault_item_id 多引用同气泡单卡 → 由父级 ChatView 按 vault_item_id 去重
  *
- * 预览/下载：USE_MOCK 态按钮置灰提示"B 接口就绪后可用"（mockGate 注入），
- * 交互态（真接口）走 /preview 与 /download。
+ * 预览/下载：交互态 emit preview/download 给父级（ChatView 挂 FilePreviewModal /
+ * blob 下载）；mock 态（mockGate）按钮置灰提示。
  */
 import { ref, computed } from 'vue'
 import { useToastStore } from '@/stores/toast'
@@ -41,6 +41,8 @@ const props = defineProps({
   /** mock 态置灰预览/下载（B 接口就绪后由 store source 驱动置 false） */
   mockGate: { type: Boolean, default: true },
 })
+
+const emit = defineEmits(['preview', 'download'])
 
 const toast = useToastStore()
 
@@ -112,18 +114,19 @@ function toggleExpand() {
 
 function onPreview() {
   if (previewDisabled.value) {
-    if (!isDeleted.value) toast.info(props.mockGate ? '预览将在 B 接口就绪后可用' : '索引中…稍后再试')
+    if (!isDeleted.value) toast.info(props.mockGate ? '预览将在接口就绪后可用' : '索引中…稍后再试')
     return
   }
-  toast.info('预览将在 B 接口就绪后可用')
+  // 预览不设 digest 门禁：保管完整就可看（§3.3b 未确认可下载预览），emit 给父级开模态
+  emit('preview', props.refItem)
 }
 
 function onDownload() {
   if (actionsDisabled.value) {
-    toast.info(props.mockGate ? '下载将在 B 接口就绪后可用' : '文件已删除')
+    toast.info(props.mockGate ? '下载将在接口就绪后可用' : '文件已删除')
     return
   }
-  toast.info('下载将在 B 接口就绪后可用')
+  emit('download', props.refItem)
 }
 </script>
 
