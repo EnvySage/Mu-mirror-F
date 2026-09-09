@@ -2,11 +2,13 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { useTodoStore } from '@/stores/todo'
 import { useToastStore } from '@/stores/toast'
 import ReviewPanel from '@/components/organisms/ReviewPanel.vue'
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
+const todoStore = useTodoStore()
 const toast = useToastStore()
 
 const record = computed(() => {
@@ -123,6 +125,10 @@ async function onConfirm() {
   if (updated) {
     toast.success('已入库，向量已生成')
     ui.detailMode = 'view'
+    // 入库后可能产生待办登记行 / pending 状态建议（todo-registry-design.md §3.1/§3.2）：
+    // 刷新建议缓存——侧栏角标/建议卡下一次打开记录页即为最新；不在此处弹建议 toast
+    // （建议卡主体在侧栏，审核窗口保持轻量，取舍已在 F 日志声明）
+    todoStore.fetch()
   } else {
     actionError.value = recordsStore.error || '确认失败，请重试'
   }

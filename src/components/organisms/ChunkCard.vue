@@ -4,10 +4,13 @@ import { CONTENT_TYPES, ALL_MOODS, TASK_STATUSES, typeMap, taskStatusMap } from 
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { useRecordsStore } from '@/stores/records'
 import { useToastStore } from '@/stores/toast'
+import { renderMarkdown } from '@/utils/mdPreview'
 /**
  * 片段卡片（v2 原型版 —— "镜面反射"）
  * 左缘 3px accent-grad 光条；segment 可编辑；chips 编辑即保存（PUT /chunks/{id}）。
  * 新增的空片段保存时走 POST /records/{id}/chunks。
+ * 只读态 segment 用 renderMarkdown 渲染（vault key chunk / 用户日记 md 源文本
+ * 带 # ** ` 标记时正常排版；纯文本日记输出 <p> 包裹视觉差异小；审核态 textarea 不动）。
  */
 const props = defineProps({
   chunk: { type: Object, required: true },
@@ -37,6 +40,9 @@ const edit = reactive({
   taskStatus: '',
   keywords: '',
 })
+
+/** 只读态 md 渲染（renderMarkdown escape-first：用户内容永远以纯文本形态出现，防 XSS） */
+const segmentHtml = computed(() => renderMarkdown(props.chunk.segment || ''))
 
 function resetFrom(chunk) {
   edit.segment = chunk.segment || ''
@@ -147,7 +153,7 @@ async function removeChunk() {
       </div>
     </div>
 
-    <!-- segment -->
+    <!-- segment：审核态 textarea 可编辑；只读态 md 渲染（vault key chunk / 日记 md 源文本） -->
     <textarea
       v-if="canEdit"
       ref="textareaEl"
@@ -158,7 +164,7 @@ async function removeChunk() {
       @input="onSegmentInput"
       @blur="onSegmentBlur"
     />
-    <div v-else class="chunk-segment" style="padding:0">{{ chunk.segment }}</div>
+    <div v-else class="chunk-segment chunk-segment-md" v-html="segmentHtml" />
 
     <!-- 标题/摘要（AI 生成展示） -->
     <div class="chunk-field">
@@ -255,6 +261,48 @@ async function removeChunk() {
   overflow: hidden;
 }
 .chunk-segment:focus { outline: none; }
+
+/* 只读态 md 渲染（fpm-md 同思路按卡片尺寸收敛：标题 --ink→--text-hi 加粗、
+   代码 --ink-2 等宽背景块；字号比模态小一档，卡片内层级不喧宾夺主） */
+.chunk-segment-md { overflow-wrap: anywhere; }
+.chunk-segment-md :deep(h1),
+.chunk-segment-md :deep(h2),
+.chunk-segment-md :deep(h3),
+.chunk-segment-md :deep(h4),
+.chunk-segment-md :deep(h5),
+.chunk-segment-md :deep(h6) {
+  font-family: var(--font-display); color: var(--text-hi); font-weight: 600;
+  margin: 10px 0 5px; line-height: 1.4;
+}
+.chunk-segment-md :deep(h1) { font-size: 16.5px; }
+.chunk-segment-md :deep(h2) { font-size: 15.5px; }
+.chunk-segment-md :deep(h3) { font-size: 14.5px; }
+.chunk-segment-md :deep(h4), .chunk-segment-md :deep(h5), .chunk-segment-md :deep(h6) { font-size: 13.5px; color: var(--text-mid); }
+.chunk-segment-md :deep(h1:first-child), .chunk-segment-md :deep(h2:first-child),
+.chunk-segment-md :deep(h3:first-child), .chunk-segment-md :deep(p:first-child) { margin-top: 0; }
+.chunk-segment-md :deep(p) { margin: 5px 0; }
+.chunk-segment-md :deep(strong) { font-weight: 600; }
+.chunk-segment-md :deep(a) { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.chunk-segment-md :deep(ul), .chunk-segment-md :deep(ol) { margin: 5px 0; padding-left: 20px; }
+.chunk-segment-md :deep(li) { margin: 2px 0; }
+.chunk-segment-md :deep(blockquote) {
+  margin: 7px 0; padding: 5px 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--ink-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-mid);
+}
+.chunk-segment-md :deep(code) {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--ink-2); border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: 4px;
+}
+.chunk-segment-md :deep(pre) {
+  margin: 7px 0; padding: 8px 10px;
+  background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow-x: auto;
+}
+.chunk-segment-md :deep(pre code) { background: none; border: none; padding: 0; font-size: 11.5px; line-height: 1.7; }
+.chunk-segment-md :deep(hr) { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
 
 .chunk-field { margin-top: 12px; }
 .chunk-field-label {
