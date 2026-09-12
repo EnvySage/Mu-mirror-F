@@ -101,8 +101,7 @@ const isDigesting = computed(() => f.value.digestStatus === 'pending' && !isDele
 /** extracted 未确认：可下载预览（保管完整），对话引用标注检索不到 */
 const isUnconfirmed = computed(() => f.value.digestStatus === 'extracted' && !isDeleted.value)
 
-/** mock 门：预览/下载按钮置灰（交互态由父级传 mockGate=false） */
-const actionsDisabled = computed(() => props.mockGate || isDeleted.value)
+const actionsDisabled = computed(() => isDeleted.value)
 const previewDisabled = computed(() => actionsDisabled.value || isDigesting.value)
 
 function toggleExpand() {
@@ -112,7 +111,7 @@ function toggleExpand() {
 
 function onPreview() {
   if (previewDisabled.value) {
-    if (!isDeleted.value) toast.info(props.mockGate ? '预览将在接口就绪后可用' : '索引中…稍后再试')
+    if (!isDeleted.value) toast.info('索引中…稍后再试')
     return
   }
   // 预览不设 digest 门禁：保管完整就可看（§3.3b 未确认可下载预览），emit 给父级开模态
@@ -121,7 +120,7 @@ function onPreview() {
 
 function onDownload() {
   if (actionsDisabled.value) {
-    toast.info(props.mockGate ? '下载将在接口就绪后可用' : '文件已删除')
+    toast.info('文件已删除')
     return
   }
   emit('download', props.refItem)

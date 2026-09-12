@@ -200,8 +200,8 @@ export const useMirrorStore = defineStore('mirror', () => {
     }
   }
 
-  /** mock 兜底月份：上个月 "YYYY-MM"（与后端 month 可空语义一致） */
-  function defaultMockMonth() {
+  /** 兜底月份：上个月 "YYYY-MM"（与后端 month 可空语义一致） */
+  function defaultMonth() {
     const d = new Date()
     d.setDate(1)
     d.setMonth(d.getMonth() - 1)
@@ -222,7 +222,7 @@ export const useMirrorStore = defineStore('mirror', () => {
       const m = String(s.created_at || '').slice(0, 7)
       if (monthRe.test(m)) months.push(m)
     }
-    if (!months.length) return [defaultMockMonth()]
+    if (!months.length) return [defaultMonth()]
     months.sort()
     const min = months[0]
     const now = new Date()

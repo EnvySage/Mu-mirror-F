@@ -8,7 +8,7 @@
 /** 单文件上限 20MB */
 export const VAULT_MAX_BYTES = 20 * 1024 * 1024
 
-/** 总配额 500MB（mock 态展示口径，真值以 B 返回 quota 为准） */
+/** 总配额 500MB（初始值，真值以 B 返回 quota 为准） */
 export const VAULT_TOTAL_BYTES = 500 * 1024 * 1024
 
 /** 类型白名单（扩展名，后端白名单一致；实际放行以后端 magic bytes 为准） */

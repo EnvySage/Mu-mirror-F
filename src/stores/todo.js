@@ -38,74 +38,25 @@ import { useStatsStore } from '@/stores/stats'
  * @property {'not_started'|'in_progress'|'completed'} current_status
  * @property {string} [source_chunk_id]
  * @property {number|string} [record_id]   来源记录（跳记录详情；联调字段需求）
+ *
+ * @typedef {Object} TodoChain    GET /todos/open-chain 单条（未完成待办，createdAt DESC）
+ * @property {number|string} todo_id
+ * @property {string} title
+ * @property {'not_started'|'in_progress'|'completed'} current_status
+ * @property {string} created_at
+ * @property {{ chunk_id: number|string, record_id: number|string, excerpt: string,
+ *              date: string }} [origin]   待办来源片段（null = orphan 降级）
+ * @property {{ chunk_id: number|string, record_id: number|string, excerpt: string,
+ *              date: string, confirmed_at: string }}[] evidence  已确认证据（按时间 ASC）
+ * @property {number} pending_suggestion_count  该待办待裁决建议数（链尾虚线节点）
  */
 
 /** 三态合法值（防脏数据进本地缓存） */
 const VALID_STATUSES = ['not_started', 'in_progress', 'completed']
 
 /**
- * chains 专用 mock 开关（R17）：B 的 GET /todos/open-chain 并行开发中，mock 先行；
- * 建议/条目/直调三端点已上线走真接口，不受此开关影响。端点 ready 后置 false。
- */
-const USE_MOCK_CHAINS = true
-
-/** mock 延迟（ms） */
-const MOCK_CHAIN_DELAY = 200
-
-/** x天前（yyyy-MM-dd HH:mm:ss，与后端时间口径同构；mock 用） */
-function daysAgo(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  const p = x => String(x).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:00`
-}
-
-/**
- * mock 证据链（走查口径）：2 条带 1-2 evidence 的链 + 1 条仅 origin；
- * todo_id 与走查注入的 pending 建议（101/102）及 /todos 条目对齐，
- * 建议 todo_id=999 刻意不在此列——orphan 降级路径的验证样本。
- * 字段 snake_case（与 request.js 拦截器输出一致；契约原文 camelCase 见 api/todo.js）
- */
-function buildMockChains() {
-  return [
-    {
-      todo_id: 102,
-      title: '投递两份简历',
-      current_status: 'in_progress',
-      created_at: daysAgo(6),
-      origin: { chunk_id: 9011, record_id: 9102, excerpt: '本周把简历和作品集改一版，目标投两家', date: daysAgo(6) },
-      evidence: [
-        { chunk_id: 9012, record_id: 9106, excerpt: 'A 公司约了下周一面，B 公司还在等回复', date: daysAgo(2), confirmed_at: daysAgo(1) },
-      ],
-      pending_suggestion_count: 1,
-    },
-    {
-      todo_id: 103,
-      title: '预约周四体检',
-      current_status: 'not_started',
-      created_at: daysAgo(3),
-      origin: { chunk_id: 9013, record_id: 9103, excerpt: '医院体检套餐有活动，周四之前得约上', date: daysAgo(3) },
-      evidence: [],
-      pending_suggestion_count: 0,
-    },
-    {
-      todo_id: 101,
-      title: '整理 Three.js 笔记第三章',
-      current_status: 'not_started',
-      created_at: daysAgo(9),
-      origin: { chunk_id: 9001, record_id: 9101, excerpt: 'Three.js 笔记第三章光照模型部分没理顺，先整理一遍', date: daysAgo(9) },
-      evidence: [
-        { chunk_id: 9002, record_id: 9107, excerpt: '光照模型章节读完了，PBR 参数那里记一下坑', date: daysAgo(5), confirmed_at: daysAgo(4) },
-        { chunk_id: 9003, record_id: 9108, excerpt: '阴影贴图章节也补完了，周末整理成篇发博客', date: daysAgo(1), confirmed_at: daysAgo(0) },
-      ],
-      pending_suggestion_count: 1,
-    },
-  ]
-}
-
-/**
- * 剥包装层：后端返回 { data: { suggestions: [...] } } / { data: { todos: [...] } }，
- * 兼容裸数组与旧口径
+ * 剥包装层：后端返回 { data: { suggestions: [...] } } / { data: { todos: [...] } } /
+ * { data: { chains: [...] } }，兼容裸数组与旧口径
  * @param {any} data
  * @param {string} key 包装字段名
  * @returns {Array}
@@ -125,7 +76,7 @@ export const useTodoStore = defineStore('todo', () => {
   const chains = ref([])
 
   const loading = ref(false)
-  /** chains 独立 loading（open-chain 端点 B 并行开发中，mock 先行；不牵动主 fetch 的 loading） */
+  /** chains 独立 loading（数据源与宿主不同，单独按需拉取，不牵动主 fetch 的 loading） */
   const chainsLoading = ref(false)
   /** 写操作进行中的 suggestion/todo id（防双击，UI 禁按钮） */
   const resolvingId = ref(null)
@@ -179,20 +130,15 @@ export const useTodoStore = defineStore('todo', () => {
   /**
    * 拉取未完成待办证据链（GET /todos/open-chain；R17 TodoChainCard 数据源）
    *
-   * 独立于 fetch()：open-chain 端点 B 并行开发中，mock 先行不牵动建议/条目的真接口路径；
-   * 失败静默兜底（chains 保持旧值/error 记错，宿主有空态文案，不白屏）。
+   * 独立于 fetch()：宿主与刷新时机都不同（侧栏/镜子页各拉各的），失败静默兜底
+   * （chains 保持旧值/error 记错，宿主有空态文案，不白屏）。
    * @returns {Promise<boolean>} 是否成功
    */
   async function fetchChains() {
     chainsLoading.value = true
     try {
-      if (USE_MOCK_CHAINS) {
-        await new Promise(r => setTimeout(r, MOCK_CHAIN_DELAY))
-        chains.value = buildMockChains()
-      } else {
-        const res = await apiGetOpenChains()
-        chains.value = unwrap(res.data, 'chains')
-      }
+      const res = await apiGetOpenChains()
+      chains.value = unwrap(res.data, 'chains')
       return true
     } catch (err) {
       console.error('Failed to fetch todo chains:', err)
@@ -238,7 +184,7 @@ export const useTodoStore = defineStore('todo', () => {
     if (action === 'confirmed' && entry && VALID_STATUSES.includes(status)) {
       entry.current_status = status
     }
-    // 证据链 L1 状态圈镜像（链可能来自 mock/尚未刷新，找不到不报错）
+    // 证据链 L1 状态圈镜像（链未加载或不含该条目则跳过）
     const chain = chains.value.find(c => String(c.todo_id ?? c.todoId) === String(suggestion.todo_id))
     const prevChainStatus = chain?.current_status
 

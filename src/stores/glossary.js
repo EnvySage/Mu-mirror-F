@@ -13,11 +13,10 @@ import {
 /**
  * 个人词典 store（lexicon-design.md 1/5a/5b/5c）
  *
- * 后端（B Agent）接口未就绪：USE_MOCK=true 走 mock（otaku_it 人设，
- * mock 数据贴合设计稿第 7 节验收口径——"论文/毕设/RAG/游戏"词条）。
- * 接口 ready 后把 USE_MOCK 置 false 即无缝切换，组件与两处 UI 零改动。
+ * 数据来源：B Agent 词典七端点（GET/POST/PUT/DELETE/confirm/dismiss/extract），
+ * 见 api/glossary.js。
  *
- * 字段口径（snake_case，与 request.js 拦截器输出一致；mock 路径同样给 snake_case）：
+ * 字段口径（snake_case，与 request.js 拦截器输出一致）：
  * @typedef {Object} Term
  * @property {number|string} id
  * @property {string} term            词条名（"论文"）
@@ -33,119 +32,6 @@ import {
  * @property {'pending'|'confirmed'|'dismissed'} status
  */
 
-/** mock 开关：B 词典七端点已上线（GET/POST/PUT/DELETE/confirm/dismiss/extract，
- *  extract 已按 fix-batch C5 对齐 {candidates:[...]} 契约），置 false 走真接口 */
-const USE_MOCK = false
-
-/** mock 延迟（ms），模拟网络 + 让 loading 态可见 */
-const MOCK_DELAY = 160
-
-/** mock 自增 id 起点（避开与真 id 混淆） */
-let mockSeq = 9000
-
-/**
- * mock 三组数据（otaku_it 人设 · 验收口径词条）
- * last_confirmed_at / last_seen_at 相对今天生成，卡片文案随日期滚动
- */
-function daysAgo(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function buildMockGroups() {
-  return {
-    pending: [
-      {
-        id: ++mockSeq,
-        term: '论文',
-        aliases: ['毕设', '那个设计'],
-        description: '你的毕业设计《AI 日记镜子系统》，RAG 检索方向，最近在补检索评测。',
-        kind: 'new',
-        evidence: '近 14 天出现 5 次',
-        query_hit_count: 0,
-        content_hit_count: 5,
-        source_chunk_id: 93,
-        last_seen_at: daysAgo(1),
-        status: 'pending',
-      },
-      {
-        id: ++mockSeq,
-        term: '游戏',
-        aliases: ['FGO'],
-        description: '8 月起多指 FGO，3-7 月指明日方舟——解释已漂移，建议按新含义更新。',
-        kind: 'update',
-        evidence: '近 14 天出现 3 次',
-        query_hit_count: 2,
-        content_hit_count: 3,
-        source_chunk_id: 92,
-        last_seen_at: daysAgo(2),
-        status: 'pending',
-      },
-      {
-        id: ++mockSeq,
-        term: '面试',
-        aliases: [],
-        description: 'AI 公司的前端岗面试，你说"那边"时通常指这家。',
-        kind: 'evidence',
-        evidence: '已有候选 · 证据 +1（近 14 天出现 2 次）',
-        query_hit_count: 0,
-        content_hit_count: 2,
-        source_chunk_id: 91,
-        last_seen_at: daysAgo(3),
-        status: 'pending',
-      },
-    ],
-    confirmed: [
-      {
-        id: ++mockSeq,
-        term: 'RAG',
-        aliases: ['检索增强'],
-        description: '检索增强生成：先从你的记录里捞相关片段，再让模型按片段回答。',
-        kind: 'new',
-        query_hit_count: 7,
-        content_hit_count: 9,
-        source_chunk_id: 93,
-        last_confirmed_at: daysAgo(6),
-        last_seen_at: daysAgo(1),
-        status: 'confirmed',
-      },
-      {
-        id: ++mockSeq,
-        term: 'book',
-        aliases: ['那本书'],
-        description: '你正在读的《置身事内》，最近在读第 4 章。',
-        kind: 'new',
-        query_hit_count: 3,
-        content_hit_count: 4,
-        source_chunk_id: 91,
-        last_confirmed_at: daysAgo(20),
-        last_seen_at: daysAgo(4),
-        status: 'confirmed',
-      },
-    ],
-    dismissed: [
-      {
-        id: ++mockSeq,
-        term: '周报',
-        aliases: [],
-        description: '每周五写的工作周报（此前被忽略，30 天后可重新浮现）。',
-        kind: 'new',
-        query_hit_count: 0,
-        content_hit_count: 1,
-        source_chunk_id: null,
-        last_seen_at: daysAgo(12),
-        status: 'dismissed',
-      },
-    ],
-  }
-}
-
-/** 深拷贝（mock 增删改作用于副本，页面刷新即还原） */
-function cloneGroups() {
-  return JSON.parse(JSON.stringify(buildMockGroups()))
-}
-
 export const useGlossaryStore = defineStore('glossary', () => {
   /** @type {import('vue').Ref<Term[]>} */
   const pending = ref([])
@@ -158,9 +44,6 @@ export const useGlossaryStore = defineStore('glossary', () => {
   const extracting = ref(false)
   /** 加载/操作失败信息（透出给调用方 toast） */
   const error = ref(null)
-
-  /** 数据来源标记（mock / live） */
-  const source = ref(null)
 
   /** pending 数量（侧栏设置图标角标） */
   const pendingCount = computed(() => pending.value.length)
@@ -185,21 +68,11 @@ export const useGlossaryStore = defineStore('glossary', () => {
     loading.value = true
     error.value = null
     try {
-      if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, MOCK_DELAY))
-        const groups = cloneGroups()
-        pending.value = groups.pending
-        confirmed.value = groups.confirmed
-        dismissed.value = groups.dismissed
-        source.value = 'mock'
-      } else {
-        const res = await apiGetGlossary()
-        const data = res.data || {}
-        pending.value = data.pending || []
-        confirmed.value = data.confirmed || []
-        dismissed.value = data.dismissed || []
-        source.value = 'live'
-      }
+      const res = await apiGetGlossary()
+      const data = res.data || {}
+      pending.value = data.pending || []
+      confirmed.value = data.confirmed || []
+      dismissed.value = data.dismissed || []
       return true
     } catch (err) {
       console.error('Failed to fetch glossary:', err)
@@ -218,7 +91,7 @@ export const useGlossaryStore = defineStore('glossary', () => {
   async function confirm(id) {
     const term = pending.value.find(t => t.id === id) || dismissed.value.find(t => t.id === id)
     try {
-      if (!USE_MOCK) await apiConfirmTerm(id)
+      await apiConfirmTerm(id)
       if (term) {
         term.last_confirmed_at = new Date().toISOString().slice(0, 10)
         moveTo(term, 'confirmed')
@@ -239,7 +112,7 @@ export const useGlossaryStore = defineStore('glossary', () => {
   async function dismiss(id) {
     const term = pending.value.find(t => t.id === id) || confirmed.value.find(t => t.id === id)
     try {
-      if (!USE_MOCK) await apiDismissTerm(id)
+      await apiDismissTerm(id)
       if (term) moveTo(term, 'dismissed')
       return true
     } catch (err) {
@@ -259,7 +132,7 @@ export const useGlossaryStore = defineStore('glossary', () => {
     const all = [...pending.value, ...confirmed.value, ...dismissed.value]
     const term = all.find(t => t.id === id)
     try {
-      if (!USE_MOCK) await apiUpdateTerm(id, data)
+      await apiUpdateTerm(id, data)
       if (term) {
         term.term = data.term
         term.aliases = data.aliases || []
@@ -280,7 +153,7 @@ export const useGlossaryStore = defineStore('glossary', () => {
    */
   async function remove(id) {
     try {
-      if (!USE_MOCK) await apiDeleteTerm(id)
+      await apiDeleteTerm(id)
       for (const list of [pending, confirmed, dismissed]) {
         const idx = list.value.findIndex(t => t.id === id)
         if (idx !== -1) {
@@ -303,26 +176,13 @@ export const useGlossaryStore = defineStore('glossary', () => {
    */
   async function add(data) {
     try {
-      if (!USE_MOCK) {
-        const res = await apiAddTerm(data)
-        if (res.data) {
-          confirmed.value.unshift(res.data)
-          return true
-        }
+      const res = await apiAddTerm(data)
+      if (res.data) {
+        confirmed.value.unshift(res.data)
+        return true
       }
-      confirmed.value.unshift({
-        id: ++mockSeq,
-        term: data.term,
-        aliases: data.aliases || [],
-        description: data.description,
-        kind: 'new',
-        query_hit_count: 0,
-        content_hit_count: 0,
-        source_chunk_id: null,
-        last_confirmed_at: new Date().toISOString().slice(0, 10),
-        last_seen_at: new Date().toISOString().slice(0, 10),
-        status: 'confirmed',
-      })
+      // 端点未回实体：重拉三组，以服务端为准
+      await fetch()
       return true
     } catch (err) {
       console.error('Failed to add term:', err)
@@ -340,13 +200,6 @@ export const useGlossaryStore = defineStore('glossary', () => {
     extracting.value = true
     error.value = null
     try {
-      if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, 600))
-        // mock：没有更多新词可抽——原样保留（抽取任务的噪音兜底是去重窗，
-        // 30 天内已处理词不重复提，所以多数时候 extract 不新增候选）
-        source.value = 'mock'
-        return true
-      }
       const res = await apiExtractTerms()
       const candidates = res.data?.candidates || res.data || []
       if (Array.isArray(candidates) && candidates.length) {
@@ -366,7 +219,7 @@ export const useGlossaryStore = defineStore('glossary', () => {
 
   return {
     pending, confirmed, dismissed,
-    loading, extracting, error, source,
+    loading, extracting, error,
     pendingCount,
     fetch, confirm, dismiss, update, remove, add, extract,
   }
