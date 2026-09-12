@@ -76,6 +76,8 @@ function updateDetailMode(r) {
     // 建议在处理过程中生成（不在审核时）：点进来时记录可能还是 processing，
     // 那时拉到的建议是空的；轮询到审核态必须重拉一次，否则只有整页刷新才看得到
     todoStore.fetch()
+    // 审核页「关联待办」数据源（GET /records/{id}/suggestions，拉到时预填裁决）
+    todoStore.fetchRecordSuggestions(r.id)
   } else if (r.status === 'failed') {
     ui.detailMode = 'failed'
   } else {
@@ -86,8 +88,8 @@ function updateDetailMode(r) {
 watch(() => ui.selectedRecordId, async (id) => {
   if (!id) return
   actionError.value = null
-  // 切记录 = 放弃上一张卡上暂存的裁决（未入库，不该带过来）
-  todoStore.clearStaged()
+  // 切记录 = 放弃上一张的关联待办裁决（未入库，不该带过来）
+  todoStore.clearResolutions()
   // 建议随"写日记分类"生成（不在审核时），打开记录时重拉一次，
   // 保证审核窗口的建议卡是最新（刚写完日记就来审核的场景）
   todoStore.fetch()
@@ -124,8 +126,8 @@ const showConfirm = computed(() => ui.detailMode === 'review')
 function close() {
   stopPolling()
   clearStepTimers()
-  // 未入库 → 暂存的裁决一并作废
-  todoStore.clearStaged()
+  // 未入库 → 关联待办裁决一并作废
+  todoStore.clearResolutions()
   ui.showDetail = false
   ui.selectedRecordId = null
   actionError.value = null
@@ -139,17 +141,21 @@ async function onConfirm() {
   if (confirming.value) return
   confirming.value = true
   actionError.value = null
-  const updated = await recordsStore.confirmReview(ui.selectedRecordId)
+  // 关联待办的每项选择随「确认入库」一起提交（todoResolutions）；
+  // 无待裁决项时不带该字段（body 可选扩展，契约见 api/records.js）
+  const todoResolutions = todoStore.resolutionsPayload
+  const payload = todoResolutions.length ? { todoResolutions } : {}
+  const updated = await recordsStore.confirmReview(ui.selectedRecordId, payload)
   confirming.value = false
   if (updated) {
     toast.success('已入库，向量已生成')
     ui.detailMode = 'view'
-    // 提交审核窗口暂存的待办裁决（审核态不落库，入库这一刻才生效）
-    const { failed } = await todoStore.commitStaged()
-    if (failed) toast.warning(`${failed} 条待办裁决提交失败，可在侧栏重试`)
+    // 裁决已随 confirm 落库 → 清掉本地暂存
+    todoStore.clearResolutions()
     // 入库后可能产生待办登记行 / pending 状态建议（todo-registry-design.md §3.1/§3.2）：
-    // 刷建议 + 强制刷 stats（侧栏待办列表读 stats.todo.open_items，30s 缓存会挡住新登记项）
+    // 刷建议 + 证据链 + 强制刷 stats（侧栏待办读 stats.todo.open_items，30s 缓存会挡住新登记项）
     todoStore.fetch()
+    todoStore.fetchChains()
     statsStore.fetchStats(30, true)
   } else {
     actionError.value = recordsStore.error || '确认失败，请重试'

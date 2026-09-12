@@ -5,8 +5,9 @@ import request from './request'
  *
  * GET  /todos/pending-suggestions      pending 建议列表（机器猜的，等用户裁决）
  * POST /todos/suggestions/{id}/resolve 裁决（confirmed 带状态 / dismissed 永久静默）
- * PUT  /todos/{id}/status              侧栏直调三态（事务内双写 chunk+registry，
- *                                      并自动作废该待办的 pending 建议）
+ * PUT  /todos/{id}/status              侧栏直调三态（本轮重构后已停用：状态变更唯一入口
+ *                                      改为记录审核页随「确认入库」提交；保留导出供兼容）
+ * DELETE /todos/{id}                   软删待办（侧栏「管理层操作」特例直点）
  * GET  /todos                          登记表条目（开放清单，用于 open_items 缺
  *                                      todo_id 时按 title 反查——契约待 B 定稿，
  *                                      前端只消费 id/title/current_status 三个字段）
@@ -84,4 +85,14 @@ export function getTodos() {
  */
 export function getOpenChains() {
   return request.get('/todos/open-chain')
+}
+
+/**
+ * 删除待办（软删；侧栏「管理层操作」特例直点，需先经影响清单弹框确认）
+ * 契约：DELETE /api/todos/{id}
+ * @param {number|string} id - todo_registry.id
+ * @returns {Promise<{ code: number, data: Object|null }>}
+ */
+export function deleteTodo(id) {
+  return request.delete(`/todos/${id}`)
 }

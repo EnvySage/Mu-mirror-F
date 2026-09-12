@@ -318,11 +318,12 @@ export const useRecordsStore = defineStore('records', () => {
   /**
    * 确认审查完成（阻塞数秒——补分类 + Embedding）
    * @param {string|number} id
+   * @param {Object} [payload] - 可选扩展 body（todoResolutions 关联待办裁决）
    * @returns {Promise<Object|null>} 更新后的记录（失败返回 null）
    */
-  async function confirmReview(id) {
+  async function confirmReview(id, payload) {
     try {
-      const res = await apiConfirmReview(id)
+      const res = await apiConfirmReview(id, payload)
       const index = records.value.findIndex(r => r.id === id)
       if (index !== -1 && res.data) {
         records.value[index] = res.data

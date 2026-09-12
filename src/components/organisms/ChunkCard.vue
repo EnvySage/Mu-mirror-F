@@ -145,7 +145,12 @@ async function removeChunk() {
 <template>
   <div :class="['chunk-card', 'card', { 'chunk-readonly': readonly }]">
     <div class="chunk-top">
-      <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
+      <span class="chunk-top-left">
+        <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
+        <!-- 终态徽标：已删除优先于已完成（todoRemoved 由后端软删待办时回写 metadata） -->
+        <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed">已删除</span>
+        <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done">已完成</span>
+      </span>
       <div class="chunk-actions">
         <button v-if="canEdit" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
@@ -246,8 +251,16 @@ async function removeChunk() {
 }
 .chunk-card.adding { animation: chunkIn .3s ease; }
 
-.chunk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.chunk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.chunk-top-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .chunk-index { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); letter-spacing: .1em; }
+/* 终态徽标（已完成 / 已删除）：形状跟随标签语言 */
+.chunk-badge {
+  flex-shrink: 0; font-size: 10.5px; font-weight: 600;
+  padding: 1px 8px; border-radius: var(--radius-full);
+}
+.chunk-badge-done { color: var(--success); background: var(--success-bg); }
+.chunk-badge-removed { color: var(--danger); background: var(--danger-bg); }
 .chunk-actions { display: flex; gap: 4px; }
 .chunk-icon-btn { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; transition: background .15s; }
 .chunk-icon-btn svg { width: 14px; height: 14px; stroke: var(--text-low); fill: none; }

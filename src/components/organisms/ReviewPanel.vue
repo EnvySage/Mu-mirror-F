@@ -3,13 +3,13 @@ import { computed } from 'vue'
 import { useRecordsStore } from '@/stores/records'
 import { useTodoStore } from '@/stores/todo'
 import ChunkCard from '@/components/organisms/ChunkCard.vue'
-import TodoSuggestionCard from '@/components/molecules/TodoSuggestionCard.vue'
+import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
 
 /**
  * 审核面板（v2 原型版）
  * 上：review-original「光源」面板（只读原文）
  * 中：chunk-card「镜面反射」卡片列表 + add-chunk-btn 虚线按钮
- * 下：待办状态建议卡（manual 模式 · 设计稿 §3.3）+ review-hint 引导
+ * 下：关联待办区块（todoStore.recordSuggestions）+ review-hint 引导
  * chips 编辑即保存（PUT /chunks/{id}），编排逻辑在 ChunkCard/store 内。
  */
 const props = defineProps({
@@ -27,25 +27,37 @@ const readonly = computed(() => props.record.status === 'done')
 const chunks = computed(() => props.record.chunks || [])
 
 /**
- * 审核态建议卡（设计稿 §3.3 manual 模式）
+ * 审核态「关联待办」区块（本轮交互重构：状态变更唯一入口）
  *
- * 命中口径：只取"证据落在本记录"的 pending 建议。审核中的记录尚未入库，
- * 它的片段还没有 registry 条目可关联（要等点确认才登记，见 B4 文案口径），
- * 所以 evidence_record_id === 本记录 id 是唯一可靠路径
- * （实测：建议 id=2 → evidence_record_id=10145 即这段"五十音学了一半"）。
+ * 数据源：todoStore.recordSuggestions（GET /records/{id}/suggestions，由宿主 DetailPanel
+ * 在进入审核态时拉取）。每项：todo 标题 + 当前状态 + 状态选择器（未开始/进行中/完成）+ 忽略。
  *
- * 与侧栏共用 todoStore.pendingSuggestions：任一处裁决后另一处同步消失。
+ * 用户选择暂存在 todoStore.resolutions（拉取时按机器建议态预填），点「确认入库」时
+ * 由 DetailPanel 组装进 confirm body 的 todoResolutions 一起提交：
+ * 已忽略 → action=dismissed；选了状态 → action=confirmed+status。
  */
-const suggestions = computed(() => {
-  if (!editable.value) return []
-  const rid = String(props.record?.id ?? '')
-  return todoStore.pendingSuggestions.filter(s => String(s.evidence_record_id ?? '') === rid)
-})
+const sugList = computed(() => (editable.value ? todoStore.recordSuggestions : []))
 
-/** 证据行跳记录：证据就在当前这条时不跳（已在看），否则交给父级切换记录 */
-function onOpenEvidence(rid) {
-  if (String(rid) === String(props.record.id)) return
-  emit('open-record', rid)
+const sugId = s => s.suggestion_id ?? s.suggestionId
+
+/** 该项的当前裁决（默认已在拉取时预填；未操作则 null） */
+function resolutionOf(s) {
+  return todoStore.resolutions[sugId(s)] || null
+}
+function isIgnored(s) {
+  return resolutionOf(s)?.action === 'dismissed'
+}
+function selectedStatus(s) {
+  return resolutionOf(s)?.status || s.suggested_status || s.suggestedStatus || ''
+}
+function selectStatus(s, st) {
+  todoStore.setSuggestionResolution(sugId(s), 'confirmed', st)
+}
+function ignoreSug(s) {
+  todoStore.setSuggestionResolution(sugId(s), 'dismissed')
+}
+function undoIgnore(s) {
+  todoStore.setSuggestionResolution(sugId(s), 'confirmed', s.suggested_status ?? s.suggestedStatus)
 }
 
 /** 新增片段：本地空占位，用户输入文本失焦时 POST /records/{id}/chunks */
@@ -97,19 +109,35 @@ function onAddChunk() {
         新增片段（AI 自动单段分类）
       </button>
 
-      <!-- 待办状态建议卡（manual 模式 · §3.3）：证据落在本记录的 pending 建议，无则不渲染 -->
-      <div v-if="suggestions.length" class="review-sug">
+      <!-- 关联待办（GET /records/{id}/suggestions）：状态选择随「确认入库」一起提交 -->
+      <div v-if="sugList.length" class="review-sug">
         <div class="review-sug-label">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.5H11L9.5 22 19 9.5h-6.5L13 2z"/></svg>
-          待办状态建议 · 顺手裁决
+          关联待办 · 随确认入库生效
         </div>
-        <TodoSuggestionCard
-          v-for="s in suggestions"
-          :key="s.id"
-          :suggestion="s"
-          context="review"
-          @open-record="onOpenEvidence"
-        />
+        <div class="todo-res-list">
+          <div
+            v-for="s in sugList"
+            :key="sugId(s)"
+            :class="['todo-res', { ignored: isIgnored(s) }]"
+          >
+            <div class="todo-res-head">
+              <span class="todo-res-title">{{ s.todo_title ?? s.todoTitle }}</span>
+              <span class="todo-res-cur">当前 {{ taskStatusMap[s.todo_status ?? s.todoStatus] || '未开始' }}</span>
+            </div>
+            <div class="todo-res-chips">
+              <button
+                v-for="st in TASK_STATUSES"
+                :key="st.key"
+                :class="['todo-res-chip', { selected: !isIgnored(s) && selectedStatus(s) === st.key, suggested: (s.suggested_status ?? s.suggestedStatus) === st.key }]"
+                :disabled="isIgnored(s)"
+                @click="selectStatus(s, st.key)"
+              >{{ st.label }}</button>
+              <button v-if="!isIgnored(s)" class="todo-res-chip todo-res-ignore" @click="ignoreSug(s)">忽略</button>
+              <button v-else class="todo-res-chip todo-res-undo" @click="undoIgnore(s)">撤销忽略</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="review-hint">
@@ -167,7 +195,30 @@ function onAddChunk() {
   display: flex; align-items: center; gap: 6px;
 }
 .review-sug-label svg { width: 12px; height: 12px; stroke: var(--accent); fill: none; }
-.review-sug .sug-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* 关联待办：每项 = 标题 + 当前状态 + 状态选择器 + 忽略 */
+.todo-res-list { display: flex; flex-direction: column; gap: 8px; }
+.todo-res {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--ink-2); padding: 10px 11px;
+  transition: opacity .2s ease;
+}
+.todo-res.ignored { opacity: .55; }
+.todo-res-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.todo-res-title { font-size: 12.5px; font-weight: 500; color: var(--text-hi); word-break: break-word; }
+.todo-res-cur { flex-shrink: 0; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-low); }
+.todo-res-chips { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.todo-res-chip {
+  font-size: 11px; padding: 3px 10px; border-radius: var(--radius-full);
+  color: var(--text-mid); box-shadow: inset 0 0 0 1px var(--line-strong);
+  transition: all .12s;
+}
+.todo-res-chip:hover:not(:disabled) { color: var(--text-hi); background: var(--card); }
+.todo-res-chip.suggested { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
+.todo-res-chip.selected { background: var(--accent); color: #FFFFFF; box-shadow: none; font-weight: 600; }
+.todo-res-chip:disabled { opacity: .55; cursor: not-allowed; }
+.todo-res-ignore { margin-left: auto; }
+.todo-res-undo { margin-left: auto; color: var(--text-low); }
 
 .review-hint {
   display: flex; gap: 8px; align-items: flex-start;

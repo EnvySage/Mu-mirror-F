@@ -81,13 +81,32 @@ export function deleteRecord(id) {
 }
 
 /**
+ * 记录关联的待办建议（审核页「关联待办」区块数据源）
+ *
+ * 契约：GET /api/records/{id}/suggestions
+ *   → [{ suggestionId, todoId, todoTitle, todoStatus, suggestedStatus, evidenceChunkId }]
+ * （响应经 request.js 拦截器统一转 snake_case：
+ *   suggestion_id / todo_id / todo_title / todo_status / suggested_status / evidence_chunk_id）
+ * @param {number|string} id - 记录ID
+ * @returns {Promise<{ code: number, data: Array }>}
+ */
+export function getRecordSuggestions(id) {
+  return request.get(`/records/${id}/suggestions`)
+}
+
+/**
  * 确认审查完成（阻塞数秒——含补分类 + Embedding，调用方需 loading 态）
  * @param {number|string} id - 记录ID
+ * @param {Object} [payload] - 可选扩展 body
+ * @param {Array} [payload.todoResolutions] - 关联待办裁决，随入库一起提交：
+ *        [{ suggestionId: 123, action: 'confirmed', status: 'completed' },
+ *         { suggestionId: 124, action: 'dismissed' }]
+ *        （action=confirmed 时 status 必填：not_started / in_progress / completed）
  * @returns {Promise<{ code: number, data: RecordVO }>}
  */
-export function confirmReview(id) {
+export function confirmReview(id, payload) {
   // confirm 阻塞数秒~数十秒（补分类+Embedding 逐个 chunk），绕开全局 15s 超时
-  return request.put(`/records/${id}/confirm`, null, { timeout: 120000 })
+  return request.put(`/records/${id}/confirm`, payload ?? null, { timeout: 120000 })
 }
 
 /**

@@ -6,7 +6,9 @@ import {
   setTodoStatus as apiSetTodoStatus,
   getTodos as apiGetTodos,
   getOpenChains as apiGetOpenChains,
+  deleteTodo as apiDeleteTodo,
 } from '@/api/todo'
+import { getRecordSuggestions as apiGetRecordSuggestions } from '@/api/records'
 import { useStatsStore } from '@/stores/stats'
 
 /**
@@ -74,12 +76,18 @@ export const useTodoStore = defineStore('todo', () => {
   const todos = ref([])
   /** @type {import('vue').Ref<Array>} 未完成待办证据链（TodoChainCard 数据源，createdAt DESC） */
   const chains = ref([])
+  /** @type {import('vue').Ref<Array>} 审核页「关联待办」建议（GET /records/{id}/suggestions） */
+  const recordSuggestions = ref([])
 
   const loading = ref(false)
   /** chains 独立 loading（数据源与宿主不同，单独按需拉取，不牵动主 fetch 的 loading） */
   const chainsLoading = ref(false)
+  /** 审核页关联待办建议独立 loading（按记录切换拉取） */
+  const recordSugLoading = ref(false)
   /** 写操作进行中的 suggestion/todo id（防双击，UI 禁按钮） */
   const resolvingId = ref(null)
+  /** 删除进行中的 todo id（防双击，卡内删除按钮禁点） */
+  const removingId = ref(null)
   const error = ref(null)
 
   /**
@@ -91,6 +99,14 @@ export const useTodoStore = defineStore('todo', () => {
    * 用户不入库直接关掉 → 暂存自然作废（clearStaged）。
    */
   const staged = ref({})
+
+  /**
+   * 审核页「关联待办」的用户裁决：suggestionId → { action: 'confirmed'|'dismissed', status }
+   *
+   * 拉到建议时按机器建议态预填（每项都有默认选择，用户只改要改的），
+   * 点「确认入库」时由 resolutionsPayload 映射进 confirm body 的 todoResolutions 一起提交。
+   */
+  const resolutions = ref({})
 
   /** pending 角标数（侧栏待办卡卡头小蓝点） */
   const pendingCount = computed(() => pendingSuggestions.value.length)
@@ -292,6 +308,106 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   /**
+   * 拉取某条记录的关联待办建议（审核页「关联待办」区块）
+   *
+   * 契约 GET /records/{id}/suggestions 返回的每条都是"待用户裁决"的建议；
+   * 拉到后按机器建议态预填 resolutions（每项都有默认选择，用户只改要改的）。
+   * @param {number|string} recordId
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async function fetchRecordSuggestions(recordId) {
+    if (recordId == null) {
+      recordSuggestions.value = []
+      resolutions.value = {}
+      return false
+    }
+    recordSugLoading.value = true
+    try {
+      const res = await apiGetRecordSuggestions(recordId)
+      const list = unwrap(res.data, 'suggestions')
+      recordSuggestions.value = list
+      const seed = {}
+      list.forEach(s => {
+        const id = s.suggestion_id ?? s.suggestionId
+        if (id == null) return
+        seed[id] = { action: 'confirmed', status: s.suggested_status ?? s.suggestedStatus }
+      })
+      resolutions.value = seed
+      return true
+    } catch (err) {
+      console.error('Failed to fetch record suggestions:', err)
+      recordSuggestions.value = []
+      resolutions.value = {}
+      return false
+    } finally {
+      recordSugLoading.value = false
+    }
+  }
+
+  /**
+   * 设置单条关联待办的裁决（confirmed 带状态 / dismissed 忽略）
+   * @param {number|string} suggestionId
+   * @param {'confirmed'|'dismissed'} action
+   * @param {string} [status] - action=confirmed 时的目标状态
+   */
+  function setSuggestionResolution(suggestionId, action, status) {
+    if (suggestionId == null) return
+    resolutions.value = { ...resolutions.value, [suggestionId]: { action, status } }
+  }
+
+  /** 清空审核页裁决暂存（切换记录 / 入库完成后调用） */
+  function clearResolutions() {
+    recordSuggestions.value = []
+    resolutions.value = {}
+  }
+
+  /**
+   * confirm body 的 todoResolutions：把每项选择映射成契约结构
+   * （已忽略 → action=dismissed；选了状态 → action=confirmed+status）
+   * @returns {Array<{suggestionId:any, action:string, status?:string}>}
+   */
+  const resolutionsPayload = computed(() => {
+    const out = []
+    for (const s of recordSuggestions.value) {
+      const id = s.suggestion_id ?? s.suggestionId
+      if (id == null) continue
+      const r = resolutions.value[id]
+      if (!r) continue
+      if (r.action === 'dismissed') out.push({ suggestionId: id, action: 'dismissed' })
+      else out.push({ suggestionId: id, action: 'confirmed', status: r.status })
+    }
+    return out
+  })
+
+  /**
+   * 删除待办（软删；侧栏「管理层操作」特例直点，调用前须经影响清单弹框确认）
+   *
+   * 成功后本地摘除 + 以服务端为准刷新清单与 pending 角标（需求：从清单消失 + 角标同步）。
+   * @param {number|string} todoId
+   * @returns {Promise<boolean>}
+   */
+  async function removeTodo(todoId) {
+    if (todoId == null || removingId.value) return false
+    removingId.value = todoId
+    error.value = null
+    try {
+      await apiDeleteTodo(todoId)
+      chains.value = chains.value.filter(c => String(c.todo_id ?? c.todoId) !== String(todoId))
+      todos.value = todos.value.filter(t => String(t.id) !== String(todoId))
+      pendingSuggestions.value = pendingSuggestions.value.filter(
+        s => String(s.todo_id ?? s.todoId) !== String(todoId))
+      await Promise.all([fetch(), fetchChains()])
+      return true
+    } catch (err) {
+      console.error('Failed to delete todo:', err)
+      error.value = err.message || '删除待办失败'
+      return false
+    } finally {
+      removingId.value = null
+    }
+  }
+
+  /**
    * stats.open_items 同步（乐观更新后的旁路镜像——stats store 30s 缓存期内
    * 侧栏待办速览仍读 stats.todo，直接改它让两处 UI 即时一致）。
    * 独立导出供组件在写成功后调用；stats 缓存过期后自然被真接口覆盖。
@@ -307,10 +423,11 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   return {
-    pendingSuggestions, todos, chains,
-    loading, chainsLoading, resolvingId, error, staged,
-    pendingCount, todoByTitle,
+    pendingSuggestions, todos, chains, recordSuggestions,
+    loading, chainsLoading, recordSugLoading, resolvingId, removingId, error, staged, resolutions,
+    pendingCount, todoByTitle, resolutionsPayload,
     fetch, fetchChains, findTodoByTitle, resolve, setStatus, syncStatsOpenItem,
     stageResolution, unstageResolution, clearStaged, commitStaged,
+    fetchRecordSuggestions, setSuggestionResolution, clearResolutions, removeTodo,
   }
 })

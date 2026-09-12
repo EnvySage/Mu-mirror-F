@@ -7,7 +7,8 @@
  *  2. 每日总结 —— summaries store 最近 7 篇（日期 + 2 行摘要），点击内联展开全文（复用 fetchDetail）
  *  3. 本周情绪带 —— 7 个色点（每天出现最多的情绪，moodColor 13 色），下标周一~周日，无记录天灰点
  *  4. 待办速览 —— todo.chains 证据链卡（TodoChainCard，两层：L1 行 + L2 时间线）
- *     卡头 pending 角标 + 状态圈直调；orphan/completed 建议（todo 不在 chains）降级独立建议卡
+ *     只读 + 导航：L1 点击跳来源记录、L2 只读；删除为特例（侧栏直点，影响清单弹框确认）；
+ *     orphan/completed 建议（todo 不在 chains）降级为只读建议卡（点击跳证据记录）
  *
  * 数据源：stats/summaries 仍由父级 onMounted 触发；todo store（chains+建议+registry）由本组件
  * 自拉（独立生命周期，操作后需即时刷新不受 stats 30s 缓存牵连）。
@@ -243,7 +244,7 @@ const orphanSuggestions = computed(() => {
           <span v-if="showSuggestions && todoStore.pendingCount" class="todo-badge" :title="`${todoStore.pendingCount} 条待办状态建议`">
             <i class="todo-badge-dot" />{{ todoStore.pendingCount }}
           </span>
-          <span v-else>状态可直调</span>
+          <span v-else>点击查看来源</span>
         </span>
       </div>
 
@@ -253,12 +254,11 @@ const orphanSuggestions = computed(() => {
           v-for="s in orphanSuggestions"
           :key="s.id"
           :suggestion="s"
-          context="sidebar"
           @open-record="emit('open-record', $event)"
         />
       </div>
 
-      <!-- 证据链列表（L1 行 + L2 卡内展开；直调浮层/建议三键在卡内） -->
+      <!-- 证据链列表（L1 行 + L2 卡内展开，只读；删除特例直点） -->
       <div v-if="todoStore.chainsLoading && !chains.length" class="side-empty">加载中…</div>
       <div v-else-if="todoStore.error && !chains.length" class="side-empty">{{ todoStore.error }}</div>
       <div v-else-if="!chains.length" class="side-empty">没有挂起的待办</div>
@@ -267,6 +267,7 @@ const orphanSuggestions = computed(() => {
           v-for="c in chains"
           :key="`chain-${c.todo_id ?? c.todoId ?? c.title}`"
           :chain="c"
+          deletable
           @open-record="emit('open-record', $event)"
         />
       </div>
