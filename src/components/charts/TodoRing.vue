@@ -3,7 +3,8 @@
  * TodoRing —— 待办完成度环（纯 SVG stroke-dasharray）
  *
  * 中央 N/M 大数字，环 = completed/total；环下 not_started / in_progress 图例。
- * 环长 CSS transition 0.4s。total=0 时显示空环 + 暂无数据文案。
+ * 环长 CSS transition 0.4s。total=0 时显示空环 + 空态文案；
+ * 完成度极低时按 MIN_ARC 保底弧长，避免"环几乎全空"看着像坏了。
  */
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
@@ -28,12 +29,19 @@ const norm = computed(() => {
 
 const pct = computed(() => (norm.value.total ? Math.round((norm.value.completed / norm.value.total) * 100) : 0))
 
+/**
+ * 最小可视弧度：完成度极低（如 1/12 → 8%）时弧线短到像"环坏了"，
+ * 有完成项就保底 4% 弧长（视觉下限，不参与数值口径）。
+ */
+const MIN_ARC = 4
+const arc = computed(() => (norm.value.completed > 0 && pct.value < MIN_ARC ? MIN_ARC : pct.value))
+
 /** 完成段弧长（dasharray 前值），其余为底环 */
-const dash = computed(() => `${pct.value} ${C - pct.value}`)
+const dash = computed(() => `${arc.value} ${C - arc.value}`)
 </script>
 
 <template>
-  <ChartEmpty v-if="!norm.total" />
+  <ChartEmpty v-if="!norm.total" text="暂无待办数据" />
   <div v-else class="todo-ring" role="img" :aria-label="`待办完成 ${norm.completed}/${norm.total}`">
     <div class="ring-wrap">
       <svg viewBox="0 0 40 40" role="presentation">

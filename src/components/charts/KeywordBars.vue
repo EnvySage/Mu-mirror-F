@@ -4,6 +4,7 @@
  *
  * 名称 + 条（墨蓝，宽 = count/max 占比）+ 数值；最长条满宽。
  * 行级 title 悬浮显示「出现 N 次」；条宽 CSS transition 0.4s。>10 项截断为 10（组件职责边界）。
+ * 展示层过滤单字噪音词（"开"/"她"/"杂"）：字符数 < 2 不入榜（英文单词不受影响）。
  */
 import { computed } from 'vue'
 import ChartEmpty from './ChartEmpty.vue'
@@ -13,8 +14,13 @@ const props = defineProps({
   data: { type: Array, default: () => [] },
 })
 
+/** 入榜最小字符数：过滤单字噪音词（中文单字无信息量，英文单词长度天然 >= 2） */
+const MIN_LEN = 2
+
 const items = computed(() => {
-  const top = props.data.slice(0, 10)
+  const top = props.data
+    .filter(d => String(d.keyword ?? '').trim().length >= MIN_LEN)
+    .slice(0, 10)
   const max = Math.max(0, ...top.map(d => d.count || 0))
   return top.map(d => ({
     ...d,
@@ -24,7 +30,7 @@ const items = computed(() => {
 </script>
 
 <template>
-  <ChartEmpty v-if="!data.length" />
+  <ChartEmpty v-if="!items.length" text="暂无有效关键词" />
   <div v-else class="kw-bars" role="img" aria-label="关键词 Top 10">
     <div v-for="it in items" :key="it.keyword" class="kw-row" :title="`「${it.keyword}」出现 ${it.count} 次`">
       <span class="kw-name">{{ it.keyword }}</span>
