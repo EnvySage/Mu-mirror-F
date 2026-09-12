@@ -241,7 +241,7 @@ function fmtDate(s) {
           <div class="todo-del-title">确认删除「{{ title }}」这条待办？</div>
           <div class="todo-del-list">
             <div class="todo-del-line">· 将从待办清单和 AI 语境中移除</div>
-            <div class="todo-del-line">· 原始记录会保留，并标记"已删除"（可追溯）</div>
+            <div class="todo-del-line">· 原始记录会保留，并标记该待办“已删除”（可追溯）</div>
             <div class="todo-del-line">· 相关证据链与建议将不再显示</div>
           </div>
           <div class="todo-del-actions">

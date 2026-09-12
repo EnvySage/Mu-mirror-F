@@ -147,9 +147,9 @@ async function removeChunk() {
     <div class="chunk-top">
       <span class="chunk-top-left">
         <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
-        <!-- 终态徽标：已删除优先于已完成（todoRemoved 由后端软删待办时回写 metadata） -->
-        <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed">已删除</span>
-        <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done">已完成</span>
+        <!-- 待办终态徽标：待办已删除优先于待办已完成（todoRemoved 由后端软删待办时回写 metadata；记录内容完整保留） -->
+        <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed" title="关联待办已被删除，记录内容保留">待办已删除</span>
+        <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done" title="关联待办已完成，记录内容保留">待办已完成</span>
       </span>
       <div class="chunk-actions">
         <button v-if="canEdit" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
@@ -254,7 +254,7 @@ async function removeChunk() {
 .chunk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .chunk-top-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .chunk-index { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); letter-spacing: .1em; }
-/* 终态徽标（已完成 / 已删除）：形状跟随标签语言 */
+/* 待办终态徽标（待办已删除 / 待办已完成）：形状跟随标签语言 */
 .chunk-badge {
   flex-shrink: 0; font-size: 10.5px; font-weight: 600;
   padding: 1px 8px; border-radius: var(--radius-full);
