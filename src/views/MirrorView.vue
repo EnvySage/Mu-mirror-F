@@ -155,6 +155,21 @@ const timeline = computed(() => (mirror.snapshots || []).map((s, i) => ({
   viewing: mirror.currentSnapshotId === s.id,
 })))
 
+/** 快照保留策略（原角标文案，收进 title，主行只留数量归属） */
+const TIMELINE_RETENTION = '保留策略：手动最近 2 份 / 月度最近 12 份'
+
+/**
+ * 时间线口径摘要：共 N 份 · 手动 X · 月度 Y。
+ * 旧文案「1 份 · manual 保 2 / monthly 保 12」数量归属含混（保 2/12 是保留上限不是当前份数），
+ * 这里把"当前份数"与"保留策略"拆开：主行只报份数，策略进 title。
+ */
+const timelineNote = computed(() => {
+  const n = timeline.value.length
+  if (!n) return '暂无历史快照'
+  const monthly = timeline.value.filter(t => t.type === 'monthly').length
+  return `共 ${n} 份 · 手动 ${n - monthly} · 月度 ${monthly}`
+})
+
 /** 查看历史快照（hero 切换为该快照内容）；卸载后不弹 toast（组件已不在 DOM） */
 async function onViewSnapshot(node) {
   const ok = await mirror.viewSnapshot(node.id)
@@ -321,11 +336,17 @@ onBeforeUnmount(() => {
       <template v-else-if="mirror.profile">
         <!-- ===== 快照轨迹条（时间线：点节点切换查看；最新在前） ===== -->
         <div class="portrait-section card timeline-card">
-          <div class="chart-head" style="margin-bottom:10px">
+          <!-- 头行：眉标 + 份数摘要 + 对比开关（对比原独占一行，合并进头行省一整行高度） -->
+          <div class="timeline-head">
             <span class="section-label">SNAPSHOT TIMELINE</span>
-            <span class="chart-head-note">
-              {{ timeline.length ? `${timeline.length} 份 · manual 保 2 / monthly 保 12` : '暂无历史快照' }}
-            </span>
+            <span class="chart-head-note" :title="timeline.length ? TIMELINE_RETENTION : null">{{ timelineNote }}</span>
+            <div v-if="timeline.length >= 2" class="timeline-actions">
+              <button type="button" :class="['compare-toggle', { on: compareMode }]" @click="toggleCompare">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M8 3v18M16 3v18M3 8h10M11 16h10"/></svg>
+                {{ compareMode ? '退出对比' : '对比两份快照' }}
+              </button>
+              <span v-if="!compareMode" class="compare-hint">对比 overall 与六维变化</span>
+            </div>
           </div>
           <div v-if="timeline.length" class="snapshot-strip" role="tablist" aria-label="快照历史时间线">
             <button
@@ -346,15 +367,6 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="portrait-text">暂无历史快照，生成第一份画像后这里会出现时间线。</div>
 
-          <!-- 对比开关 + 提示 -->
-          <div v-if="timeline.length >= 2" class="compare-bar">
-            <button type="button" :class="['compare-toggle', { on: compareMode }]" @click="toggleCompare">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M8 3v18M16 3v18M3 8h10M11 16h10"/></svg>
-              {{ compareMode ? '退出对比' : '对比两份快照' }}
-            </button>
-            <span v-if="!compareMode" class="compare-hint">对比 overall 总结与六维分析的变化</span>
-          </div>
-
           <!-- 按月生成入口（幽灵卡）：只列"有区间但无 monthly"的历史月份 -->
           <div v-if="mirror.generatableMonths.length" class="ghost-card">
             <div class="ghost-head">
@@ -372,8 +384,8 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="mirror.generatingMonthly" class="ghost-loading">照镜中…约需十几秒</div>
           </div>
-          <!-- 淡态：无可生成月份 -->
-          <div v-else-if="timeline.length" class="ghost-card ghost-idle">近两个月都已有镜子</div>
+          <!-- 淡态：无可生成月份（原虚线整卡占一整行，压缩为一行小字） -->
+          <p v-else-if="timeline.length" class="timeline-idle">近两个月都已有镜子</p>
         </div>
 
         <!-- ===== 对比区（compareMode 开启时插入 hero 上方） ===== -->
@@ -509,13 +521,13 @@ onBeforeUnmount(() => {
             较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
           </div>
           <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
-          <div class="mirror-stats">
-            <div v-for="(s, i) in stats" :key="i" class="mirror-stat">
-              <div class="mirror-stat-num">{{ s.display }}</div>
-              <div class="mirror-stat-label">{{ s.label }}</div>
-            </div>
+          <div class="mirror-metrics">
+            <span v-for="(s, i) in stats" :key="i" class="metric">
+              <b class="metric-num">{{ s.display }}</b>
+              <span class="metric-label">{{ s.label }}</span>
+            </span>
+            <span class="metric-note">近 30 天实时统计（与所选快照无关）</span>
           </div>
-          <div class="mirror-stats-note">近 30 天实时统计（与所选快照无关）</div>
           <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
             {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
@@ -561,10 +573,8 @@ onBeforeUnmount(() => {
               <span class="section-label">TODO</span>
               <span class="chart-head-note">近 30 天完成度</span>
             </div>
+            <!-- 口径注释由 TodoRing 自带（.ring-note），此处不再重复渲染 -->
             <TodoRing :todo="statsStore.todo" />
-            <div class="chart-legend center">
-              <span class="chart-legend-item">仅统计 todo / plan 类型片段</span>
-            </div>
           </div>
           <div class="portrait-section card chart-card">
             <div class="chart-head">
@@ -625,7 +635,9 @@ onBeforeUnmount(() => {
                 <div class="mood-legend-dot" :style="{ background: seg.color }" />{{ seg.label }} {{ seg.pct }}%
               </div>
             </div>
-            <div v-if="mirror.profile.mood_analysis" class="portrait-text" style="margin-top:10px">{{ mirror.profile.mood_analysis }}</div>
+            <!-- 空态：虚线占位条（原整卡只剩一句文案，改为紧凑一行） -->
+            <div v-else class="mood-empty">近 30 天无情绪数据 · 写几条带情绪的记录后自动统计</div>
+            <div v-if="mirror.profile.mood_analysis" class="portrait-text mood-note">{{ mirror.profile.mood_analysis }}</div>
           </div>
 
           <div class="portrait-section card">
@@ -702,8 +714,11 @@ onBeforeUnmount(() => {
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
-/* ===== 快照时间线 ===== */
-.timeline-card { padding: 14px 16px; margin-top: 8px; }
+/* ===== 快照时间线（压缩：头行合并对比开关，淡态去整卡） ===== */
+.timeline-card { padding: 12px 14px; margin-top: 8px; }
+.timeline-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.timeline-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.timeline-idle { margin-top: 8px; font-size: 11.5px; color: var(--text-low); }
 .snapshot-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .snapshot-chip {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 10.5px;
@@ -734,8 +749,7 @@ onBeforeUnmount(() => {
 .snapshot-viewing-tag { font-family: var(--font); font-size: 10px; color: var(--accent); }
 .snapshot-latest-tag { font-family: var(--font); font-size: 10px; color: var(--text-low); }
 
-/* ===== 对比开关行 ===== */
-.compare-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+/* ===== 对比开关（已并入时间线头行） ===== */
 .compare-toggle {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 600; color: var(--text-mid);
@@ -750,7 +764,7 @@ onBeforeUnmount(() => {
 
 /* ===== 按月生成幽灵卡（时间线尾部入口，虚线同 dropzone 视觉） ===== */
 .ghost-card {
-  margin-top: 10px; padding: 10px 14px;
+  margin-top: 8px; padding: 8px 12px;
   border: 1.5px dashed var(--line-strong);
   border-radius: var(--radius-sm);
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -787,11 +801,6 @@ onBeforeUnmount(() => {
   flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px;
   color: var(--text-low); animation: blink 1.2s ease infinite;
 }
-.ghost-idle {
-  justify-content: center; font-size: 12px; color: var(--text-low);
-  cursor: default;
-}
-.ghost-idle:hover { border-color: var(--line-strong); background: transparent; }
 @media (max-width: 420px) {
   .ghost-card { padding: 10px 12px; gap: 8px; }
   .ghost-actions { margin-left: 0; width: 100%; }
@@ -889,18 +898,19 @@ onBeforeUnmount(() => {
 .mirror-drift svg { width: 12px; height: 12px; stroke: #8B5CF6; fill: none; }
 .mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; }
 
-.mirror-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
-.mirror-stat {
-  text-align: center; padding: 12px 6px; border-radius: var(--radius-sm);
-  background: var(--ink-2);
+/* 紧凑指标条：数字 + 标签横排一行（原三张 12px padding 大卡，占高过大） */
+.mirror-metrics {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 18px;
+  margin-top: 14px; padding: 8px 12px;
+  border-radius: var(--radius-sm); background: var(--ink-2);
 }
-.mirror-stat-num {
-  font-family: var(--font-display); font-size: 21px; font-weight: 600;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
+.metric { display: inline-flex; align-items: baseline; gap: 5px; }
+.metric-num {
+  font-family: var(--font-display); font-size: 17px; font-weight: 600;
+  color: var(--accent); font-variant-numeric: tabular-nums;
 }
-.mirror-stat-label { font-size: 11px; color: var(--text-low); margin-top: 1px; }
-.mirror-stats-note { font-size: 10.5px; color: var(--text-low); margin-top: 7px; }
+.metric-label { font-size: 11.5px; color: var(--text-low); }
+.metric-note { margin-left: auto; font-size: 10.5px; color: var(--text-low); }
 
 .mirror-generate {
   margin-top: 16px; width: 100%; padding: 12px; border-radius: 12px;
@@ -969,6 +979,13 @@ onBeforeUnmount(() => {
 .mood-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 11px; }
 .mood-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-mid); }
 .mood-legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+/* 空态占位（虚线小条，不留整块空白卡） */
+.mood-empty {
+  padding: 7px 10px; border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px; color: var(--text-low);
+}
+.mood-note { margin-top: 8px; font-size: 12.5px; }
 
 /* user tags（未完成的事已升级为 TodoChainCard 证据链，.todo-row 旧样式移除） */
 .user-tags { display: flex; flex-wrap: wrap; gap: 8px; }
