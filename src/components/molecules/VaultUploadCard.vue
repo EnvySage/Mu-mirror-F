@@ -3,8 +3,8 @@
  * 上传卡（任务 2 · 设计稿 4.2）
  *
  * 选文件后先弹此卡再上传（上传=显式动作免确认红线以用户点[就这样存]为准）：
- *   [类型图标] 榨取显示名（mock=清洗 original；真态=B 元数据榨取名）
- *   AI 已识别：xxx · 分类（LLM 消化管道顺路命名）
+ *   [类型图标] 显示名（本地清洗 original；B 侧的元数据榨取名随上传返回覆盖）
+ *   类型行：显示名 · 大类（按扩展名判；description 由后端消化管道给出）
  *   可空描述框（placeholder「以后想怎么找到它？」——key 三层渐进第 3 层用户补正）
  *   [就这样存] [改个名]
  *
@@ -12,13 +12,13 @@
  */
 import { ref, computed } from 'vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
-import { formatBytes, mockCategoryTag } from '@/constants/fileTypes'
+import { formatBytes, categoryLabel } from '@/constants/fileTypes'
 
 const props = defineProps({
   /**
    * 待上传文件上下文（ChatView 选文件后构造）：
    * @property {File} file
-   * @property {string} displayName  mock 榨取名
+   * @property {string} displayName  本地兜底显示名（清洗文件名）
    * @property {'document'|'image'|'audio'|null} category
    */
   pending: { type: Object, required: true },
@@ -89,10 +89,10 @@ function cancel() {
       </div>
     </div>
 
-    <!-- AI 已识别行（元数据榨取 + LLM 命名口径） -->
+    <!-- 类型识别行（按扩展名判大类，真实 description 由后端消化管道给出） -->
     <div class="up-recognized">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
-      <span>AI 已识别：{{ displayName }} · {{ mockCategoryTag(pending.category) }}</span>
+      <span>{{ displayName }} · {{ categoryLabel(pending.category) }}</span>
     </div>
 
     <!-- 描述框（图片必填强提示；非图片可空轻口径——key 三层第 3 层：用户补正） -->

@@ -65,12 +65,12 @@ export function categoryOf(ext) {
 }
 
 /**
- * mock 元数据榨取名（真实现由 B 在上传瞬间做，PDF Title / docx 属性 / ID3 / EXIF；
- * 前端 mock 退化为清洗 original：去扩展名 + 下划线转空格）
+ * 展示名兜底（元数据榨取真实现由 B 在上传瞬间做：PDF Title / docx 属性 / ID3 / EXIF；
+ * 前端只做 filename → 可读名的清洗：去扩展名 + 下划线转空格）
  * @param {string} name
  * @returns {string}
  */
-export function deriveMockDisplayName(name) {
+export function deriveDisplayName(name) {
   const ext = fileExt(name)
   const base = ext ? name.slice(0, name.length - ext.length - 1) : (name || '')
   const cleaned = base.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -78,15 +78,12 @@ export function deriveMockDisplayName(name) {
 }
 
 /**
- * mock "AI 已识别" 描述行（真实现由 LLM 消化管道给出 description + category）
+ * 大类 → 中文名（未知回落"文件"）
  * @param {'document'|'image'|'audio'|null} category
  * @returns {string}
  */
-export function mockCategoryTag(category) {
-  if (category === 'image') return '图片 · 生活记录'
-  if (category === 'audio') return '音频 · 音乐'
-  if (category === 'document') return '文档 · 学习资料'
-  return '文件'
+export function categoryLabel(category) {
+  return CATEGORY_LABELS[category] || '文件'
 }
 
 /**

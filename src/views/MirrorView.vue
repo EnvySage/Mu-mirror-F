@@ -3,9 +3,11 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
 import { useRecordsStore } from '@/stores/records'
 import { useStatsStore } from '@/stores/stats'
+import { useTodoStore } from '@/stores/todo'
+import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
 import { MOOD_COLOR } from '@/constants/moodColor'
-import { moodMap, taskStatusMap } from '@/constants/tags'
+import { moodMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
 import MoodBand from '@/components/charts/MoodBand.vue'
 import HourHeat from '@/components/charts/HourHeat.vue'
@@ -13,10 +15,13 @@ import WeekdayBars from '@/components/charts/WeekdayBars.vue'
 import KeywordBars from '@/components/charts/KeywordBars.vue'
 import TodoRing from '@/components/charts/TodoRing.vue'
 import RecordFreq from '@/components/charts/RecordFreq.vue'
+import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
 const statsStore = useStatsStore()
+const todoStore = useTodoStore()
+const ui = useUIStore()
 const toast = useToastStore()
 
 onMounted(() => {
@@ -26,6 +31,8 @@ onMounted(() => {
   mirror.fetchSnapshots().catch(() => {})
   // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
   statsStore.fetchStats().catch(() => {})
+  // 证据链（「未完成的事」模块数据源；store 有缓存，两页共用一份 chains）
+  todoStore.fetchChains().catch(() => {})
 })
 
 /** 镜子名：当前月份 */
@@ -88,16 +95,18 @@ const learningEvidence = computed(() => {
   return items.slice(0, 2)
 })
 
-/** 未完成的事（todo/plan 且 taskStatus !== completed） */
-const todos = computed(() => {
-  const items = []
-  recordsStore.records.forEach(r => (r.chunks || []).forEach(c => {
-    if ((c.metadata?.contentType === 'todo' || c.metadata?.contentType === 'plan') && c.metadata?.taskStatus !== 'completed') {
-      items.push({ title: c.metadata?.title || c.segment, status: c.metadata?.taskStatus })
-    }
-  }))
-  return items
-})
+/**
+ * 未完成的事：证据链视图（todoStore.chains，与侧栏待办速览同组件同数据）。
+ * 旧的 records chunk 遍历（taskStatus 单行）已被 TodoChainCard 取代。
+ */
+const chains = computed(() => todoStore.chains)
+
+/** 链节点 open-record → 打开 DetailPanel（与 RecordsView 同款接线：ui store 全局常驻） */
+function openTodoRecord(recordId) {
+  if (!recordId) return
+  ui.selectedRecordId = recordId
+  ui.showDetail = true
+}
 
 /** MoodBand 图例：30 天窗口内实际出现过的情绪（按出现总量倒序，最多 8 个） */
 const moodLegend = computed(() => {
@@ -642,14 +651,17 @@ onBeforeUnmount(() => {
               <div class="portrait-section-icon" style="background:var(--warn)">
                 <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
-              <div class="portrait-section-title">未完成的事 · {{ todos.length }}</div>
+              <div class="portrait-section-title">未完成的事 · {{ chains.length }}</div>
             </div>
-            <template v-if="todos.length">
-              <div v-for="(t, i) in todos" :key="i" class="todo-row">
-                <span>{{ t.title }}</span>
-                <span class="tag tag-status">{{ taskStatusMap[t.status] || '未开始' }}</span>
-              </div>
+            <template v-if="chains.length">
+              <TodoChainCard
+                v-for="c in chains"
+                :key="`m-chain-${c.todo_id ?? c.todoId ?? c.title}`"
+                :chain="c"
+                @open-record="openTodoRecord"
+              />
             </template>
+            <div v-else-if="todoStore.chainsLoading" class="portrait-text">加载中…</div>
             <div v-else class="portrait-text">没有挂起的待办，干得漂亮。</div>
           </div>
 
@@ -958,12 +970,7 @@ onBeforeUnmount(() => {
 .mood-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-mid); }
 .mood-legend-dot { width: 7px; height: 7px; border-radius: 50%; }
 
-/* todo rows + user tags */
-.todo-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px;
-}
-.todo-row:last-child { border-bottom: none; }
+/* user tags（未完成的事已升级为 TodoChainCard 证据链，.todo-row 旧样式移除） */
 .user-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .user-tag {
   font-size: 12.5px; padding: 5px 13px; border-radius: var(--radius-full);

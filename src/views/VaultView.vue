@@ -19,8 +19,8 @@ import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import {
   validateVaultFile,
   VAULT_WHITELIST,
-  deriveMockDisplayName,
-  mockCategoryTag,
+  deriveDisplayName,
+  categoryLabel,
 } from '@/constants/fileTypes'
 import request from '@/api/request'
 
@@ -38,9 +38,6 @@ function openPreview(item) {
   if (item.deleted) return
   previewItem.value = item
 }
-
-/** mock 门（B /api/vault 已就绪；store.source==='mock' 时下载置灰） */
-const mockGate = computed(() => vault.source === 'mock')
 
 const FILTERS = [
   { key: 'all', label: '全部' },
@@ -114,7 +111,7 @@ function acceptFile(file) {
   pendingUpload.value = {
     file,
     description: '',
-    displayName: deriveMockDisplayName(file.name),
+    displayName: deriveDisplayName(file.name),
     category: v.category,
     file_type: v.ext,
   }
@@ -218,10 +215,6 @@ function flushAllPendingDeletes() {
 
 /** 下载（AssetCard 下载按钮；blob fetch 走 request 封装带鉴权，触发保存） */
 async function onDownload(item) {
-  if (mockGate.value) {
-    toast.info('下载将在 mock 关闭后可用')
-    return
-  }
   downloadingId.value = item.id
   try {
     // 拦截器 return response.data —— responseType:'blob' 时直接就是 Blob
@@ -309,7 +302,7 @@ const digestSummary = computed(() => {
           <span class="up-mini-icon"><FileTypeIcon :kind="pendingUpload.category || 'file'" /></span>
           <div class="up-mini-body">
             <div class="up-mini-name">{{ pendingUpload.displayName }}</div>
-            <div class="up-mini-meta">AI 已识别：{{ mockCategoryTag(pendingUpload.category) }}</div>
+            <div class="up-mini-meta">识别为：{{ categoryLabel(pendingUpload.category) }}</div>
           </div>
         </div>
         <input
@@ -386,7 +379,6 @@ const digestSummary = computed(() => {
           :data-asset-id="item.id"
           :item="item"
           :busy="busyId === item.id"
-          :mock-gate="mockGate"
           @preview="openPreview"
           @save="(d) => onSave(item, d)"
           @confirm="(d) => onConfirm(item, d)"

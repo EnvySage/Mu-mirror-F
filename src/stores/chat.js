@@ -490,71 +490,6 @@ export const useChatStore = defineStore('chat', () => {
     clearSavedSessionId()
   }
 
-  /**
-   * 注入演示消息（mock 态：对话文件卡三档 + 工具轨迹芯片演示）。
-   * B 的 vault_refs / tools_used 事件就绪后此函数仅作演示入口保留
-   * （ChatView 空态引导按钮调用；真链路数据全部走 SSE 事件解析）。
-   */
-  function pushDemoVaultMessage() {
-    if (sending.value) return
-    messages.value.push({ id: String(++msgId), role: 'user', content: '我的论文咋样了？顺便看看昨天传的东西' })
-    messages.value.push({
-      id: String(++msgId),
-      role: 'ai',
-      content: '根据你的开题报告，毕设目前推进到检索评测阶段：骨架已定型，接下来两周主要补三档消融实验。'
-        + '\n\n昨天传的东西我找到了：一份文档和一张合照。合照还没确认，我检索不到它的内容——你可以在回执卡或资产页补一句描述并确认，以后就好找了。',
-      route: 'HYBRID',
-      typing: false,
-      // 思考面板演示（SSE thinking 事件同构：thinking 为字符串累积）
-      thinking: '用户问论文进度 → 先检索 records 拿近期记录，再查 vault 找开题报告。'
-        + '\n开题报告命中强引用（quote 命中），摘要出推进阶段结论。'
-        + '\n合照 digest_status=extracted 未确认 → 检索不到内容，提醒用户补确认。',
-      sources: [],
-      // 工具轨迹芯片（meta.tools_used 同构）
-      toolsUsed: [
-        { id: 'd1', tool: 'find_item', summary: '开题报告' },
-        { id: 'd2', tool: 'search_records', summary: '9 月记录 · 12 条' },
-      ],
-      // 三档演示：强引用完整卡（quote）/ 弱引用芯片 / 模糊提及芯片
-      vaultRefs: normalizeVaultRefs([
-        {
-          vault_item_id: 7001,
-          display_name: '毕业论文-开题报告',
-          category: 'document',
-          file_type: 'pdf',
-          size_bytes: 2.1 * 1024 * 1024,
-          digest_status: 'confirmed',
-          created_at: daysAgoLocal(4),
-          quote: '…本课题采用 Planner-Executor 双层架构，检索评测选用 Recall@K 与 MRR 双指标，消融实验覆盖词典加权与时间衰减两个维度…',
-        },
-        {
-          vault_item_id: 7002,
-          display_name: 'IMG_0901 宿舍合照',
-          category: 'image',
-          file_type: 'jpg',
-          size_bytes: 3.4 * 1024 * 1024,
-          digest_status: 'extracted',
-          created_at: daysAgoLocal(3),
-        },
-        {
-          vault_item_id: null,
-          display_name: '昨天传的图片',
-          vague: true,
-          category: 'image',
-          digest_status: 'extracted',
-          created_at: daysAgoLocal(1),
-        },
-      ]),
-    })
-  }
-
-  /** n 天前 yyyy-MM-dd（demo 引用存入日期） */
-  function daysAgoLocal(n) {
-    const d = new Date()
-    d.setDate(d.getDate() - n)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
-
   return {
     messages,
     sending,
@@ -566,7 +501,6 @@ export const useChatStore = defineStore('chat', () => {
     historyLoading,
     historyError,
     sendMessage,
-    pushDemoVaultMessage,
     fetchSessions,
     loadSession,
     removeSession,

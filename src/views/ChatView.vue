@@ -11,7 +11,7 @@ import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
 import ToolTrail from '@/components/molecules/ToolTrail.vue'
 import ThinkingPanel from '@/components/molecules/ThinkingPanel.vue'
-import { validateVaultFile, deriveMockDisplayName, formatBytes } from '@/constants/fileTypes'
+import { validateVaultFile, deriveDisplayName, formatBytes } from '@/constants/fileTypes'
 import request from '@/api/request'
 
 /**
@@ -46,9 +46,6 @@ const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
 const receiptItems = computed(() =>
   vault.items.filter(i => i.digest_status === 'extracted' && i._receiptOpen)
 )
-
-/** mock 门（B /api/vault + vault_refs 就绪前预览/下载置灰） */
-const vaultMockGate = computed(() => vault.source === 'mock')
 
 /** 预览模态当前条目（null=关闭；VaultRefCard 预览按钮 → FilePreviewModal） */
 const previewItem = ref(null)
@@ -102,7 +99,7 @@ onMounted(() => {
   chat.restoreLastSession()
   // 常驻栏（≥1440px）与抽屉共用同一份列表，进页拉一次
   chat.fetchSessions()
-  // vault store：附件入口 + 消化回执数据源（mock 态含 otaku_it 三件套演示数据）
+  // vault store：附件入口 + 消化回执数据源
   vault.fetch()
 })
 
@@ -209,13 +206,13 @@ function acceptFile(file) {
   }
   pendingUpload.value = {
     file,
-    displayName: deriveMockDisplayName(file.name),
+    displayName: deriveDisplayName(file.name),
     category: v.category,
     file_type: v.ext,
   }
 }
 
-/** 上传卡 [就这样存] → vault store（mock 2s 后消化完成出回执） */
+/** 上传卡 [就这样存] → vault store（消化完成后轮询到 extracted 出回执卡） */
 async function confirmUpload({ description, displayName }) {
   if (!pendingUpload.value) return
   const file = pendingUpload.value.file
@@ -296,14 +293,6 @@ async function onReceiptRemove(item) {
   else toast.error(vault.error || '删除失败')
 }
 
-// ==================== 演示（mock 文件卡三档 + 工具轨迹） ====================
-
-/** 空态演示按钮：注入三档文件卡 + 工具轨迹演示气泡（真链路走 SSE 事件） */
-function showDemo() {
-  chat.pushDemoVaultMessage()
-  scrollToBottom()
-}
-
 /** 面板共用回调：打开会话（抽屉形态需先收起抽屉） */
 async function onOpenSession(id) {
   showSessions.value = false
@@ -360,10 +349,6 @@ async function onRemoveSession(id) {
             </div>
             <div class="empty-title">{{ emptyTitle }}</div>
             <div class="empty-desc">{{ emptyDesc }}</div>
-            <!-- 演示入口：mock 态看对话文件卡三档 + 工具轨迹（真链路就绪后自然被真实会话取代） -->
-            <button v-if="vaultMockGate" class="chat-demo-btn" @click="showDemo">
-              看看文件卡长什么样（演示）
-            </button>
           </div>
 
           <!-- 消息列表 -->
@@ -412,7 +397,6 @@ async function onRemoveSession(id) {
                     v-for="vr in msg.vaultRefs"
                     :key="vr.id"
                     :ref-item="vr"
-                    :mock-gate="vaultMockGate"
                     @preview="(it) => (previewItem = it)"
                     @download="downloadRef"
                   />
@@ -590,16 +574,6 @@ async function onRemoveSession(id) {
 
 /* 回执气泡：白底全宽（回执卡自身带边框，气泡退为容器） */
 .chat-msg-bubble-receipt { background: transparent; border: none; padding: 0; max-width: 100%; width: 100%; }
-
-/* 演示入口按钮（空态；B 接口就绪后 vaultMockGate=false 自动消失） */
-.chat-demo-btn {
-  margin-top: 16px;
-  font-size: 12.5px; color: var(--accent);
-  padding: 6px 16px; border-radius: var(--radius-full);
-  border: 1px dashed var(--accent);
-  transition: background .15s;
-}
-.chat-demo-btn:hover { background: var(--accent-soft); }
 
 /* 附件按钮（paperclip，无 emoji） */
 .chat-attach {

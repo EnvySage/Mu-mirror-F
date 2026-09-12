@@ -2,12 +2,14 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
+import { useStatsStore } from '@/stores/stats'
 import { useTodoStore } from '@/stores/todo'
 import { useToastStore } from '@/stores/toast'
 import ReviewPanel from '@/components/organisms/ReviewPanel.vue'
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
+const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const toast = useToastStore()
 
@@ -71,6 +73,9 @@ function updateDetailMode(r) {
     startPolling(r.id)
   } else if (r.status === 'reviewing') {
     ui.detailMode = 'review'
+    // 建议在处理过程中生成（不在审核时）：点进来时记录可能还是 processing，
+    // 那时拉到的建议是空的；轮询到审核态必须重拉一次，否则只有整页刷新才看得到
+    todoStore.fetch()
   } else if (r.status === 'failed') {
     ui.detailMode = 'failed'
   } else {
@@ -81,10 +86,22 @@ function updateDetailMode(r) {
 watch(() => ui.selectedRecordId, async (id) => {
   if (!id) return
   actionError.value = null
+  // 切记录 = 放弃上一张卡上暂存的裁决（未入库，不该带过来）
+  todoStore.clearStaged()
+  // 建议随"写日记分类"生成（不在审核时），打开记录时重拉一次，
+  // 保证审核窗口的建议卡是最新（刚写完日记就来审核的场景）
+  todoStore.fetch()
   const r = await recordsStore.fetchRecord(id)
   if (!r) return
   updateDetailMode(r)
-})
+  // immediate：DetailPanel 在 MainLayout 常驻，若 mounted 时 selectedRecordId 已有值
+  // （刷新后恢复/路由直达），watch 不会触发，首次进入就漏掉建议刷新
+}, { immediate: true })
+
+/** 建议卡证据行 → 切到证据所在记录（同 id 时组件内已拦截，不会走到这） */
+function openRecord(id) {
+  ui.selectedRecordId = id
+}
 
 watch(record, (newRecord, oldRecord) => {
   if (!newRecord || !ui.selectedRecordId) return
@@ -107,6 +124,8 @@ const showConfirm = computed(() => ui.detailMode === 'review')
 function close() {
   stopPolling()
   clearStepTimers()
+  // 未入库 → 暂存的裁决一并作废
+  todoStore.clearStaged()
   ui.showDetail = false
   ui.selectedRecordId = null
   actionError.value = null
@@ -125,10 +144,13 @@ async function onConfirm() {
   if (updated) {
     toast.success('已入库，向量已生成')
     ui.detailMode = 'view'
+    // 提交审核窗口暂存的待办裁决（审核态不落库，入库这一刻才生效）
+    const { failed } = await todoStore.commitStaged()
+    if (failed) toast.warning(`${failed} 条待办裁决提交失败，可在侧栏重试`)
     // 入库后可能产生待办登记行 / pending 状态建议（todo-registry-design.md §3.1/§3.2）：
-    // 刷新建议缓存——侧栏角标/建议卡下一次打开记录页即为最新；不在此处弹建议 toast
-    // （建议卡主体在侧栏，审核窗口保持轻量，取舍已在 F 日志声明）
+    // 刷建议 + 强制刷 stats（侧栏待办列表读 stats.todo.open_items，30s 缓存会挡住新登记项）
     todoStore.fetch()
+    statsStore.fetchStats(30, true)
   } else {
     actionError.value = recordsStore.error || '确认失败，请重试'
   }
@@ -226,8 +248,8 @@ async function deleteRecord() {
             </div>
           </div>
 
-          <!-- 审核 / 只读 -->
-          <ReviewPanel v-else :record="record" />
+          <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
+          <ReviewPanel v-else :record="record" @open-record="openRecord" />
         </div>
       </div>
     </Transition>

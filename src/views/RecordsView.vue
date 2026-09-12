@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
 import { useSummariesStore } from '@/stores/summaries'
 import { useStatsStore } from '@/stores/stats'
+import { useTodoStore } from '@/stores/todo'
 import { useToastStore } from '@/stores/toast'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
@@ -19,6 +20,7 @@ const ui = useUIStore()
 const recordsStore = useRecordsStore()
 const summariesStore = useSummariesStore()
 const statsStore = useStatsStore()
+const todoStore = useTodoStore()
 const toast = useToastStore()
 
 /** 按日期分组（倒序） */
@@ -107,6 +109,18 @@ watch(() => recordsStore.processingRecords.length, (n) => {
   if (n > 0 && !pollTimer) scheduleListPolling()
   if (n === 0) stopListPolling()
 }, { immediate: true })
+
+/**
+ * AI 全部处理完成后刷新待办数据
+ * 待办登记与状态建议都在处理过程中落库，处理完成前拉不到；
+ * 侧栏待办列表读 stats.todo.open_items（30s 缓存），不强制刷新就停在旧数据上，
+ * 只有整页刷新才看得到新待办。
+ */
+watch(() => recordsStore.processingRecords.length, (n, prev) => {
+  if (n !== 0 || !prev) return
+  todoStore.fetch()
+  statsStore.fetchStats(30, true)
+})
 
 onBeforeUnmount(stopListPolling)
 

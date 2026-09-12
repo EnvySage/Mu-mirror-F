@@ -14,7 +14,7 @@
  *  - 同 vault_item_id 多引用同气泡单卡 → 由父级 ChatView 按 vault_item_id 去重
  *
  * 预览/下载：交互态 emit preview/download 给父级（ChatView 挂 FilePreviewModal /
- * blob 下载）；mock 态（mockGate）按钮置灰提示。
+ * blob 下载）。
  */
 import { ref, computed } from 'vue'
 import { useToastStore } from '@/stores/toast'
@@ -38,8 +38,6 @@ const props = defineProps({
    * @property {'strong'|'weak'|'vague'} strength
    */
   refItem: { type: Object, required: true },
-  /** mock 态置灰预览/下载（B 接口就绪后由 store source 驱动置 false） */
-  mockGate: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['preview', 'download'])

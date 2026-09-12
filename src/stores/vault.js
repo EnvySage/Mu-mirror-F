@@ -7,7 +7,7 @@ import {
   deleteVaultItem as apiDeleteVaultItem,
   confirmVaultItem as apiConfirmVaultItem,
 } from '@/api/vault'
-import { VAULT_TOTAL_BYTES, deriveMockDisplayName, categoryOf } from '@/constants/fileTypes'
+import { VAULT_TOTAL_BYTES } from '@/constants/fileTypes'
 
 /**
  * Vault 资产 store（toolcalling-vault-design.md 3/§3.3b + fix-batch 第十四轮）
@@ -23,14 +23,13 @@ import { VAULT_TOTAL_BYTES, deriveMockDisplayName, categoryOf } from '@/constant
  *   skipped    仅保管（音视频零消化）
  *   failed     读取失败（只按文件名可找）
  *
- * mock 态（USE_MOCK=true）保留同构演示流：上传 pending → 2s extracted →
- * confirm 1s → confirmed；接真接口开关置 false 组件零改动。
+ * 上传后的消化由后端 @Async 完成：新条目 pending 起步，前端 2s 首查 + 最多 4 次重拉，
+ * 到 extracted 时开回执卡（音频 skipped 不开）。
  *
- * 字段口径（snake_case，与 request.js 拦截器输出一致；mock 同样给 snake_case）：
+ * 字段口径（snake_case，与 request.js 拦截器输出一致）：
  * @typedef {Object} VaultItem
  * @property {number|string} id
- * @property {string} display_name     展示名（B 契约：originalName 的 snake_case 归一名；
- *                                     mock 与真接口统一用 display_name 渲染）
+ * @property {string} display_name     展示名（B 契约：originalName 的 snake_case 归一名）
  * @property {string} original_name    清洗后原始文件名
  * @property {'document'|'image'|'audio'} category   大类（后端 kind；category 现为 contentType 口径）
  * @property {string} file_type        扩展名（pdf/jpg/mp3…）
@@ -43,31 +42,11 @@ import { VAULT_TOTAL_BYTES, deriveMockDisplayName, categoryOf } from '@/constant
  * @property {string} created_at
  */
 
-/** mock 开关：B vault REST + 确认端点已上线（fix-batch B6/B7），置 false 走真接口 */
-const USE_MOCK = false
+/** 消化轮询首查延迟（ms）：后端 digest @Async 秒级，给一次机会再确认 */
+const DIGEST_POLL_DELAY = 2000
 
-/** mock 延迟（ms） */
-const MOCK_DELAY = 200
-
-/** mock 自增 id 起点（避开真 id） */
-let mockSeq = 7000
-
-/** mock 消化时长（上传后 pending，2s 后转 extracted 出回执卡） */
-export const MOCK_DIGEST_DELAY = 2000
-
-/** mock 确认时长（confirm 1s 延迟改状态，任务 2 口径） */
-export const MOCK_CONFIRM_DELAY = 1000
-
-/**
- * x天前的 ISO 日期串（yyyy-MM-dd）
- * @param {number} n
- * @returns {string}
- */
-function daysAgo(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+/** 消化轮询最多重拉次数（超出则停手，回执卡由下次 fetch 驱动） */
+const DIGEST_MAX_TRIES = 4
 
 /**
  * 后端 VO → 前端渲染口径归一（camelCase 已被 request.js 拦截器转 snake_case；
@@ -93,88 +72,14 @@ function normalizeItem(raw) {
   }
 }
 
-/**
- * mock 三件套（otaku_it 人设 · 五态演示口径）
- * - 开题报告 PDF：confirmed（已确认可检索 12 段）——对话强引用主体
- * - 宿舍合照 jpg：extracted 描述为空——低信息置顶区 + 确认门禁演示
- * - 一首歌 mp3：skipped 零消化——"仅保管"状态
- * - 扫描件 PDF：failed——读取失败演示
- */
-function buildMockItems() {
-  return [
-    {
-      id: ++mockSeq,
-      display_name: '毕业论文-开题报告',
-      original_name: 'a3f9c2e1-开题报告_final_v2.pdf',
-      category: 'document',
-      file_type: 'pdf',
-      size_bytes: 2.1 * 1024 * 1024,
-      digest_status: 'confirmed',
-      description: 'RAG 检索方向的毕设开题报告 · 学习资料',
-      chunk_count: 12,
-      quota_used_bytes: 0,
-      quota_bytes: 0,
-      created_at: daysAgo(4),
-      deleted: false,
-    },
-    {
-      id: ++mockSeq,
-      display_name: 'IMG_0901 宿舍合照',
-      original_name: 'IMG_20260901_2214.jpg',
-      category: 'image',
-      file_type: 'jpg',
-      size_bytes: 3.4 * 1024 * 1024,
-      digest_status: 'extracted',
-      description: '',
-      chunk_count: 0,
-      quota_used_bytes: 0,
-      quota_bytes: 0,
-      created_at: daysAgo(3),
-      deleted: false,
-    },
-    {
-      id: ++mockSeq,
-      display_name: '夜空中最亮的星 (Live)',
-      original_name: 'song_09.mp3',
-      category: 'audio',
-      file_type: 'mp3',
-      size_bytes: 8.7 * 1024 * 1024,
-      digest_status: 'skipped',
-      description: '逃跑计划 · 音频保管（ID3 元数据）',
-      chunk_count: 0,
-      quota_used_bytes: 0,
-      quota_bytes: 0,
-      created_at: daysAgo(9),
-      deleted: false,
-    },
-    {
-      id: ++mockSeq,
-      display_name: '扫描件_0042',
-      original_name: 'scan_0042.pdf',
-      category: 'document',
-      file_type: 'pdf',
-      size_bytes: 1.2 * 1024 * 1024,
-      digest_status: 'failed',
-      description: '',
-      chunk_count: 0,
-      quota_used_bytes: 0,
-      quota_bytes: 0,
-      created_at: daysAgo(6),
-      deleted: false,
-    },
-  ]
-}
-
 export const useVaultStore = defineStore('vault', () => {
   /** @type {import('vue').Ref<VaultItem[]>} */
   const items = ref([])
   const loading = ref(false)
   const uploading = ref(false)
   const error = ref(null)
-  /** 数据来源标记（mock / live） */
-  const source = ref(null)
 
-  /** 已用字节（真接口以每条目 quota_used_bytes 最新值为准；mock 按 items 累计） */
+  /** 已用字节（真接口以每条目 quota_used_bytes 最新值为准） */
   const usedBytes = ref(0)
   /** 总配额 */
   const totalBytes = ref(VAULT_TOTAL_BYTES)
@@ -228,24 +133,16 @@ export const useVaultStore = defineStore('vault', () => {
     loading.value = true
     error.value = null
     try {
-      if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, MOCK_DELAY))
-        items.value = buildMockItems()
-        recalcQuota()
-        source.value = 'mock'
+      const res = await apiGetVaultItems()
+      const list = Array.isArray(res.data) ? res.data : (res.data?.items || [])
+      items.value = list.map(normalizeItem)
+      // 配额：后端在每条目上带最新值，取最大（未上传过时回退本地累计=0）
+      const withQuota = items.value.find(i => i.quota_bytes > 0)
+      if (withQuota) {
+        usedBytes.value = withQuota.quota_used_bytes
+        totalBytes.value = withQuota.quota_bytes
       } else {
-        const res = await apiGetVaultItems()
-        const list = Array.isArray(res.data) ? res.data : (res.data?.items || [])
-        items.value = list.map(normalizeItem)
-        // 配额：后端在每条目上带最新值，取最大（未上传过时回退本地累计=0）
-        const withQuota = items.value.find(i => i.quota_bytes > 0)
-        if (withQuota) {
-          usedBytes.value = withQuota.quota_used_bytes
-          totalBytes.value = withQuota.quota_bytes
-        } else {
-          recalcQuota()
-        }
-        source.value = 'live'
+        recalcQuota()
       }
       return true
     } catch (err) {
@@ -257,15 +154,14 @@ export const useVaultStore = defineStore('vault', () => {
     }
   }
 
-  /** mock 态按 items 重算已用（真接口以后端 quota 为准） */
+  /** 按 items 重算已用（后端未回 quota 时的兜底，真值以后端 quota 为准） */
   function recalcQuota() {
     usedBytes.value = items.value.reduce((s, i) => s + (Number(i.size_bytes) || 0), 0)
   }
 
   /**
    * 上传文件（POST /api/vault/upload）
-   * 真接口：上传返回新条目（pending），消化异步进行 → extracted 时由轮询/重拉呈现回执卡；
-   * mock：本地造条目 pending，2s 后转 extracted 开回执卡。
+   * 上传返回新条目（pending），消化异步进行 → extracted 时由轮询/重拉呈现回执卡。
    * @param {File} file
    * @param {string} [description]
    * @returns {Promise<{ ok: boolean, item?: VaultItem, error?: string }>}
@@ -273,39 +169,14 @@ export const useVaultStore = defineStore('vault', () => {
   async function upload(file, description) {
     uploading.value = true
     try {
-      if (!USE_MOCK) {
-        const res = await apiUploadVaultItem(file, description)
-        const item = normalizeItem(res.data || {})
-        // 上传卡里用户已给的一句话描述立即呈现（后端会落库，本地同步防闪烁）
-        if (description && !item.description) item.description = description
-        items.value.unshift(item)
-        usedBytes.value = item.quota_used_bytes || (usedBytes.value + item.size_bytes)
-        if (item.quota_bytes) totalBytes.value = item.quota_bytes
-        source.value = 'live'
-        scheduleMockDigestIfAny(item)
-        return { ok: true, item }
-      }
-      await new Promise(r => setTimeout(r, MOCK_DELAY))
-      const ext = (file.name.split('.').pop() || '').toLowerCase()
-      const item = {
-        id: ++mockSeq,
-        display_name: deriveMockDisplayName(file.name),
-        original_name: file.name,
-        category: categoryOf(ext) || 'document',
-        file_type: ext,
-        size_bytes: file.size,
-        digest_status: 'pending',
-        description: description || '',
-        chunk_count: 0,
-        quota_used_bytes: 0,
-        quota_bytes: 0,
-        created_at: new Date().toISOString().slice(0, 10),
-        deleted: false,
-      }
+      const res = await apiUploadVaultItem(file, description)
+      const item = normalizeItem(res.data || {})
+      // 上传卡里用户已给的一句话描述立即呈现（后端会落库，本地同步防闪烁）
+      if (description && !item.description) item.description = description
       items.value.unshift(item)
-      recalcQuota()
-      source.value = 'mock'
-      scheduleMockDigestIfAny(item)
+      usedBytes.value = item.quota_used_bytes || (usedBytes.value + item.size_bytes)
+      if (item.quota_bytes) totalBytes.value = item.quota_bytes
+      pollDigestUntilDone(item)
       return { ok: true, item }
     } catch (err) {
       console.error('Failed to upload vault item:', err)
@@ -316,32 +187,20 @@ export const useVaultStore = defineStore('vault', () => {
   }
 
   /**
-   * 上传后等待消化完成（真接口：B digest @Async 秒级，但批量上传/SSE 高峰可能滞后，
-   * 2s 首查 + 最多 4 次重拉；mock：2s 后本地翻转状态）。状态离开 pending 且
-   * extracted 时开回执卡（音频 skipped 不开）。
+   * 上传后等待消化完成（B digest @Async 秒级，但批量上传/SSE 高峰可能滞后，
+   * 2s 首查 + 最多 4 次重拉）。状态离开 pending 且 extracted 时开回执卡
+   * （音频 skipped 不开）。
    * @param {VaultItem} item
    */
-  function scheduleMockDigestIfAny(item) {
-    if (!USE_MOCK && item.digest_status !== 'pending') return
-    const waitAndCheck = (delay) => new Promise(r => setTimeout(r, delay))
+  function pollDigestUntilDone(item) {
+    if (item.digest_status !== 'pending') return
+    const wait = (delay) => new Promise(r => setTimeout(r, delay))
     ;(async () => {
-      await waitAndCheck(MOCK_DIGEST_DELAY)
-      const maxTries = USE_MOCK ? 1 : 4
-      for (let i = 0; i < maxTries; i += 1) {
+      await wait(DIGEST_POLL_DELAY)
+      for (let i = 0; i < DIGEST_MAX_TRIES; i += 1) {
         const cur = items.value.find(i => i.id === item.id)
         if (!cur || cur.digest_status !== 'pending') {
           if (cur && cur.digest_status === 'extracted') cur._receiptOpen = true
-          return
-        }
-        if (USE_MOCK) {
-          if (cur.category === 'audio') {
-            cur.digest_status = 'skipped'
-            cur.description = cur.description || '音频保管（ID3 元数据）'
-          } else {
-            // 文本/图片如实 extracted：等用户确认才可检索（§3.3b）
-            cur.digest_status = 'extracted'
-          }
-          cur._receiptOpen = true
           return
         }
         await fetch()
@@ -358,13 +217,11 @@ export const useVaultStore = defineStore('vault', () => {
    */
   async function update(id, data) {
     try {
-      if (!USE_MOCK) {
-        // B 契约：PUT /vault/{id} 只吃 description/category（display_name 属 confirm 的 key）
-        const payload = {}
-        if (data.description !== undefined) payload.description = data.description
-        if (data.category !== undefined) payload.category = data.category
-        await apiUpdateVaultItem(id, payload)
-      }
+      // B 契约：PUT /vault/{id} 只吃 description/category（display_name 属 confirm 的 key）
+      const payload = {}
+      if (data.description !== undefined) payload.description = data.description
+      if (data.category !== undefined) payload.category = data.category
+      await apiUpdateVaultItem(id, payload)
       const item = items.value.find(i => i.id === id)
       if (item) {
         if (data.display_name !== undefined) item.display_name = data.display_name
@@ -391,21 +248,6 @@ export const useVaultStore = defineStore('vault', () => {
   async function confirmDigest(id, data = {}) {
     const item = items.value.find(i => i.id === id)
     try {
-      if (USE_MOCK) {
-        await new Promise(r => setTimeout(r, MOCK_CONFIRM_DELAY))
-        if (item) {
-          if (data.key) item.display_name = data.key
-          if (data.description !== undefined) item.description = data.description
-          if (data.category) item.category = data.category
-          if (item.digest_status !== 'skipped') {
-            item.digest_status = 'confirmed'
-            item.chunk_count = item.chunk_count || 12
-          } else {
-            item.digest_status = 'confirmed'
-          }
-        }
-        return true
-      }
       const payload = {}
       if (data.key) payload.key = data.key
       if (data.description !== undefined) payload.description = data.description
@@ -438,9 +280,9 @@ export const useVaultStore = defineStore('vault', () => {
    */
   async function remove(id, opts = {}) {
     try {
-      if (!USE_MOCK) await apiDeleteVaultItem(id, opts)
+      await apiDeleteVaultItem(id, opts)
       items.value = items.value.filter(i => i.id !== id)
-      if (USE_MOCK) recalcQuota()
+      await fetch()
       return true
     } catch (err) {
       console.error('Failed to delete vault item:', err)
@@ -456,7 +298,7 @@ export const useVaultStore = defineStore('vault', () => {
 
   return {
     items, filter,
-    loading, uploading, error, source,
+    loading, uploading, error,
     usedBytes, totalBytes, quotaPercent, quotaLabel,
     filteredItems, lowInfoItems, unconfirmedItems, digesting,
     fetch, upload, update, remove, confirmDigest, setFilter,
