@@ -326,8 +326,9 @@ function handleLogout() {
         </div>
       </div>
 
-      <!-- 审核 -->
-      <div class="settings-group">
+      <!-- 审核（软禁用：仅后端 autoReviewAvailable=true 时渲染整组；字段缺失/undefined 按 false 隐藏，
+           连同下方提示文案一并隐藏。契约字段 autoReviewAvailable 经拦截器转 snake_case 为 auto_review_available） -->
+      <div v-if="settingsStore.settings.auto_review_available === true" class="settings-group">
         <div class="settings-group-title">审核</div>
         <div class="settings-card card">
           <SettingsItem
