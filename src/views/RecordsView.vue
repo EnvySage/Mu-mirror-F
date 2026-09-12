@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
 import { useSummariesStore } from '@/stores/summaries'
@@ -68,11 +68,25 @@ function loadAll() {
   recordsStore.fetchRecords()
 }
 
+// ---- 侧栏形态：≥1440px 常驻右栏；窄屏（手机/平板）FAB + 抽屉 ----
+/** 与旧 CSS 断点同口径：1440px 以上侧栏常驻 */
+const WIDE_QUERY = '(min-width: 1440px)'
+const wideMql = window.matchMedia(WIDE_QUERY)
+const isWide = ref(wideMql.matches)
+/** 抽屉开合（仅窄屏有意义；转宽屏时强制收起，避免与常驻栏重复） */
+const showSidebarDrawer = ref(false)
+
+function onWideChange(e) {
+  isWide.value = e.matches
+  if (e.matches) showSidebarDrawer.value = false
+}
+
 onMounted(() => {
   filterDate.value ? loadByDate(filterDate.value) : loadAll()
   // 侧栏数据源：每日总结列表 + stats（stats store 内 30s 缓存，两页共用）
   summariesStore.fetchList()
   statsStore.fetchStats()
+  wideMql.addEventListener('change', onWideChange)
 })
 
 watch(() => props.date, (d) => {
@@ -122,7 +136,12 @@ watch(() => recordsStore.processingRecords.length, (n, prev) => {
   statsStore.fetchStats(30, true)
 })
 
-onBeforeUnmount(stopListPolling)
+onBeforeUnmount(() => {
+  stopListPolling()
+  wideMql.removeEventListener('change', onWideChange)
+  // 卸载时抽屉可能仍开着：body 滚动锁必须复位，否则切页后整页滚不动
+  document.body.style.overflow = ''
+})
 
 function openRecord(id) {
   ui.selectedRecordId = id
@@ -140,6 +159,22 @@ function openTodoRecord(recordId) {
 function openSummarySheet() {
   ui.openSummarySheet()
 }
+
+/** 抽屉内交互：先收起抽屉再执行（详情页/sheet 都是全屏层，叠在抽屉上会打架） */
+function onDrawerOpenRecord(recordId) {
+  showSidebarDrawer.value = false
+  openTodoRecord(recordId)
+}
+
+function onDrawerOpenSummaries() {
+  showSidebarDrawer.value = false
+  openSummarySheet()
+}
+
+/** 抽屉打开时锁 body 滚动（抽屉内自滚，背景不跟着动） */
+watch(showSidebarDrawer, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
 
 /** 瀑布入场：分组的全局序号（前序组卡片数累计），供 40ms 递增 delay */
 function groupIndex(group) {
@@ -209,12 +244,50 @@ async function onRetryRecord(record) {
           </div>
         </div>
 
-        <RecordsSidebar
-          @open-record="openTodoRecord"
-          @open-summaries="openSummarySheet"
-        />
+        <!-- 宽屏（≥1440px）：侧栏常驻右栏；窄屏由下方 FAB + 抽屉承载，此处不渲染 -->
+        <div v-if="isWide" class="records-aside">
+          <RecordsSidebar
+            @open-record="openTodoRecord"
+            @open-summaries="openSummarySheet"
+          />
+        </div>
       </div>
     </div>
+
+    <!-- 窄屏侧栏入口：悬浮按钮 → 抽屉（与 BottomNav 凸钮同区，避开导航高度） -->
+    <button
+      v-if="!isWide"
+      type="button"
+      class="sidebar-fab"
+      aria-label="打开概览侧栏"
+      title="概览"
+      @click="showSidebarDrawer = true"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>
+      </svg>
+    </button>
+
+    <!-- 侧栏抽屉（Teleport to body：脱离页面滚动容器；点遮罩/关闭收起） -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showSidebarDrawer" class="sidebar-overlay" @click="showSidebarDrawer = false" />
+      </Transition>
+      <Transition name="slide-right">
+        <div v-if="showSidebarDrawer" class="sidebar-drawer" role="dialog" aria-label="概览侧栏">
+          <div class="sidebar-drawer-head">
+            <span class="sidebar-drawer-title">概览</span>
+            <button type="button" class="sidebar-drawer-close" @click="showSidebarDrawer = false">关闭</button>
+          </div>
+          <div class="sidebar-drawer-body">
+            <RecordsSidebar
+              @open-record="onDrawerOpenRecord"
+              @open-summaries="onDrawerOpenSummaries"
+            />
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -238,13 +311,42 @@ async function onRetryRecord(record) {
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
-/* ===== 双栏：主列 fluid + 右侧栏 320px（≥1440px） ===== */
-.records-layout { display: block; }
-.records-sidebar { display: none; }
-@media (min-width: 1440px) {
-  .records-layout { display: flex; align-items: flex-start; gap: 18px; }
-  .records-main { flex: 1; min-width: 0; }
-  .records-sidebar { display: block; flex: 0 0 320px; width: 320px; position: sticky; top: 18px; }
+/* ===== 双栏：主列 fluid + 右侧栏 320px（≥1440px 常驻；窄屏走抽屉，见下） ===== */
+.records-layout { display: flex; align-items: flex-start; gap: 18px; }
+.records-main { flex: 1; min-width: 0; }
+.records-aside { flex: 0 0 320px; width: 320px; position: sticky; top: 18px; }
+
+/* ===== 窄屏侧栏入口：FAB + 右滑抽屉 ===== */
+.sidebar-fab {
+  position: fixed; z-index: 18;
+  right: 16px; bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
+  width: 44px; height: 44px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+}
+.sidebar-fab svg { width: 19px; height: 19px; stroke: var(--text-mid); }
+.sidebar-fab:active { transform: scale(.94); }
+@media (min-width: 1440px) { .sidebar-fab { display: none; } }
+
+.sidebar-overlay { position: fixed; inset: 0; z-index: 46; background: rgba(26,26,23,.35); }
+.sidebar-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 47;
+  width: min(88vw, 360px);
+  display: flex; flex-direction: column;
+  background: var(--ink); border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+}
+.sidebar-drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+}
+.sidebar-drawer-title { font-family: var(--font-display); font-size: 16px; }
+.sidebar-drawer-close { font-size: 13px; color: var(--text-mid); padding: 4px 2px; }
+.sidebar-drawer-close:hover { color: var(--accent); }
+.sidebar-drawer-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 12px 14px calc(20px + var(--safe-bottom));
 }
 
 /* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */
