@@ -98,9 +98,10 @@ export function getRecordSuggestions(id) {
  * 确认审查完成（阻塞数秒——含补分类 + Embedding，调用方需 loading 态）
  * @param {number|string} id - 记录ID
  * @param {Object} [payload] - 可选扩展 body
- * @param {Array} [payload.todoResolutions] - 关联待办裁决，随入库一起提交：
- *        [{ suggestionId: 123, action: 'confirmed', status: 'completed' },
- *         { suggestionId: 124, action: 'dismissed' }]
+ * @param {Array} [payload.todoResolutions] - 关联待办决议，随入库一起提交（每条恰好其一）：
+ *        AI 建议裁决：[{ suggestionId: 123, action: 'confirmed', status: 'completed' },
+ *                     { suggestionId: 124, action: 'dismissed' }]
+ *        手动挂载：  [{ todoId: 6, action: 'confirmed', status: 'not_started' }]
  *        （action=confirmed 时 status 必填：not_started / in_progress / completed）
  * @returns {Promise<{ code: number, data: RecordVO }>}
  */

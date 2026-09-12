@@ -5,16 +5,19 @@ import request from './request'
  *
  * GET    /todos/pending-suggestions   pending 建议列表（机器猜的，等用户裁决；
  *                                      侧栏只读展示 + 导航，裁决唯一入口 = 记录审核页）
+ * GET    /todos                       登记列表（审核页「手动关联待办」选择面板数据源；
+ *                                      后端按"未完成在前"排序，含已完成 todo）
  * DELETE /todos/{id}                  软删待办（侧栏「管理层操作」特例直点）
  * GET    /todos/open-chain            未完成待办证据链（TodoChainCard 数据源）
  *
  * 包装层：GET /todos/pending-suggestions → { data: { suggestions: [...] } }
  *         GET /todos/open-chain          → { data: { chains: [...] } }
+ *         GET /todos                     → { data: { todos: [...] } }
  * （读取端兼容裸数组，见 store 内的 unwrap）
  *
  * 已下线（随「状态变更唯一入口 = 记录审核页」重构）：旧直调 PUT /todos/{id}/status、
- * 逐条裁决 POST /todos/suggestions/{id}/resolve，以及旧 GET /todos 条目清单缓存
- * （仅服务直调反查 registry）；后端 B 侧同步删除前两个端点。
+ * 逐条裁决 POST /todos/suggestions/{id}/resolve；后端 B 侧同步删除这两个端点。
+ * （GET /todos 清单端点重新启用，仅用于审核页手动关联选择，不再做 registry 直调反查。）
  *
  * 字段口径（后端 camelCase，经 request.js 拦截器转 snake_case；证据为平铺字段，
  * 不是嵌套对象）：
@@ -52,6 +55,20 @@ export function getPendingSuggestions() {
  */
 export function getOpenChains() {
   return request.get('/todos/open-chain')
+}
+
+/**
+ * 待办登记列表（审核页「手动关联待办」选择面板数据源）
+ *
+ * 契约：GET /api/todos → { data: { todos: [{ id, title, currentStatus,
+ *   sourceChunkId, sourceExcerpt, orphan, linkCount, pendingSuggestionCount,
+ *   createdAt, closedAt }] } }
+ * 响应经 request.js 拦截器转 snake_case（current_status / source_chunk_id …）。
+ * 后端已加"未完成在前"排序，可选范围含已完成 todo（用户拍板）。
+ * @returns {Promise<{ code: number, data: { todos: Array } }>}
+ */
+export function getTodos() {
+  return request.get('/todos')
 }
 
 /**

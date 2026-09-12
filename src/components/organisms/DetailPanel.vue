@@ -141,8 +141,8 @@ async function onConfirm() {
   if (confirming.value) return
   confirming.value = true
   actionError.value = null
-  // 关联待办的每项选择随「确认入库」一起提交（todoResolutions）；
-  // 无待裁决项时不带该字段（body 可选扩展，契约见 api/records.js）
+  // 关联待办（AI 建议裁决 + 手动挂载）随「确认入库」一起提交（todoResolutions）；
+  // 无任何关联项时不带该字段（body 可选扩展，契约见 api/records.js）
   const todoResolutions = todoStore.resolutionsPayload
   const payload = todoResolutions.length ? { todoResolutions } : {}
   const updated = await recordsStore.confirmReview(ui.selectedRecordId, payload)

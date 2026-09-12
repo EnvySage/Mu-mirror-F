@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   getPendingSuggestions as apiGetPendingSuggestions,
   getOpenChains as apiGetOpenChains,
+  getTodos as apiGetTodos,
   deleteTodo as apiDeleteTodo,
 } from '@/api/todo'
 import { getRecordSuggestions as apiGetRecordSuggestions } from '@/api/records'
@@ -14,14 +15,16 @@ import { getRecordSuggestions as apiGetRecordSuggestions } from '@/api/records'
  * （删除待办、关联待办裁决），职责不同不并入。
  *
  * 数据来源：GET /todos/pending-suggestions、GET /todos/open-chain、
- * GET /records/{id}/suggestions、DELETE /todos/{id}，见 api/todo.js 与 api/records.js。
+ * GET /todos（登记列表，审核页手动关联选择面板）、GET /records/{id}/suggestions、
+ * DELETE /todos/{id}，见 api/todo.js 与 api/records.js。
  *
  * 写操作策略：乐观更新 + 失败回滚 + toast 反馈（成功 toast 由调用方发，
  * store 只负责数据一致性——失败时还原本地状态并把错误写进 error）。
  *
  * 注：状态变更唯一入口 = 记录审核页（随「确认入库」提交），故旧直调
  * （PUT /todos/{id}/status）、逐条裁决（POST /todos/suggestions/{id}/resolve）
- * 及配套的 resolve/setStatus/staged 暂存、registry 反查缓存已全部下线。
+ * 及配套的 resolve/setStatus/staged 暂存、registry 直调反查缓存已全部下线。
+ * （GET /todos 清单端点为「手动关联」选择面板重新启用，只读展示，不承担状态直调。）
  *
  * 字段口径（后端 camelCase，经 request.js 拦截器转 snake_case；证据为平铺字段）：
  * @typedef {Object} TodoSuggestion
@@ -33,6 +36,17 @@ import { getRecordSuggestions as apiGetRecordSuggestions } from '@/api/records'
  * @property {string} evidence_excerpt      证据摘录
  * @property {number|string} evidence_record_id  证据所在记录 id（跳记录详情）
  * @property {string} created_at
+ *
+ * @typedef {Object} TodoItem     GET /todos 登记条目（手动关联选择面板数据源）
+ * @property {number|string} id
+ * @property {string} title
+ * @property {'not_started'|'in_progress'|'completed'} current_status
+ * @property {number|string} [source_chunk_id]
+ * @property {boolean} [orphan]
+ * @property {number} [link_count]
+ * @property {number} [pending_suggestion_count]
+ * @property {string} [created_at]
+ * @property {string} [closed_at]
  *
  * @typedef {Object} TodoChain    GET /todos/open-chain 单条（未完成待办，createdAt DESC）
  * @property {number|string} todo_id
@@ -59,6 +73,20 @@ function unwrap(data, key) {
   return []
 }
 
+/**
+ * 多键名剥包装：兼容 { todos } / { list } / { items } 与裸数组（后端包装口径可能微调）
+ * @param {any} data
+ * @param {string[]} keys
+ * @returns {Array}
+ */
+function unwrapAny(data, keys) {
+  if (Array.isArray(data)) return data
+  for (const k of keys) {
+    if (Array.isArray(data?.[k])) return data[k]
+  }
+  return []
+}
+
 export const useTodoStore = defineStore('todo', () => {
   /** @type {import('vue').Ref<TodoSuggestion[]>} pending 建议列表 */
   const pendingSuggestions = ref([])
@@ -66,12 +94,28 @@ export const useTodoStore = defineStore('todo', () => {
   const chains = ref([])
   /** @type {import('vue').Ref<Array>} 审核页「关联待办」建议（GET /records/{id}/suggestions） */
   const recordSuggestions = ref([])
+  /** @type {import('vue').Ref<TodoItem[]>} 登记列表（GET /todos，手动关联选择面板数据源） */
+  const registry = ref([])
+  /**
+   * @type {import('vue').Ref<Array<{todoId:any, title:string, currentStatus:string, status:string, seq:number}>>}
+   * 审核页「手动关联」行：status 预填 currentStatus（用户不改 = 只关联不改状态）；
+   * seq 用于与 AI 建议行按 todo 去重时"最后操作优先"。
+   */
+  const manualLinks = ref([])
+
+  /** 操作序号：AI 建议裁决 / 手动关联指向同一 todo 时，以最后一次操作为准（见 resolutionsPayload） */
+  let opSeq = 0
+  const nextSeq = () => ++opSeq
 
   const loading = ref(false)
   /** chains 独立 loading（数据源与宿主不同，单独按需拉取，不牵动主 fetch 的 loading） */
   const chainsLoading = ref(false)
   /** 审核页关联待办建议独立 loading（按记录切换拉取） */
   const recordSugLoading = ref(false)
+  /** 手动关联选择面板独立 loading（GET /todos） */
+  const registryLoading = ref(false)
+  /** registry 是否已成功拉取过（面板重复打开不重复请求；失败不置位，允许重试） */
+  let registryLoaded = false
   /** 删除进行中的 todo id（防双击，卡内删除按钮禁点） */
   const removingId = ref(null)
   const error = ref(null)
@@ -152,7 +196,7 @@ export const useTodoStore = defineStore('todo', () => {
       list.forEach(s => {
         const id = s.suggestion_id ?? s.suggestionId
         if (id == null) return
-        seed[id] = { action: 'confirmed', status: s.suggested_status ?? s.suggestedStatus }
+        seed[id] = { action: 'confirmed', status: s.suggested_status ?? s.suggestedStatus, seq: nextSeq() }
       })
       resolutions.value = seed
       return true
@@ -174,31 +218,128 @@ export const useTodoStore = defineStore('todo', () => {
    */
   function setSuggestionResolution(suggestionId, action, status) {
     if (suggestionId == null) return
-    resolutions.value = { ...resolutions.value, [suggestionId]: { action, status } }
+    resolutions.value = { ...resolutions.value, [suggestionId]: { action, status, seq: nextSeq() } }
   }
 
   /** 清空审核页裁决暂存（切换记录 / 入库完成后调用） */
   function clearResolutions() {
     recordSuggestions.value = []
     resolutions.value = {}
+    manualLinks.value = []
   }
 
   /**
-   * confirm body 的 todoResolutions：把每项选择映射成契约结构
-   * （已忽略 → action=dismissed；选了状态 → action=confirmed+status）
-   * @returns {Array<{suggestionId:any, action:string, status?:string}>}
+   * 拉取待办登记列表（审核页「手动关联」选择面板；GET /todos）
+   *
+   * registryLoaded 置位后重复打开不重复请求；force=true 强制刷新（用完即弃场景）。
+   * @param {boolean} [force]
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async function fetchRegistry(force = false) {
+    if (registryLoaded && !force) return true
+    registryLoading.value = true
+    try {
+      const res = await apiGetTodos()
+      registry.value = unwrapAny(res.data, ['todos', 'list', 'items'])
+      registryLoaded = true
+      return true
+    } catch (err) {
+      console.error('Failed to fetch todo registry:', err)
+      error.value = err.message || '待办列表加载失败'
+      return false
+    } finally {
+      registryLoading.value = false
+    }
+  }
+
+  /** 归一化 todo 主键（后端 TodoItemVO.id / 兼容 todo_id、todoId 口径） */
+  function todoIdOf(t) {
+    return t?.id ?? t?.todo_id ?? t?.todoId ?? null
+  }
+
+  /**
+   * 手动关联一个待办（审核页「＋ 手动关联待办」选中）
+   *
+   * 去重规则（用户拍板 #2）：
+   * - 已在手动列表 → 'exists'
+   * - 该 todo 的 AI 建议行存在且未被忽略 → 'already_suggested'（不产生第二行）
+   * - 该 todo 的 AI 建议行已被忽略 → 允许挂载（最终由 resolutionsPayload 按 seq 去重，手动为准）
+   *
+   * status 预填 current_status（用户不改 = 仅关联不改状态）。
+   * @param {TodoItem} todo
+   * @returns {'ok'|'exists'|'already_suggested'|'invalid'}
+   */
+  function addManualLink(todo) {
+    const todoId = todoIdOf(todo)
+    if (todoId == null) return 'invalid'
+    if (manualLinks.value.some(m => String(m.todoId) === String(todoId))) return 'exists'
+    const sug = recordSuggestions.value.find(
+      s => String(s.todo_id ?? s.todoId) === String(todoId))
+    if (sug) {
+      const sid = sug.suggestion_id ?? sug.suggestionId
+      const r = sid != null ? resolutions.value[sid] : null
+      if (!r || r.action !== 'dismissed') return 'already_suggested'
+    }
+    const currentStatus = todo.current_status ?? todo.currentStatus ?? todo.status ?? 'not_started'
+    manualLinks.value = [...manualLinks.value, {
+      todoId,
+      title: todo.title ?? todo.todo_title ?? todo.todoTitle ?? '未命名待办',
+      currentStatus,
+      status: currentStatus,
+      seq: nextSeq(),
+    }]
+    return 'ok'
+  }
+
+  /**
+   * 修改手动关联行的目标状态（不改状态时即预填的 currentStatus）
+   * @param {any} todoId
+   * @param {string} status
+   */
+  function setManualLinkStatus(todoId, status) {
+    if (todoId == null || !status) return
+    manualLinks.value = manualLinks.value.map(m =>
+      String(m.todoId) === String(todoId) ? { ...m, status, seq: nextSeq() } : m)
+  }
+
+  /** 移除手动关联行 */
+  function removeManualLink(todoId) {
+    manualLinks.value = manualLinks.value.filter(m => String(m.todoId) !== String(todoId))
+  }
+
+  /**
+   * confirm body 的 todoResolutions：把每项选择映射成契约结构，两类条目混合提交
+   * - AI 建议裁决：{ suggestionId, action: 'confirmed'|'dismissed', status? }
+   * - 手动关联：  { todoId, action: 'confirmed', status }
+   *
+   * 按 todo 去重（用户拍板 #2）：同一 todo 的 AI 建议行与手动行同时存在时取 seq 最大者
+   * （最后一次操作）——被忽略的建议行 + 手动挂载同一 todo 时，最终只提交一条。
+   * @returns {Array<{suggestionId?:any, todoId?:any, action:string, status?:string}>}
    */
   const resolutionsPayload = computed(() => {
-    const out = []
+    /** todo 主键 → { seq, payload }（"最后操作为准"） */
+    const byTodo = new Map()
+    const consider = (key, seq, payload) => {
+      const prev = byTodo.get(key)
+      if (!prev || seq >= prev.seq) byTodo.set(key, { seq, payload })
+    }
     for (const s of recordSuggestions.value) {
       const id = s.suggestion_id ?? s.suggestionId
       if (id == null) continue
       const r = resolutions.value[id]
       if (!r) continue
-      if (r.action === 'dismissed') out.push({ suggestionId: id, action: 'dismissed' })
-      else out.push({ suggestionId: id, action: 'confirmed', status: r.status })
+      const tid = s.todo_id ?? s.todoId
+      const key = tid == null ? `s:${id}` : String(tid)
+      consider(key, r.seq ?? 0, r.action === 'dismissed'
+        ? { suggestionId: id, action: 'dismissed' }
+        : { suggestionId: id, action: 'confirmed', status: r.status })
     }
-    return out
+    for (const m of manualLinks.value) {
+      if (m.todoId == null) continue
+      consider(String(m.todoId), m.seq ?? 0,
+        { todoId: m.todoId, action: 'confirmed', status: m.status || m.currentStatus })
+    }
+    return [...byTodo.values()].map(e => e.payload)
   })
 
   /**
@@ -229,10 +370,12 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   return {
-    pendingSuggestions, chains, recordSuggestions,
-    loading, chainsLoading, recordSugLoading, removingId, error, resolutions,
+    pendingSuggestions, chains, recordSuggestions, registry, manualLinks,
+    loading, chainsLoading, recordSugLoading, registryLoading, removingId, error, resolutions,
     pendingCount, resolutionsPayload,
-    fetch, fetchChains, fetchRecordSuggestions,
-    setSuggestionResolution, clearResolutions, removeTodo,
+    fetch, fetchChains, fetchRecordSuggestions, fetchRegistry,
+    setSuggestionResolution, clearResolutions,
+    addManualLink, setManualLinkStatus, removeManualLink,
+    removeTodo,
   }
 })
