@@ -3,23 +3,23 @@ import request from './request'
 /**
  * 待办登记表 API（todo-registry-design.md §2/§3.3/§4 F 行，B Agent 提供）
  *
- * GET  /todos/pending-suggestions      pending 建议列表（机器猜的，等用户裁决）
- * POST /todos/suggestions/{id}/resolve 裁决（confirmed 带状态 / dismissed 永久静默）
- * PUT  /todos/{id}/status              侧栏直调三态（本轮重构后已停用：状态变更唯一入口
- *                                      改为记录审核页随「确认入库」提交；保留导出供兼容）
- * DELETE /todos/{id}                   软删待办（侧栏「管理层操作」特例直点）
- * GET  /todos                          登记表条目（开放清单，用于 open_items 缺
- *                                      todo_id 时按 title 反查——契约待 B 定稿，
- *                                      前端只消费 id/title/current_status 三个字段）
+ * GET    /todos/pending-suggestions   pending 建议列表（机器猜的，等用户裁决；
+ *                                      侧栏只读展示 + 导航，裁决唯一入口 = 记录审核页）
+ * DELETE /todos/{id}                  软删待办（侧栏「管理层操作」特例直点）
+ * GET    /todos/open-chain            未完成待办证据链（TodoChainCard 数据源）
  *
  * 包装层：GET /todos/pending-suggestions → { data: { suggestions: [...] } }
- *         GET /todos                     → { data: { todos: [...] } }
+ *         GET /todos/open-chain          → { data: { chains: [...] } }
  * （读取端兼容裸数组，见 store 内的 unwrap）
+ *
+ * 已下线（随「状态变更唯一入口 = 记录审核页」重构）：旧直调 PUT /todos/{id}/status、
+ * 逐条裁决 POST /todos/suggestions/{id}/resolve，以及旧 GET /todos 条目清单缓存
+ * （仅服务直调反查 registry）；后端 B 侧同步删除前两个端点。
  *
  * 字段口径（后端 camelCase，经 request.js 拦截器转 snake_case；证据为平铺字段，
  * 不是嵌套对象）：
  * @typedef {Object} TodoSuggestion
- * @property {number|string} id             建议 id（裁决端点路径参数）
+ * @property {number|string} id             建议 id（关联待办裁决 body 的 suggestionId）
  * @property {number|string} todo_id        关联登记表条目 id
  * @property {string} title                 待办标题
  * @property {'not_started'|'in_progress'|'completed'} current_status   条目当前状态
@@ -35,39 +35,6 @@ import request from './request'
  */
 export function getPendingSuggestions() {
   return request.get('/todos/pending-suggestions')
-}
-
-/**
- * 裁决建议（用户主权：确认带三态可改 LLM 建议；忽略永久静默同一证据）
- * @param {number|string} id - 建议 id（TodoSuggestion.id）
- * @param {'confirmed'|'dismissed'} action
- * @param {string} [status] - action=confirmed 时必带：用户最终选定的状态
- * @returns {Promise<{ code: number, data: Object|null }>}
- */
-export function resolveSuggestion(id, action, status) {
-  return request.post(`/todos/suggestions/${id}/resolve`, {
-    action,
-    ...(action === 'confirmed' && status ? { status } : {}),
-  })
-}
-
-/**
- * 侧栏直调：改待办状态（chunk.metadata.taskStatus + registry.current_status 事务双写）
- * @param {number|string} id - todo_registry.id
- * @param {'not_started'|'in_progress'|'completed'} status
- * @returns {Promise<{ code: number, data: Object|null }>}
- */
-export function setTodoStatus(id, status) {
-  return request.put(`/todos/${id}/status`, { status })
-}
-
-/**
- * 登记表条目清单（开放项；用于 open_items ↔ registry 关联反查）
- * @returns {Promise<{ code: number, data: { todos: Array<{ id: number|string, title: string,
- *            current_status: string, source_chunk_id?: number|string }> } }>}
- */
-export function getTodos() {
-  return request.get('/todos')
 }
 
 /**

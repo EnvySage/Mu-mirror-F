@@ -12,7 +12,7 @@ import { useTodoStore } from '@/stores/todo'
  *
  * 行为：
  *  - 页面不可见（切标签页/最小化）时跳过本轮，回到前台自动继续
- *  - 正在裁决（resolvingId 非空）或有请求在飞（loading）时跳过本轮，不覆盖用户操作
+ *  - 正在删除待办（removingId 非空）或有请求在飞（loading）时跳过本轮，不覆盖用户操作
  *  - 建议条数变化时回调 onChange：说明后端有新增，调用方可顺带刷新 stats 等聚合
  *
  * @param {{ interval?: number, onChange?: (next: number, prev: number) => void }} options
@@ -24,7 +24,7 @@ export function useTodoPolling({ interval = 15000, onChange } = {}) {
   let lastCount = -1
 
   async function tick() {
-    if (document.visibilityState === 'visible' && !todoStore.loading && !todoStore.resolvingId) {
+    if (document.visibilityState === 'visible' && !todoStore.loading && !todoStore.removingId) {
       await todoStore.fetch()
       const n = todoStore.pendingSuggestions.length
       if (lastCount >= 0 && n !== lastCount && onChange) onChange(n, lastCount)
