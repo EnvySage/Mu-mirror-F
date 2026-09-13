@@ -9,12 +9,10 @@ import { useToastStore } from '@/stores/toast'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
-import MoodBand from '@/components/charts/MoodBand.vue'
-import HourHeat from '@/components/charts/HourHeat.vue'
-import WeekdayBars from '@/components/charts/WeekdayBars.vue'
+import ActivityBand from '@/components/charts/ActivityBand.vue'
+import RhythmDist from '@/components/charts/RhythmDist.vue'
 import KeywordBars from '@/components/charts/KeywordBars.vue'
 import TodoRing from '@/components/charts/TodoRing.vue'
-import RecordFreq from '@/components/charts/RecordFreq.vue'
 import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 
 const mirror = useMirrorStore()
@@ -120,13 +118,13 @@ const moodLegend = computed(() => {
     .map(([key]) => ({ key, label: moodMap[key] || key, color: MOOD_COLOR[key] || '#A8A8A0' }))
 })
 
-/** RecordFreq 端点日期标注（08-07 / 09-05） */
-const freqRange = computed(() => {
+/** 频率摘要：日均（按有记录的天算）+ 活跃天数，补足稀疏柱状图的信息量 */
+const freqSummary = computed(() => {
   const daily = statsStore.record_daily
   if (!daily.length) return ''
-  const first = String(daily[0].date || '')
-  const last = String(daily[daily.length - 1].date || '')
-  return first.length >= 10 && last.length >= 10 ? `${first.slice(5)} / ${last.slice(5)}` : ''
+  const total = daily.reduce((a, d) => a + (d.count || 0), 0)
+  const active = daily.filter(d => (d.count || 0) > 0).length
+  return active ? `日均 ${(total / active).toFixed(1)} 条 · 活跃 ${active} 天` : ''
 })
 
 // ===== 任务 A：快照历史轨迹 + 查看 + 对比 =====
@@ -499,73 +497,82 @@ onBeforeUnmount(() => {
           </template>
         </div>
 
-        <!-- mirror-hero：展示当前查看的快照（默认最新） -->
+        <!-- mirror-hero：左主文案 + 右指标栏（右栏消化超宽屏的大片右侧留白） -->
         <div :class="['mirror-hero', 'card', { settled: justSettled }]">
           <div class="mirror-hero-inner">
-          <div class="mirror-greeting">这是我在你身上看到的</div>
-          <div class="mirror-name">{{ mirrorName }}</div>
-          <div v-if="!mirror.isEmpty" class="mirror-viewing-line">
-            正在查看：{{ shortDateTime(mirror.profile.created_at) }}
-            <span :class="['snapshot-type-badge', `badge-${mirror.profile.snapshot_type === 'monthly' ? 'monthly' : 'manual'}`]">
-              {{ mirror.profile.snapshot_type === 'monthly' ? '月度快照' : '手动快照' }}
-            </span>
-            <button
-              v-if="timeline.length && !timeline[0].viewing"
-              type="button"
-              class="back-latest-btn"
-              @click="onBackToLatest"
-            >回到最新</button>
-          </div>
-          <div v-if="mirror.drift" class="mirror-drift">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-            较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
-          </div>
-          <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
-          <div class="mirror-metrics">
-            <span v-for="(s, i) in stats" :key="i" class="metric">
-              <b class="metric-num">{{ s.display }}</b>
-              <span class="metric-label">{{ s.label }}</span>
-            </span>
-            <span class="metric-note">近 30 天实时统计（与所选快照无关）</span>
-          </div>
-          <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
-            {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
-          </button>
+            <div class="mirror-hero-main">
+              <div class="mirror-greeting">这是我在你身上看到的</div>
+              <div class="mirror-name">{{ mirrorName }}</div>
+              <div v-if="!mirror.isEmpty" class="mirror-viewing-line">
+                正在查看：{{ shortDateTime(mirror.profile.created_at) }}
+                <span :class="['snapshot-type-badge', `badge-${mirror.profile.snapshot_type === 'monthly' ? 'monthly' : 'manual'}`]">
+                  {{ mirror.profile.snapshot_type === 'monthly' ? '月度快照' : '手动快照' }}
+                </span>
+                <button
+                  v-if="timeline.length && !timeline[0].viewing"
+                  type="button"
+                  class="back-latest-btn"
+                  @click="onBackToLatest"
+                >回到最新</button>
+              </div>
+              <div v-if="mirror.drift" class="mirror-drift">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+                较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
+              </div>
+              <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
+              <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+                {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
+              </button>
+            </div>
+            <aside class="mirror-hero-stats" aria-label="近 30 天实时统计">
+              <div class="hero-stats-cap">近 30 天 · 实时</div>
+              <div v-for="(s, i) in stats" :key="i" class="hero-stat">
+                <b class="hero-stat-num">{{ s.display }}</b>
+                <span class="hero-stat-label">{{ s.label }}</span>
+              </div>
+            </aside>
           </div>
         </div>
 
         <!-- ===== 统计图区（R6 重排：色带全宽 → 三小卡 → 两卡 → portrait → 快照） ===== -->
 
-        <!-- 情绪趋势 30 天堆叠色带（全宽大图） -->
-        <div class="portrait-section card chart-card span-all" style="margin-top:12px">
+        <!-- 30 天活动带（全宽）：情绪与记录数融合在同一根时间轴上 -->
+        <div class="portrait-section card chart-card">
           <div class="chart-head">
-            <span class="section-label">MOOD TREND · 30D</span>
-            <span class="chart-head-note">实时统计（近 30 天） · 每天一根 · 按当日情绪占比分色</span>
+            <span class="section-label">ACTIVITY · 30D</span>
+            <span class="chart-head-note">柱高 = 当日记录数 · 柱内按情绪占比分色</span>
           </div>
-          <MoodBand :data="statsStore.mood_daily" />
-          <div v-if="moodLegend.length" class="chart-legend">
+          <ActivityBand :daily="statsStore.record_daily" :moods="statsStore.mood_daily" />
+          <div class="chart-legend">
             <span v-for="item in moodLegend" :key="item.key" class="chart-legend-item">
               <i class="legend-dot" :style="{ background: item.color }" />{{ item.label }}
             </span>
+            <span v-if="freqSummary" class="chart-legend-item mono">{{ freqSummary }}</span>
           </div>
         </div>
 
-        <!-- 三小卡一行：活跃时段 / 待办完成度 / 周节奏（≥1200px 三列，窄屏堆叠） -->
-        <div class="chart-row-3">
+        <!-- 活跃节律（全宽）：24 小时 + 一周，共用同一高度基准 -->
+        <div class="portrait-section card chart-card">
+          <div class="chart-head">
+            <span class="section-label">RHYTHM</span>
+            <span class="chart-head-note">实时统计 · 哪个时段 / 哪一天在记录</span>
+          </div>
+          <RhythmDist :hours="statsStore.hour_dist" :weekdays="statsStore.weekday_dist" />
+        </div>
+
+        <!-- 两卡一行：关键词 Top10 / 待办完成度 -->
+        <div class="chart-row-2">
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">HOUR HEAT</span>
-              <span class="chart-head-note">实时统计 · 24 小时</span>
+              <span class="section-label">KEYWORDS</span>
+              <span class="chart-head-note">实时统计 · Top 10</span>
             </div>
-            <HourHeat :data="statsStore.hour_dist" />
+            <div class="chart-body">
+              <KeywordBars :data="statsStore.keyword_top" />
+            </div>
             <div class="chart-legend">
-              <span class="chart-legend-item">颜色越深 = 该时段记录越多</span>
-              <span class="chart-legend-item heat-scale" aria-hidden="true">
-                <i class="heat-scale-cell" style="background:rgba(44,95,232,.14)" />
-                <i class="heat-scale-cell" style="background:rgba(44,95,232,.55)" />
-                <i class="heat-scale-cell" style="background:rgba(44,95,232,1)" />
-              </span>
+              <span class="chart-legend-item">条长 = 出现次数（右侧数值，悬浮可见「出现 N 次」）</span>
             </div>
           </div>
           <div class="portrait-section card chart-card">
@@ -574,41 +581,8 @@ onBeforeUnmount(() => {
               <span class="chart-head-note">近 30 天完成度</span>
             </div>
             <!-- 口径注释由 TodoRing 自带（.ring-note），此处不再重复渲染 -->
-            <TodoRing :todo="statsStore.todo" />
-          </div>
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">WEEKDAY</span>
-              <span class="chart-head-note">实时统计 · 一周节奏</span>
-            </div>
-            <WeekdayBars :data="statsStore.weekday_dist" />
-            <div class="chart-legend">
-              <span class="chart-legend-item">柱高 = 当日记录数（周一至周日）</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 两卡一行：关键词 Top10 / 记录频率 -->
-        <div class="chart-row-2">
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">KEYWORDS</span>
-              <span class="chart-head-note">实时统计 · Top 10</span>
-            </div>
-            <KeywordBars :data="statsStore.keyword_top" />
-            <div class="chart-legend">
-              <span class="chart-legend-item">条长 = 出现次数（右侧数值，悬浮可见「出现 N 次」）</span>
-            </div>
-          </div>
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">FREQUENCY</span>
-              <span class="chart-head-note">实时统计 · 每天记录数</span>
-            </div>
-            <RecordFreq :data="statsStore.record_daily" />
-            <div class="chart-legend">
-              <span class="chart-legend-item">每柱一天 · 高度 = 当日记录数</span>
-              <span v-if="freqRange" class="chart-legend-item mono">{{ freqRange }}</span>
+            <div class="chart-body">
+              <TodoRing :todo="statsStore.todo" />
             </div>
           </div>
         </div>
@@ -709,13 +683,29 @@ onBeforeUnmount(() => {
   padding: 10px 18px calc(96px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
+/* 模块间距与入场：原先是各卡零散 margin-top（8/12/14 不等）+ 单层淡投影，
+   结果卡片挨太近、边界糊成一片。改为统一相邻兄弟间距，配合 base.css 的双层投影 */
+.page-content > * + * { margin-top: 18px; }
+.page-content > * { animation: cardIn .5s cubic-bezier(.22, .8, .3, 1) backwards; }
+.page-content > *:nth-child(2) { animation-delay: 55ms; }
+.page-content > *:nth-child(3) { animation-delay: 110ms; }
+.page-content > *:nth-child(4) { animation-delay: 165ms; }
+.page-content > *:nth-child(5) { animation-delay: 220ms; }
+.page-content > *:nth-child(6) { animation-delay: 275ms; }
+.page-content > *:nth-child(7) { animation-delay: 330ms; }
+.page-content > *:nth-child(n+8) { animation-delay: 380ms; }
+/* backwards 而非 both：动画结束即交还 CSS 值，不抢占 .card:hover 的 transform */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @media (min-width: 900px) {
   /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
 /* ===== 快照时间线（压缩：头行合并对比开关，淡态去整卡） ===== */
-.timeline-card { padding: 12px 14px; margin-top: 8px; }
+.timeline-card { padding: 12px 14px; }
 .timeline-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .timeline-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .timeline-idle { margin-top: 8px; font-size: 11.5px; color: var(--text-low); }
@@ -808,7 +798,7 @@ onBeforeUnmount(() => {
 }
 
 /* ===== 对比区 ===== */
-.compare-card { margin-top: 12px; padding: 16px; border-color: var(--accent); }
+.compare-card { padding: 16px; border-color: var(--accent); }
 .delta-chip { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 9px; border-radius: var(--radius-full); }
 .tier-stable { color: var(--success); background: var(--success-bg); }
 .tier-minor { color: var(--warn); background: var(--warn-bg); }
@@ -870,10 +860,15 @@ onBeforeUnmount(() => {
   .compare-dim-cells { grid-template-columns: 1fr 1fr; gap: 12px; }
 }
 
-/* mirror-hero（白卡，无扫光） */
-.mirror-hero { position: relative; overflow: hidden; padding: 26px 22px; margin-top: 12px; text-align: left; }
-/* 超宽屏限文本行长（卡做全宽背景，内容限宽），避免 overall 总结一行拉太长 */
-.mirror-hero-inner { max-width: 720px; }
+/* mirror-hero（白卡，无扫光）：左主文案 + 右指标栏。
+   原 max-width:720px 限行长是对的（避免 overall 一行拉太长），但被限出来的右侧就白白空着；
+   改成两栏后既保住行长，又让右栏承接指标，超宽屏不再有大片留白 */
+.mirror-hero { position: relative; overflow: hidden; padding: 30px 32px; text-align: left; }
+/* 1.9 : 1 两列 —— 左栏读书写、右栏放指标。
+   关键：两列是比例分配而非"左栏限宽 + 右栏固定宽"，
+   否则剩余空间会全堆到右端变成一块死白（首版 flex 写法就是这个毛病） */
+.mirror-hero-inner { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 40px; align-items: stretch; }
+.mirror-hero-main { min-width: 0; }
 .mirror-hero.settled { animation: breatheOnce 1.1s ease; }
 .mirror-greeting { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .22em; color: var(--accent); margin-bottom: 8px; }
 .mirror-name { font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.3; }
@@ -896,21 +891,36 @@ onBeforeUnmount(() => {
   background: #F3EEFF;
 }
 .mirror-drift svg { width: 12px; height: 12px; stroke: #8B5CF6; fill: none; }
-.mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; }
+/* 行长限制从"整栏"挪到"段落"上：栏可以宽，但一行别超过 ~45 个汉字 */
+.mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; max-width: 640px; }
 
-/* 紧凑指标条：数字 + 标签横排一行（原三张 12px padding 大卡，占高过大） */
-.mirror-metrics {
-  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 18px;
-  margin-top: 14px; padding: 8px 12px;
-  border-radius: var(--radius-sm); background: var(--ink-2);
+/* 右侧指标栏：3 项横排、整组在栏内垂直居中；左缘竖线兼作主/次分区 */
+.mirror-hero-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  align-content: center; gap: 16px;
+  padding-left: 32px; border-left: 1px solid var(--line);
 }
-.metric { display: inline-flex; align-items: baseline; gap: 5px; }
-.metric-num {
-  font-family: var(--font-display); font-size: 17px; font-weight: 600;
-  color: var(--accent); font-variant-numeric: tabular-nums;
+.hero-stats-cap {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .16em;
+  color: var(--text-low);
 }
-.metric-label { font-size: 11.5px; color: var(--text-low); }
-.metric-note { margin-left: auto; font-size: 10.5px; color: var(--text-low); }
+.hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hero-stat-num {
+  font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  color: var(--accent); line-height: 1.15; font-variant-numeric: tabular-nums;
+}
+.hero-stat-label { font-size: 11.5px; color: var(--text-low); }
+
+@media (max-width: 899px) {
+  .mirror-hero { padding: 22px 18px; }
+  .mirror-hero-inner { grid-template-columns: 1fr; gap: 18px; }
+  .mirror-hero-stats {
+    padding-left: 0; padding-top: 16px; gap: 10px;
+    border-left: none; border-top: 1px solid var(--line);
+  }
+  .hero-stat-num { font-size: 21px; }
+}
 
 .mirror-generate {
   margin-top: 16px; width: 100%; padding: 12px; border-radius: 12px;
@@ -924,7 +934,12 @@ onBeforeUnmount(() => {
 .mirror-generate svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
 
 /* ===== 统计图区布局 ===== */
-.chart-card { min-width: 0; }
+/* 图表卡统一 flex 列：图例贴底、图表主体吃掉剩余高度（等高栅格下不再"内容堆顶、底部一片白"） */
+.chart-card { min-width: 0; display: flex; flex-direction: column; }
+.chart-body {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; justify-content: center;
+}
 .chart-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   margin-bottom: 14px;
@@ -940,19 +955,13 @@ onBeforeUnmount(() => {
 .chart-legend-item { display: inline-flex; align-items: center; gap: 5px; }
 .chart-legend-item.mono { font-family: var(--font-mono); font-size: 10px; }
 .legend-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-.heat-scale { gap: 2px; }
-.heat-scale-cell { width: 12px; height: 8px; border-radius: 2px; display: inline-block; }
-
-/* 三小卡：≥1200px 一行三列，窄屏堆叠 */
-.chart-row-3 { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
-@media (min-width: 700px) { .chart-row-3 { grid-template-columns: repeat(3, 1fr); } }
 
 /* 两卡：≥900px 一行两列（关键词列稍宽），窄屏堆叠 */
-.chart-row-2 { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+.chart-row-2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 900px) { .chart-row-2 { grid-template-columns: 1.2fr 1fr; } }
 
 /* portrait grid */
-.portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px; }
+.portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 900px) {
   .portrait-grid { grid-template-columns: repeat(2, 1fr); }
   .portrait-grid .card.span-2 { grid-column: span 2; }
