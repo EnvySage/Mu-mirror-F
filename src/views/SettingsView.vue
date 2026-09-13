@@ -21,6 +21,8 @@ const ui = useUIStore()
 
 /** 已忽略组折叠态 */
 const dismissedOpen = ref(false)
+/** 已生效组折叠态：默认收起——词典卡是管理入口不是阅读页，整卡长度不该随词条数无上限拉长 */
+const confirmedOpen = ref(false)
 /** 「教镜子一个词」空表单展开态 */
 const addOpen = ref(false)
 const addDraft = ref({ term: '', aliasesText: '', description: '' })
@@ -244,6 +246,7 @@ function handleLogout() {
       <div class="page-subtitle">模型 · 审核 · RAG · 数据</div>
     </div>
     <div class="page-content">
+      <div class="settings-wrap">
       <!-- AI 模型 -->
       <div class="settings-group">
         <div class="settings-group-title">AI 模型（加密存储 · 脱敏返回）</div>
@@ -282,8 +285,7 @@ function handleLogout() {
             action="edit"
             @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'claude-sonnet-5 / gpt-4o')"
           />
-          <div class="settings-item" style="cursor:default">
-            <span />
+          <div class="test-row">
             <button class="test-btn" :disabled="settingsStore.testLoading" @click="handleTestAi">
               {{ settingsStore.testLoading ? '测试中…' : '测试连接' }}
             </button>
@@ -408,31 +410,39 @@ function handleLogout() {
             </template>
             <div v-else class="glossary-empty">没有待确认的候选 · 凌晨任务会从近 14 天日记里学新词</div>
 
-            <!-- 2. 已生效 -->
-            <div class="glossary-group-head">
-              <span>已生效</span>
-              <span v-if="glossary.confirmed.length" class="glossary-badge glossary-badge-mid">{{ glossary.confirmed.length }}</span>
-            </div>
+            <!-- 2. 已生效（有词时默认收起，与已忽略组同一套折叠交互） -->
             <template v-if="glossary.confirmed.length">
-              <TermCard
-                v-for="t in glossary.confirmed"
-                :key="t.id"
-                :term="t"
-                group="confirmed"
-                :busy="busyTermId === t.id"
-                @confirm="onTermConfirm(t)"
-                @save="data => onTermSave(t, data)"
-                @dismiss="onTermDismiss(t)"
-                @open-source="onTermOpenSource"
-              />
+              <button class="glossary-group-head glossary-group-toggle" @click="confirmedOpen = !confirmedOpen">
+                <span>已生效</span>
+                <span class="glossary-badge glossary-badge-mid">{{ glossary.confirmed.length }}</span>
+                <span class="glossary-toggle-hint">{{ confirmedOpen ? '收起' : '展开' }}</span>
+                <svg :class="['glossary-caret', { open: confirmedOpen }]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <template v-if="confirmedOpen">
+                <TermCard
+                  v-for="t in glossary.confirmed"
+                  :key="t.id"
+                  :term="t"
+                  group="confirmed"
+                  :busy="busyTermId === t.id"
+                  @confirm="onTermConfirm(t)"
+                  @save="data => onTermSave(t, data)"
+                  @dismiss="onTermDismiss(t)"
+                  @open-source="onTermOpenSource"
+                />
+              </template>
             </template>
-            <div v-else class="glossary-empty">还没有已生效的词 · 确认候选或点上方「教镜子一个词」</div>
+            <template v-else>
+              <div class="glossary-group-head"><span>已生效</span></div>
+              <div class="glossary-empty">还没有已生效的词 · 确认候选或点上方「教镜子一个词」</div>
+            </template>
 
             <!-- 3. 已忽略（折叠） -->
             <template v-if="glossary.dismissed.length">
               <button class="glossary-group-head glossary-group-toggle" @click="dismissedOpen = !dismissedOpen">
                 <span>已忽略</span>
                 <span class="glossary-badge glossary-badge-low">{{ glossary.dismissed.length }}</span>
+                <span class="glossary-toggle-hint">{{ dismissedOpen ? '收起' : '展开' }}</span>
                 <svg :class="['glossary-caret', { open: dismissedOpen }]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
               <template v-if="dismissedOpen">
@@ -530,6 +540,7 @@ function handleLogout() {
           </SettingsItem>
         </div>
       </div>
+      </div>
 
       <!-- 编辑弹窗 -->
       <Teleport to="body">
@@ -591,24 +602,33 @@ function handleLogout() {
   padding: 10px 18px calc(96px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
+/* 桌面端侧距与镜子页同源（clamp 弹性），表单类内容的限宽居中交给内层 wrap——
+   原先 max-width 和 padding 挤在同一个盒子上，窄窗口时两组数值互相打架 */
 @media (min-width: 900px) {
-  .page-content { padding: 18px 32px 40px; max-width: 760px; margin: 0 auto; }
+  .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
+.settings-wrap { max-width: 720px; margin: 0 auto; }
 
-.settings-group { margin-bottom: 20px; }
+/* 分组间距统一由相邻兄弟控制（原先散落的 margin-bottom 与组内 note 的下 padding 叠加出不一致空隙） */
+.settings-wrap > * + * { margin-top: 22px; }
 .settings-group-title {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em;
-  color: var(--text-low); margin: 0 4px 8px;
+  color: var(--text-low); margin: 0 0 8px;
 }
 .settings-card { overflow: hidden; }
 
 .settings-note {
   font-size: 11.5px; color: var(--text-low); line-height: 1.6;
-  padding: 10px 16px 14px;
+  padding: 10px 16px 0; /* 底部空隙交给分组间距，不再自带 14px */
 }
 .settings-note.warn { color: var(--warn); }
 
-.protocol-chips { display: flex; gap: 8px; padding: 4px 16px 14px; }
+/* 卡内动作行：对齐 SettingsItem 的行节奏（分隔线上下留白均衡）——
+   早期这里借用 .settings-item 类名，但那套样式 scoped 在 SettingsItem 组件内，
+   本 div 实际一直是零 padding，按钮紧贴上下分隔线 */
+.test-row { padding: 12px 16px 14px; }
+
+.protocol-chips { display: flex; gap: 8px; padding: 12px 16px 14px; }
 
 .test-btn {
   font-size: 12.5px; color: var(--accent);
@@ -780,7 +800,12 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent)
 }
 .glossary-group-toggle { cursor: pointer; }
 .glossary-group-toggle:hover { color: var(--text-mid); }
-.glossary-caret { width: 12px; height: 12px; margin-left: auto; transition: transform .2s; }
+/* 折叠组（已生效 / 已忽略）共用：数量 badge 后跟"展开/收起"提示，箭头跟在其后 */
+.glossary-toggle-hint {
+  margin-left: auto; font-family: var(--font); font-size: 10.5px;
+  letter-spacing: 0; color: var(--text-low);
+}
+.glossary-caret { width: 12px; height: 12px; transition: transform .2s; }
 .glossary-caret.open { transform: rotate(90deg); }
 .glossary-badge {
   min-width: 17px; height: 17px; padding: 0 5px; border-radius: var(--radius-full);
