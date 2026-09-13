@@ -135,9 +135,12 @@ const weekBars = computed(() => build(props.weekdays, 7, 0.4))
 .rhythm-week .rhythm-tick { text-align: center; }
 
 @media (min-width: 900px) { .rhythm-svg { height: 132px; } }
-/* 窄屏上下堆叠：24 根柱挤在一行会变成发丝 */
+/* 窄屏上下堆叠：24 根柱挤在一行会变成发丝。
+   注意 column 方向下 align-items 管的是横向——flex-start 会让子块收缩成内容宽
+   （桌面 row 方向它只管纵向，所以这个坑只在移动端炸），必须显式恢复横向拉伸 */
 @media (max-width: 899px) {
   .rhythm { flex-direction: column; gap: 16px; }
+  .rhythm-block { align-self: stretch; }
   .rhythm-block.narrow { flex: 1 1 auto; }
 }
 </style>

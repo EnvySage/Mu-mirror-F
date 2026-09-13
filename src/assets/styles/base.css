@@ -30,7 +30,17 @@ a { color: var(--accent); text-decoration: none; }
   transition: transform .12s ease, box-shadow .12s ease;
 }
 @media (hover: hover) {
-  .card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(20, 20, 15, .06), 0 12px 24px -10px rgba(20, 20, 15, .14); }
+  /* 纯展示卡只加深阴影，不上浮：translateY 是"可点"的暗示，
+     而统计卡 / AI 分析卡这类卡片点下去没有任何反应，上浮等于在骗用户。
+     另外"纸"本来也不会跳起来，这样更贴晨纸的克制气质 */
+  .card:hover {
+    box-shadow: 0 2px 4px rgba(20, 20, 15, .07), 0 14px 28px -12px rgba(20, 20, 15, .16);
+  }
+  /* 真正可交互的卡片（快照节点等 button/a）保留上浮反馈 */
+  button.card:hover, a.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(20, 20, 15, .06), 0 12px 24px -10px rgba(20, 20, 15, .14);
+  }
 }
 
 /* ============ 按钮按压微交互 ============ */
@@ -38,6 +48,21 @@ button { transition: transform .1s ease; }
 button:active { transform: scale(.97); }
 /* 导航 / toggle / 日历格等自管 transform 的按钮不受全局缩放影响 */
 .calendar-day:active, .toggle:active { transform: none; }
+
+/* ============ 触控目标（仅在粗指针设备生效） ============
+   这批紧凑小按钮实测只有 17~28px 高，远低于 44×44 的可点区下限。
+   全站统一抬到 36px（紧凑型 UI 的折中值），桌面鼠标布局完全不受影响。
+   相邻目标间距另见各容器 gap，均已 ≥ 8px。 */
+@media (pointer: coarse) {
+  .back-latest-btn, .compare-toggle, .test-btn, .chip,
+  .ghost-btn, .ghost-select, .snapshot-chip, .lookback-select,
+  .glossary-add-btn, .glossary-cancel, .glossary-submit,
+  .glossary-group-toggle, .term-btn, .todo-circle-btn {
+    min-height: 36px;
+  }
+  /* 圆形关闭键需同时给宽，否则 min-height 只拉高会变椭圆 */
+  .modal-close { width: 36px; height: 36px; }
+}
 
 /* ============ 动效无障碍 ============ */
 @media (prefers-reduced-motion: reduce) {

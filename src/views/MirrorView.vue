@@ -14,6 +14,7 @@ import RhythmDist from '@/components/charts/RhythmDist.vue'
 import KeywordBars from '@/components/charts/KeywordBars.vue'
 import TodoRing from '@/components/charts/TodoRing.vue'
 import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
+import SelectMenu from '@/components/atoms/SelectMenu.vue'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
@@ -126,6 +127,12 @@ const freqSummary = computed(() => {
   const active = daily.filter(d => (d.count || 0) > 0).length
   return active ? `日均 ${(total / active).toFixed(1)} 条 · 活跃 ${active} 天` : ''
 })
+
+/**
+ * 统计区首次加载：loading 且尚无数据。
+ * 此时不能让图表走"暂无数据"分支——那会把"还没取到"说成"你没有记录"。
+ */
+const statsFirstLoad = computed(() => statsStore.loading && !statsStore.record_daily.length)
 
 // ===== 任务 A：快照历史轨迹 + 查看 + 对比 =====
 
@@ -259,6 +266,12 @@ function compareLabel(id) {
   return node ? `${node.full ? shortDateTime(node.full) : `#${id}`} · ${node.type}` : `#${id}`
 }
 
+/** A / B 对比下拉选项（SelectMenu 用） */
+const compareAOptions = computed(() =>
+  timeline.value.map(n => ({ value: n.id, label: compareLabel(n.id) })))
+const compareBOptions = computed(() =>
+  compareOptions.value.map(n => ({ value: n.id, label: compareLabel(n.id) })))
+
 async function onGenerate() {
   const ok = await mirror.generate()
   // 生成阻塞数十秒，期间用户可能已切页：卸载后只落 store 不弹 toast（无宿主 DOM）
@@ -282,6 +295,10 @@ function monthLabel(ym) {
   const m = Number(String(ym || '').slice(5, 7))
   return m ? `${m} 月` : String(ym || '')
 }
+
+/** 幽灵卡月份下拉选项（SelectMenu 用；原生 select 的下拉面板无法样式化） */
+const ghostMonthOptions = computed(() =>
+  mirror.generatableMonths.map(ym => ({ value: ym, label: monthLabel(ym) })))
 
 /**
  * 生成该月 monthly 快照：
@@ -372,9 +389,14 @@ onBeforeUnmount(() => {
               为没有镜子的月份照一镜
             </div>
             <div class="ghost-actions">
-              <select v-model="ghostMonth" class="ghost-select" aria-label="选择要生成月度画像的月份">
-                <option v-for="ym in mirror.generatableMonths" :key="ym" :value="ym">{{ monthLabel(ym) }}</option>
-              </select>
+              <SelectMenu
+                v-model="ghostMonth"
+                class="ghost-select"
+                :options="ghostMonthOptions"
+                size="sm"
+                :block="false"
+                aria-label="选择要生成月度画像的月份"
+              />
               <button type="button" class="ghost-btn" :disabled="mirror.generatingMonthly || !ghostMonth" @click="onGenerateMonthly">
                 <svg v-if="!mirror.generatingMonthly" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
                 {{ mirror.generatingMonthly ? '照镜中…' : '生成' }}
@@ -400,20 +422,26 @@ onBeforeUnmount(() => {
           <div class="compare-pickers">
             <label class="compare-picker">
               <span class="compare-picker-label">基准 A</span>
-              <select v-model="compareAId" class="compare-select">
-                <option v-for="node in timeline" :key="node.id" :value="node.id">
-                  {{ compareLabel(node.id) }}
-                </option>
-              </select>
+              <SelectMenu
+                v-model="compareAId"
+                class="compare-select"
+                :options="compareAOptions"
+                size="sm"
+                :block="false"
+                aria-label="对比基准 A"
+              />
             </label>
             <span class="compare-vs">vs</span>
             <label class="compare-picker">
               <span class="compare-picker-label">对比 B</span>
-              <select v-model="compareBId" class="compare-select">
-                <option v-for="node in compareOptions" :key="node.id" :value="node.id">
-                  {{ compareLabel(node.id) }}
-                </option>
-              </select>
+              <SelectMenu
+                v-model="compareBId"
+                class="compare-select"
+                :options="compareBOptions"
+                size="sm"
+                :block="false"
+                aria-label="对比对象 B"
+              />
             </label>
           </div>
 
@@ -538,12 +566,13 @@ onBeforeUnmount(() => {
         <!-- ===== 统计图区（R6 重排：色带全宽 → 三小卡 → 两卡 → portrait → 快照） ===== -->
 
         <!-- 30 天活动带（全宽）：情绪与记录数融合在同一根时间轴上 -->
-        <div class="portrait-section card chart-card">
+        <div class="portrait-section card chart-card zone-start">
           <div class="chart-head">
             <span class="section-label">ACTIVITY · 30D</span>
             <span class="chart-head-note">柱高 = 当日记录数 · 柱内按情绪占比分色</span>
           </div>
-          <ActivityBand :daily="statsStore.record_daily" :moods="statsStore.mood_daily" />
+          <ActivityBand v-if="!statsFirstLoad" :daily="statsStore.record_daily" :moods="statsStore.mood_daily" />
+          <div v-else class="sk-block sk-activity" aria-busy="true" />
           <div class="chart-legend">
             <span v-for="item in moodLegend" :key="item.key" class="chart-legend-item">
               <i class="legend-dot" :style="{ background: item.color }" />{{ item.label }}
@@ -552,28 +581,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 活跃节律（全宽）：24 小时 + 一周，共用同一高度基准 -->
-        <div class="portrait-section card chart-card">
-          <div class="chart-head">
-            <span class="section-label">RHYTHM</span>
-            <span class="chart-head-note">实时统计 · 哪个时段 / 哪一天在记录</span>
-          </div>
-          <RhythmDist :hours="statsStore.hour_dist" :weekdays="statsStore.weekday_dist" />
-        </div>
-
-        <!-- 两卡一行：关键词 Top10 / 待办完成度 -->
+        <!-- 节律 + 待办完成度（桌面并排，窄屏堆叠） -->
         <div class="chart-row-2">
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">KEYWORDS</span>
-              <span class="chart-head-note">实时统计 · Top 10</span>
+              <span class="section-label">RHYTHM</span>
+              <span class="chart-head-note">实时统计 · 哪个时段 / 哪一天在记录</span>
             </div>
-            <div class="chart-body">
-              <KeywordBars :data="statsStore.keyword_top" />
-            </div>
-            <div class="chart-legend">
-              <span class="chart-legend-item">条长 = 出现次数（右侧数值，悬浮可见「出现 N 次」）</span>
-            </div>
+            <RhythmDist v-if="!statsFirstLoad" :hours="statsStore.hour_dist" :weekdays="statsStore.weekday_dist" />
+            <div v-else class="sk-block sk-rhythm" aria-busy="true" />
           </div>
           <div class="portrait-section card chart-card">
             <div class="chart-head">
@@ -582,37 +598,55 @@ onBeforeUnmount(() => {
             </div>
             <!-- 口径注释由 TodoRing 自带（.ring-note），此处不再重复渲染 -->
             <div class="chart-body">
-              <TodoRing :todo="statsStore.todo" />
+              <TodoRing v-if="!statsFirstLoad" :todo="statsStore.todo" />
+              <div v-else class="sk-block sk-ring" aria-busy="true" />
             </div>
           </div>
         </div>
 
-        <!-- portrait-grid 四卡（现有 AI 分析） -->
-        <div class="portrait-grid">
-          <div class="portrait-section card">
-            <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:var(--accent)">
-                <svg viewBox="0 0 24 24" style="stroke:#fff"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-              </div>
-              <div class="portrait-section-title">情绪分布</div>
+        <!-- 关键词 + 情绪构成（桌面并排，窄屏堆叠） -->
+        <div class="chart-row-2">
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">KEYWORDS</span>
+              <span class="chart-head-note">实时统计 · Top 10</span>
             </div>
-            <div v-if="moodSegments.length" class="mood-bar">
-              <div
-                v-for="seg in moodSegments"
-                :key="seg.key"
-                class="mood-bar-seg"
-                :style="{ width: seg.pct + '%', background: seg.color }"
-              />
+            <div class="chart-body">
+              <KeywordBars v-if="!statsFirstLoad" :data="statsStore.keyword_top" />
+              <div v-else class="sk-block sk-keywords" aria-busy="true" />
             </div>
-            <div v-if="moodSegments.length" class="mood-legend">
-              <div v-for="seg in moodSegments" :key="seg.key" class="mood-legend-item">
-                <div class="mood-legend-dot" :style="{ background: seg.color }" />{{ seg.label }} {{ seg.pct }}%
-              </div>
+            <div class="chart-legend">
+              <span class="chart-legend-item">条长 = 出现次数（右侧数值，悬浮可见「出现 N 次」）</span>
             </div>
-            <!-- 空态：虚线占位条（原整卡只剩一句文案，改为紧凑一行） -->
-            <div v-else class="mood-empty">近 30 天无情绪数据 · 写几条带情绪的记录后自动统计</div>
-            <div v-if="mirror.profile.mood_analysis" class="portrait-text mood-note">{{ mirror.profile.mood_analysis }}</div>
           </div>
+          <div class="portrait-section card chart-card">
+            <div class="chart-head">
+              <span class="section-label">MOOD MIX</span>
+              <span class="chart-head-note">近 30 天 · 按出现次数</span>
+            </div>
+            <div class="chart-body">
+              <div v-if="moodSegments.length" class="mood-bar">
+                <div
+                  v-for="seg in moodSegments"
+                  :key="seg.key"
+                  class="mood-bar-seg"
+                  :style="{ width: seg.pct + '%', background: seg.color }"
+                />
+              </div>
+              <div v-if="moodSegments.length" class="mood-legend">
+                <div v-for="seg in moodSegments" :key="seg.key" class="mood-legend-item">
+                  <div class="mood-legend-dot" :style="{ background: seg.color }" />{{ seg.label }} {{ seg.pct }}%
+                </div>
+              </div>
+              <!-- 空态：虚线占位条 -->
+              <div v-else class="mood-empty">近 30 天无情绪数据 · 写几条带情绪的记录后自动统计</div>
+            </div>
+            <div v-if="mirror.profile.mood_analysis" class="portrait-text mood-note mood-note-card">{{ mirror.profile.mood_analysis }}</div>
+          </div>
+        </div>
+
+        <!-- AI 分析三卡 -->
+        <div class="portrait-grid zone-start">
 
           <div class="portrait-section card">
             <div class="portrait-section-header">
@@ -653,7 +687,7 @@ onBeforeUnmount(() => {
 
           <div class="portrait-section card">
             <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:#8B5CF6">
+              <div class="portrait-section-icon" style="background:var(--violet)">
                 <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
               </div>
               <div class="portrait-section-title">个人标签</div>
@@ -680,12 +714,15 @@ onBeforeUnmount(() => {
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 10px 18px calc(96px + var(--safe-bottom));
+  padding: 10px 18px var(--page-bottom-clearance);
   -webkit-overflow-scrolling: touch;
 }
 /* 模块间距与入场：原先是各卡零散 margin-top（8/12/14 不等）+ 单层淡投影，
    结果卡片挨太近、边界糊成一片。改为统一相邻兄弟间距，配合 base.css 的双层投影 */
 .page-content > * + * { margin-top: 18px; }
+/* 分区之间 28px、组内 18px —— 间距分级后"分区"才成立，
+   否则所有空隙一个尺寸，层次是平的（这也是此前"模块分界不明显"的另一半原因） */
+.page-content > .zone-start { margin-top: 28px; }
 .page-content > * { animation: cardIn .5s cubic-bezier(.22, .8, .3, 1) backwards; }
 .page-content > *:nth-child(2) { animation-delay: 55ms; }
 .page-content > *:nth-child(3) { animation-delay: 110ms; }
@@ -733,9 +770,9 @@ onBeforeUnmount(() => {
   padding: 1.5px 6px; border-radius: var(--radius-full); line-height: 1.3;
 }
 .badge-manual { color: var(--accent); background: var(--accent-soft); }
-.badge-monthly { color: #8B5CF6; background: #F3EEFF; }
+.badge-monthly { color: var(--violet); background: var(--violet-bg); }
 .snapshot-node.current .badge-manual { color: #FFFFFF; background: var(--accent); }
-.snapshot-node.current .badge-monthly { color: #FFFFFF; background: #8B5CF6; }
+.snapshot-node.current .badge-monthly { color: #FFFFFF; background: var(--violet); }
 .snapshot-viewing-tag { font-family: var(--font); font-size: 10px; color: var(--accent); }
 .snapshot-latest-tag { font-family: var(--font); font-size: 10px; color: var(--text-low); }
 
@@ -770,13 +807,8 @@ onBeforeUnmount(() => {
 .ghost-card:hover .ghost-head { color: var(--accent); }
 .ghost-card:hover .ghost-head svg { color: var(--accent); }
 .ghost-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.ghost-select {
-  font-size: 12.5px; color: var(--text-hi);
-  padding: 5px 8px; border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong); background: var(--card);
-  max-width: 100%; font-variant-numeric: tabular-nums;
-}
-.ghost-select:focus { outline: none; border-color: var(--accent); }
+/* 月份下拉走 atoms/SelectMenu.vue（原生 select 的下拉面板无法样式化，会溢出卡片） */
+.ghost-select { max-width: 100%; font-variant-numeric: tabular-nums; }
 .ghost-btn {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12.5px; font-weight: 600; color: var(--accent);
@@ -807,13 +839,8 @@ onBeforeUnmount(() => {
 .compare-pickers { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .compare-picker { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .compare-picker-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--text-low); }
-.compare-select {
-  font-size: 12px; color: var(--text-hi);
-  padding: 6px 9px; border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong); background: var(--card);
-  max-width: 100%;
-}
-.compare-select:focus { outline: none; border-color: var(--accent); }
+/* A/B 下拉走 atoms/SelectMenu.vue（同上：原生 popup 不可样式化） */
+.compare-select { max-width: 100%; }
 .compare-vs { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); padding-bottom: 7px; }
 .compare-loading { font-size: 12.5px; color: var(--text-low); padding: 14px 0; text-align: center; }
 
@@ -864,6 +891,14 @@ onBeforeUnmount(() => {
    原 max-width:720px 限行长是对的（避免 overall 一行拉太长），但被限出来的右侧就白白空着；
    改成两栏后既保住行长，又让右栏承接指标，超宽屏不再有大片留白 */
 .mirror-hero { position: relative; overflow: hidden; padding: 30px 32px; text-align: left; }
+/* 主卡身份：hero 是整页的视觉锚点，却和统计卡长得一模一样。
+   给它一档更重的投影（及对应的 hover 档），让页面第一次有主次 */
+.mirror-hero.card {
+  box-shadow: 0 4px 12px -6px rgba(20, 20, 15, .10), 0 18px 40px -18px rgba(20, 20, 15, .18);
+}
+.mirror-hero.card:hover {
+  box-shadow: 0 6px 16px -6px rgba(20, 20, 15, .12), 0 24px 52px -20px rgba(20, 20, 15, .22);
+}
 /* 1.9 : 1 两列 —— 左栏读书写、右栏放指标。
    关键：两列是比例分配而非"左栏限宽 + 右栏固定宽"，
    否则剩余空间会全堆到右端变成一块死白（首版 flex 写法就是这个毛病） */
@@ -886,11 +921,11 @@ onBeforeUnmount(() => {
 .back-latest-btn:hover { border-color: var(--accent); }
 .mirror-drift {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
-  font-size: 12px; color: #8B5CF6;
+  font-size: 12px; color: var(--violet);
   padding: 4px 12px; border-radius: var(--radius-full);
-  background: #F3EEFF;
+  background: var(--violet-bg);
 }
-.mirror-drift svg { width: 12px; height: 12px; stroke: #8B5CF6; fill: none; }
+.mirror-drift svg { width: 12px; height: 12px; stroke: var(--violet); fill: none; }
 /* 行长限制从"整栏"挪到"段落"上：栏可以宽，但一行别超过 ~45 个汉字 */
 .mirror-overall { font-size: 14px; line-height: 1.85; color: var(--text-mid); margin-top: 14px; max-width: 640px; }
 
@@ -907,7 +942,7 @@ onBeforeUnmount(() => {
 }
 .hero-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .hero-stat-num {
-  font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  font-family: var(--font-display); font-size: 34px; font-weight: 600;
   color: var(--accent); line-height: 1.15; font-variant-numeric: tabular-nums;
 }
 .hero-stat-label { font-size: 11.5px; color: var(--text-low); }
@@ -940,6 +975,25 @@ onBeforeUnmount(() => {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; justify-content: center;
 }
+
+/* 首次加载骨架：高度贴近各图表实际渲染高度，加载完不跳版 */
+.sk-block {
+  border-radius: var(--radius-sm);
+  background: var(--ink-2);
+  animation: skPulse 1.3s ease-in-out infinite;
+}
+.sk-activity { height: 110px; }
+.sk-rhythm { height: 140px; }
+.sk-keywords { height: 190px; }
+.sk-ring { height: 150px; }
+@keyframes skPulse {
+  0%, 100% { opacity: .5; }
+  50% { opacity: .85; }
+}
+@media (min-width: 900px) {
+  .sk-activity { height: 168px; }   /* 图高 150 + 日期轴 18 */
+  .sk-rhythm { height: 168px; }
+}
 .chart-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   margin-bottom: 14px;
@@ -958,7 +1012,7 @@ onBeforeUnmount(() => {
 
 /* 两卡：≥900px 一行两列（关键词列稍宽），窄屏堆叠 */
 .chart-row-2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
-@media (min-width: 900px) { .chart-row-2 { grid-template-columns: 1.2fr 1fr; } }
+@media (min-width: 900px) { .chart-row-2 { grid-template-columns: 1.4fr 1fr; } }
 
 /* portrait grid */
 .portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -967,10 +1021,13 @@ onBeforeUnmount(() => {
   .portrait-grid .card.span-2 { grid-column: span 2; }
 }
 @media (min-width: 1200px) {
-  .portrait-grid { grid-template-columns: repeat(4, 1fr); }
-  .portrait-grid .card.span-2 { grid-column: span 4; }
+  /* 情绪构成卡已上移与关键词并排，AI 分析区收敛为三卡 */
+  .portrait-grid { grid-template-columns: repeat(3, 1fr); }
+  .portrait-grid .card.span-2 { grid-column: span 3; }
 }
 .portrait-section { padding: 16px; }
+/* 桌面端放宽卡内呼吸：留白的"贵"感主要来自这里 */
+@media (min-width: 900px) { .portrait-section { padding: 20px; } }
 .portrait-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .portrait-section-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
 .portrait-section-icon svg { width: 15px; height: 15px; fill: none; stroke-width: 2; }
@@ -995,6 +1052,8 @@ onBeforeUnmount(() => {
   font-size: 11.5px; color: var(--text-low);
 }
 .mood-note { margin-top: 8px; font-size: 12.5px; }
+/* 情绪构成卡改用 chart-card 结构后，说明文字补卡内边距 */
+.mood-note-card { margin-top: 0; padding: 0 16px 14px; }
 
 /* user tags（未完成的事已升级为 TodoChainCard 证据链，.todo-row 旧样式移除） */
 .user-tags { display: flex; flex-wrap: wrap; gap: 8px; }

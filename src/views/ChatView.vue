@@ -11,6 +11,7 @@ import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
 import ToolTrail from '@/components/molecules/ToolTrail.vue'
 import ThinkingPanel from '@/components/molecules/ThinkingPanel.vue'
+import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { validateVaultFile, deriveDisplayName, formatBytes } from '@/constants/fileTypes'
 import request from '@/api/request'
 
@@ -164,6 +165,69 @@ function openSource(msg) {
   if (!msg.recordId) return
   ui.selectedRecordId = msg.recordId
   ui.showDetail = true
+}
+
+/**
+ * 正文引用角标切分：把 "…[1]…[F1]…" 切成 [文本, 角标] 序列，交给模板分段渲染。
+ *   [n]  → 日记资料引用（sources），按 n 定位
+ *   [Fn] → 文件引用（vaultRefs 独立编号空间），渲染成行内文件芯片
+ * 用分段渲染而非 v-html：AI 输出不可信，v-html 等于把注入面敞开。
+ */
+function parseCitations(content, sources, vaultRefs) {
+  const text = content || ''
+  const list = sources && sources.length ? sources : []
+  const refs = vaultRefs && vaultRefs.length ? vaultRefs : []
+  if (!list.length && !refs.length) return [{ type: 'text', value: text }]
+  const out = []
+  // [n] 与 [Fn] 一次扫完；排除 markdown 链接形态 [n](url)
+  const re = /\[(F?)(\d{1,3})\](?!\()/g
+  let last = 0
+  let m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ type: 'text', value: text.slice(last, m.index) })
+    const n = Number(m[2])
+    if (m[1]) {
+      out.push({ type: 'vault', n, ref: refs.find(r => Number(r.n) === n) || null })
+    } else {
+      out.push({ type: 'cite', n, source: findSource(list, n) })
+    }
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push({ type: 'text', value: text.slice(last) })
+  return out
+}
+
+/**
+ * 按编号取来源。
+ * 后端只回"被引用到的"子集（引用 [1][5] 时列表长度只有 2），编号会跳号 ——
+ * 必须用 source.n 定位；sources[n-1] 只在没有 n 的历史数据上回退（旧契约）。
+ */
+function findSource(sources, n) {
+  const byN = sources.find(s => Number(s.n) === n)
+  if (byN) return byN
+  if (sources.some(s => s.n != null)) return null // 新契约数据缺 n 就是真缺，别用下标凑
+  return sources[n - 1] || null
+}
+
+/** 角标悬浮：日期 + 摘录前 24 字 */
+function citeTitle(s) {
+  return `${s.date} · ${s.quote.slice(0, 24)}…`
+}
+
+/**
+ * 正文文件芯片 [Fn] 点击 → 与文件卡"预览"同口径
+ * （已删除 / 排队消化中给出提示，其余交给 FilePreviewModal）
+ */
+function openVaultRef(ref) {
+  if (ref.deleted) {
+    toast.info('文件已删除')
+    return
+  }
+  if (ref.digestStatus === 'pending') {
+    toast.info('索引中…稍后再试')
+    return
+  }
+  previewItem.value = ref
 }
 
 // ==================== 附件上传（任务 2） ====================
@@ -376,7 +440,29 @@ async function onRemoveSession(id) {
 
                 <!-- typing dots（thinking 进行中不出打字点，思考面板已表达"进行中"） -->
                 <span v-if="msg.typing && !msg.thinking" class="typing-dots"><i /><i /><i /></span>
-                <template v-else-if="!msg.typing">{{ msg.content }}</template>
+                <template v-else-if="!msg.typing">
+                  <template v-for="(seg, si) in parseCitations(msg.content, msg.sources, msg.vaultRefs)" :key="si">
+                    <button
+                      v-if="seg.type === 'cite' && seg.source"
+                      class="cite-chip"
+                      :title="citeTitle(seg.source)"
+                      @click="openSource(seg.source)"
+                    >{{ seg.n }}</button>
+                    <span v-else-if="seg.type === 'cite'">[{{ seg.n }}]</span>
+                    <!-- 文件引用 [Fn]：行内文件芯片（点击预览），不再以裸文本/加粗文件名出现 -->
+                    <button
+                      v-else-if="seg.type === 'vault' && seg.ref"
+                      class="cite-file-chip"
+                      :title="`文件 · ${seg.ref.displayName}`"
+                      @click="openVaultRef(seg.ref)"
+                    >
+                      <FileTypeIcon :kind="seg.ref.category || 'file'" />
+                      <span class="cite-file-name">{{ seg.ref.displayName }}</span>
+                    </button>
+                    <span v-else-if="seg.type === 'vault'" class="cite-file-plain">[F{{ seg.n }}]</span>
+                    <template v-else>{{ seg.value }}</template>
+                  </template>
+                </template>
 
                 <!-- sources 引用芯片 -->
                 <div v-if="msg.sources && msg.sources.length" class="chat-msg-sources">
@@ -502,7 +588,10 @@ async function onRemoveSession(id) {
 
 .page-content {
   flex: 1; min-height: 0; overflow: hidden;
-  padding: 10px 18px calc(96px + var(--safe-bottom));
+  /* 对话页底部是常驻输入条，且本页不挂「写日记」FAB（BottomNav 的 isChat 判断），
+     所以不能沿用为 FAB 预留的 --page-bottom-clearance(148px)：只留底栏 + 一点呼吸，
+     否则输入条下方会空出一大截（移动端尤其明显） */
+  padding: 10px 18px calc(var(--nav-height) + 18px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
   display: flex;
 }
@@ -554,6 +643,38 @@ async function onRemoveSession(id) {
   color: var(--text-low); margin-bottom: 7px;
 }
 .chat-route b { color: var(--text-mid); font-weight: 500; }
+
+/* 正文引用角标 [1] [2]：可点跳转 + hover 高亮 */
+.cite-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 17px; height: 17px; padding: 0 5px;
+  margin: 0 1px; vertical-align: 2px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--accent); background: var(--accent-soft);
+  border-radius: var(--radius-full);
+  transition: background .15s, color .15s;
+}
+.cite-chip:hover { background: var(--accent); color: #FFFFFF; }
+
+/* 正文文件引用 [F1]：行内文件芯片（图标 + 文件名，点击预览）
+   与数字角标同一视觉族，避免文件在正文里以裸文本/加粗文件名突兀出现 */
+.cite-file-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 100%; padding: 1px 8px; margin: 0 2px;
+  vertical-align: 2px;
+  font-size: 11.5px; color: var(--text-mid);
+  background: var(--ink-2); border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  transition: border-color .15s, color .15s;
+}
+.cite-file-chip svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--text-low); }
+.cite-file-chip:hover { border-color: var(--accent); color: var(--accent); }
+.cite-file-chip:hover svg { color: var(--accent); }
+.cite-file-name {
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* vault_refs 未命中时（文件卡缺失/已越界）退回朴素编号，不伪装成可点链接 */
+.cite-file-plain { color: var(--text-low); font-family: var(--font-mono); font-size: 11px; }
 
 /* sources 引用芯片 */
 .chat-msg-sources {

@@ -303,7 +303,7 @@ async function onRetryRecord(record) {
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 10px 18px calc(96px + var(--safe-bottom));
+  padding: 10px 18px var(--page-bottom-clearance);
   -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 900px) {
@@ -319,7 +319,8 @@ async function onRetryRecord(record) {
 /* ===== 窄屏侧栏入口：FAB + 右滑抽屉 ===== */
 .sidebar-fab {
   position: fixed; z-index: 18;
-  right: 16px; bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
+  /* 上移让位给右下角的写日记 FAB（52px + 14px 间距），否则两个按钮叠在一起 */
+  right: 16px; bottom: calc(var(--nav-height) + var(--safe-bottom) + 78px);
   width: 44px; height: 44px; border-radius: 14px;
   display: grid; place-items: center;
   background: var(--card); border: 1px solid var(--line);

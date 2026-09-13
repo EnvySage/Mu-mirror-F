@@ -4,29 +4,41 @@
    装饰服务内容：细线边框、纸感投影、无渐变、无发光、无玻璃拟态
    =================================================================== */
 :root {
-  /* 纸面 */
-  --ink: #FAFAF8;               /* 基色：暖白纸 */
-  --ink-2: #F3F2EE;             /* 次级底 */
+  /* 纸面
+     原 --ink #FAFAF8 与卡片白 #FFFFFF 对比度仅 1.02:1——几乎同色，
+     白卡在纸面上本体不可见，边界只能靠 1px 细线硬撑。
+     压深到 #F1F0EA（约 1.12:1）后卡片真正"浮"起来，分界是底色给的，不是描边给的 */
+  --ink: #F1F0EA;               /* 基色：暖白纸 */
+  --ink-2: #EDEBE4;             /* 次级底（卡内浅块，同幅压深以维持与白卡的差） */
   --card: #FFFFFF;              /* 卡片白 */
   --line: #E8E6E0;              /* 细线 */
   --line-strong: #D8D5CC;
 
   /* 文字 */
+  /* 文字三档：对比度（vs --card #FFF）依次为 17:1 / ~7:1 / ~4.8:1。
+     原 --text-low #A8A8A0 只有 2.4:1，低于 WCAG AA 的 4.5:1 门槛——
+     它承载了大量图表口径说明与刻度，既不可读也让整页显得灰扑扑 */
   --text-hi: #1A1A17;           /* 墨黑 */
-  --text-mid: #6B6B64;          /* 石墨灰 */
-  --text-low: #A8A8A0;
+  --text-mid: #56564F;          /* 石墨灰 */
+  --text-low: #6F6F67;          /* 次要：已过 AA 门槛，仍明显弱于正文 */
 
   /* 钢笔墨蓝（唯一 accent） */
   --accent: #2C5FE8;
   --accent-hover: #1E47B8;
   --accent-soft: #EEF2FE;       /* 淡蓝底：选中态 / 标签底 */
 
-  /* 语义色（配 .10~.12 透明底） */
+  /* 语义色（配 .10~.12 透明底）
+     按 WCAG AA 校准：作"文字"时对白/纸底 ≥ 4.5:1，作"底色"时其上白字 ≥ 4.5:1。
+     原 --warn #C98A1B 于纸底仅 2.82:1、原 --danger #D6455D 于白底 4.31:1，均未达标 */
   --success: #2E9E6B; --success-bg: rgba(46,158,107,.12);
-  --warn: #C98A1B;    --warn-bg: rgba(201,138,27,.12);
-  --danger: #D6455D;  --danger-bg: rgba(214,69,93,.12);
+  --warn: #9A6A10;    --warn-bg: rgba(154,106,16,.12);
+  --danger: #C93B52;  --danger-bg: rgba(201,59,82,.12);
   --processing: #5B6BE8; --processing-bg: rgba(91,107,232,.12);
-  --error: #D6455D;
+  --error: #C93B52;
+
+  /* 第二主色：时间 / 漂移 / 月度语义（区别于 accent 的"数据"语义）。
+     原先散落为 #8B5CF6 硬编码，且该色配 #F3EEFF 底只有 3.73:1 */
+  --violet: #7A45E8; --violet-bg: #F3EEFF;
 
   /* 几何 / 投影 */
   --radius: 12px; --radius-sm: 8px; --radius-full: 9999px;
@@ -43,6 +55,8 @@
   --nav-height: 62px;
   --sidebar-width: 264px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 移动端内容底部净空：底栏 62 + 悬浮写日记 FAB 52 + 上下呼吸（FAB 不压最后一张卡） */
+  --page-bottom-clearance: calc(148px + var(--safe-bottom));
 
   /* 兼容别名（历史组件遗留引用：MButton / ToastContainer） */
   --surface: #FFFFFF;

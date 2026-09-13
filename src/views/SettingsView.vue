@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/ui'
 import { exportData } from '@/api/export'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 import TermCard from '@/components/molecules/TermCard.vue'
+import SelectMenu from '@/components/atoms/SelectMenu.vue'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
@@ -112,13 +113,19 @@ const halfLifeEditing = ref(false)
 const halfLifeValue = computed(() => Number(settingsStore.settings.rag_half_life) || 30)
 const effectiveHalfLife = computed(() => (halfLifeEditing.value ? halfLifeDraft.value : halfLifeValue.value))
 
-/** mirror_lookback 回看深度（0-3，默认 1，rolling-mirror-design.md §2）：select 即时保存（同 chips/toggle 模式） */
+/** mirror_lookback 回看深度（0-3，默认 1，rolling-mirror-design.md §2）：选中即保存（同 chips/toggle 模式） */
 const lookbackOptions = [
   { value: 0, label: '只继承上月镜子', desc: '最省 · 生成时只带上月镜子全文，不翻原文' },
   { value: 1, label: '带上月原文', desc: '推荐 · 上月镜子 + 上月原文一起给 AI' },
   { value: 2, label: '带近三月原文', desc: '上月镜子 + 近三个月的原文' },
   { value: 3, label: '全部原文', desc: '慢 · 带全部历史原文，记录多时消耗大' },
 ]
+/** 触发器/菜单项显示形如 "1 = 带上月原文"，desc 作为菜单里的副行说明 */
+const lookbackSelectOptions = computed(() => lookbackOptions.map(o => ({
+  value: o.value,
+  label: `${o.value} = ${o.label}`,
+  desc: o.desc,
+})))
 const lookbackSaving = ref(false)
 const lookbackValue = computed(() => {
   const raw = settingsStore.settings.mirror_lookback
@@ -127,11 +134,11 @@ const lookbackValue = computed(() => {
   return Number.isFinite(n) && n >= 0 && n <= 3 ? n : 1
 })
 
-async function saveLookback(e) {
-  const val = Number(e.target.value)
-  if (val === lookbackValue.value || lookbackSaving.value) return
+async function onLookbackChange(val) {
+  const next = Number(val)
+  if (next === lookbackValue.value || lookbackSaving.value) return
   lookbackSaving.value = true
-  const ok = await settingsStore.updateSettings({ mirror_lookback: val })
+  const ok = await settingsStore.updateSettings({ mirror_lookback: next })
   lookbackSaving.value = false
   if (ok) toast.success('已保存回看深度')
   else toast.error(settingsStore.error || '保存失败')
@@ -271,7 +278,7 @@ function handleLogout() {
           </div>
           <SettingsItem
             icon="link"
-            icon-bg="#8B5CF6"
+            icon-bg="var(--violet)"
             label="API 地址"
             :description="settingsStore.settings.ai_base_url || '使用默认'"
             action="edit"
@@ -321,6 +328,14 @@ function handleLogout() {
             :description="settingsStore.settings.embedding_api_key || '未配置'"
             action="edit"
             @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 Embedding API Key')"
+          />
+          <SettingsItem
+            icon="layers"
+            icon-bg="var(--violet)"
+            label="模型"
+            :description="settingsStore.settings.embedding_model || '未配置'"
+            action="edit"
+            @click="openEdit('embedding_model', settingsStore.settings.embedding_model, 'Embedding 模型名称', 'BAAI/bge-m3')"
           />
         </div>
         <div class="settings-note">
@@ -473,15 +488,13 @@ function handleLogout() {
               <span class="lookback-label">原文回看深度</span>
               <span class="lookback-value">{{ lookbackValue }}</span>
             </div>
-            <select
-              class="lookback-select"
-              aria-label="生成镜子时带多少原文回看"
-              :value="lookbackValue"
+            <SelectMenu
+              :model-value="lookbackValue"
+              :options="lookbackSelectOptions"
               :disabled="lookbackSaving"
-              @change="saveLookback"
-            >
-              <option v-for="opt in lookbackOptions" :key="opt.value" :value="opt.value">{{ opt.value }} = {{ opt.label }}</option>
-            </select>
+              aria-label="生成镜子时带多少原文回看"
+              @update:model-value="onLookbackChange"
+            />
             <div v-if="lookbackValue === 3" class="lookback-warn">记录多时生成会变慢且消耗更多 token</div>
           </div>
           <div class="half-life-row">
@@ -599,7 +612,7 @@ function handleLogout() {
 
 .page-content {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 10px 18px calc(96px + var(--safe-bottom));
+  padding: 10px 18px var(--page-bottom-clearance);
   -webkit-overflow-scrolling: touch;
 }
 /* 桌面端侧距与镜子页同源（clamp 弹性），表单类内容的限宽居中交给内层 wrap——
@@ -657,13 +670,7 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent)
 .lookback-head { display: flex; justify-content: space-between; align-items: baseline; }
 .lookback-label { font-size: 14px; }
 .lookback-value { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
-.lookback-select {
-  width: 100%; font-size: 13px; color: var(--text-hi);
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong); background: var(--card);
-}
-.lookback-select:focus { outline: none; border-color: var(--accent); }
-.lookback-select:disabled { opacity: .55; }
+/* 下拉选择走 atoms/SelectMenu.vue（原生 select 的 popup 无法样式化，会溢出卡片） */
 .lookback-warn {
   font-size: 11.5px; color: var(--warn); line-height: 1.6;
   padding: 8px 10px; border-radius: var(--radius-sm);

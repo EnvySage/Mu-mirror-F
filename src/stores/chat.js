@@ -15,7 +15,10 @@ import {
  *   thinking   → { content }                          思考增量（与 delta 同构，流式多次到达；
  *                                                     模型不支持思考时该事件完全不出现）
  *   delta      → { content }                          回答增量（逐块追加渲染）
- *   sources    → [{ record_id, quote, date }]         来源追溯（引用芯片，点击跳详情）
+ *   sources    → [{ n, record_id, quote, date }]      来源追溯（引用芯片，点击跳详情）
+ *                                                      n = 正文里的 [n] 原始编号；
+ *                                                      后端只回被引用子集、编号会跳号，
+ *                                                      必须按 n 定位，不能按下标取
  *   vault_refs → [{ n, vault_item_id, display_name, file_type, size_bytes,
  *                   digest_status, quote, category?, created_at? }]  对话文件卡（4.1）
  *   done       → { sessionId, route, fallback }       结束标志（fallback=true 为兜底文案）
@@ -37,7 +40,7 @@ import {
  * @property {string} [thinking] 思考过程累积文本（仅本轮流式产生；历史消息永远没有）
  * @property {string} [route] - 意图路由（INTENT → HYBRID 等）
  * @property {boolean} [typing] - 是否正在打字
- * @property {{ recordId: number|string, quote: string, date: string }[]} [sources]
+ * @property {{ n: number|null, recordId: number|string, quote: string, date: string }[]} [sources]
  * @property {{ id: string, tool: string, summary: string }[]} [toolsUsed] 工具轨迹（气泡上方芯片行）
  * @property {Array} [vaultRefs] 对话文件卡引用（已去重归一化）
  */
@@ -107,6 +110,7 @@ export const useChatStore = defineStore('chat', () => {
       const key = r.vague ? `vague:${r.display_name || r.query || ''}` : String(r.vault_item_id)
       const item = {
         id: key,
+        n: r.n ?? null,
         vaultItemId: r.vault_item_id ?? null,
         displayName: r.display_name || r.original_name || '未命名文件',
         category: r.category || null,
@@ -277,7 +281,7 @@ export const useChatStore = defineStore('chat', () => {
         if (Array.isArray(payload)) {
           aiMsg.sources = payload
             .filter(s => s && s.record_id > 0)
-            .map(s => ({ recordId: s.record_id, quote: s.quote || '', date: s.date || '' }))
+            .map(s => ({ n: s.n ?? null, recordId: s.record_id, quote: s.quote || '', date: s.date || '' }))
         }
         break
       case 'vault_refs':
@@ -362,7 +366,7 @@ export const useChatStore = defineStore('chat', () => {
         typing: false,
         sources: (m.sources || [])
           .filter(s => s && s.record_id > 0)
-          .map(s => ({ recordId: s.record_id, quote: s.quote || '', date: s.date || '' })),
+          .map(s => ({ n: s.n ?? null, recordId: s.record_id, quote: s.quote || '', date: s.date || '' })),
         // 历史回放：B 在消息 VO 带出 tools_used / vault_refs 才有值，缺省空数组不渲染
         toolsUsed: normalizeToolsUsed(m.tools_used || []),
         vaultRefs: normalizeVaultRefs(m.vault_refs || []),
