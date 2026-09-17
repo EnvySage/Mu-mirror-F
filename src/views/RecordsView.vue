@@ -83,8 +83,8 @@ function onWideChange(e) {
 
 onMounted(() => {
   filterDate.value ? loadByDate(filterDate.value) : loadAll()
-  // 侧栏数据源：每日总结列表 + stats（stats store 内 30s 缓存，两页共用）
-  summariesStore.fetchList()
+  // 侧栏数据源：每日总结（只取最近 7 篇，全量浏览由「全部」弹窗游标分页）+ stats（30s 缓存，两页共用）
+  summariesStore.fetchList({ limit: 7 })
   statsStore.fetchStats()
   wideMql.addEventListener('change', onWideChange)
 })
