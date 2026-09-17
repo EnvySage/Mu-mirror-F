@@ -2,83 +2,46 @@ name: Deploy Mu-mirror
 
 on:
   push:
-    branches: [main]            # 推送到 main 触发部署
-  workflow_dispatch:            # 支持手动触发 / 回滚
-    inputs:
-      action:
-        description: 'deploy（默认）或 rollback'
-        required: false
-        default: 'deploy'
+    branches: [main]            # 推送到 main 触发构建
+  workflow_dispatch:
 
 permissions:
-  contents: read                # 最小权限
+  contents: write               # 需要创建 Release 上传构建产物
 
-# 防止连续推送时两次部署并发执行导致互相覆盖
 concurrency:
   group: deploy-mu-mirror
-  cancel-in-progress: false     # 排队执行，不取消前一个
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # ---------- 回滚分支 ----------
-      - name: 回滚到上一个版本
-        if: github.event.inputs.action == 'rollback'
-        uses: appleboy/ssh-action@v1.0.3
-        timeout-minutes: 5
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: deploy
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          timeout: 120s         # 国际链路丢包，默认 30s 容易超时
-          script: sudo /usr/local/bin/deploy-mirror.sh rollback
-
-      # ---------- 正常部署分支 ----------
       - uses: actions/checkout@v5
-        if: github.event.inputs.action != 'rollback'
 
       - uses: actions/setup-node@v5
-        if: github.event.inputs.action != 'rollback'
         with:
           node-version: '22'    # 项目要求 ^22.18.0 || >=24.12.0
           cache: 'npm'
 
       - name: 安装依赖
-        if: github.event.inputs.action != 'rollback'
         run: npm ci
 
       - name: 构建
-        if: github.event.inputs.action != 'rollback'
         run: npm run build
 
       - name: 打包 dist
-        if: github.event.inputs.action != 'rollback'
         run: tar -czf mu-mirror-dist.tar.gz -C dist .
 
-      - name: 上传到服务器
-        if: github.event.inputs.action != 'rollback'
-        uses: appleboy/scp-action@v0.1.7
-        timeout-minutes: 10
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: deploy
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          timeout: 120s         # 国际链路丢包，默认 30s 容易超时
-          source: "mu-mirror-dist.tar.gz"
-          target: "/tmp"
+      - name: 发布构建产物到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # 自动生成，无需手动配置
+        run: |
+          gh release create deploy \
+            --title "auto-deploy" \
+            --notes "auto build ${GITHUB_SHA}" \
+            --target main 2>/dev/null || true
+          gh release upload deploy mu-mirror-dist.tar.gz --clobber
 
-      - name: 原子发布（含校验与自动回滚）
-        if: github.event.inputs.action != 'rollback'
-        uses: appleboy/ssh-action@v1.0.3
-        timeout-minutes: 10
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: deploy
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          timeout: 120s         # 国际链路丢包，默认 30s 容易超时
-          script: sudo /usr/local/bin/deploy-mirror.sh deploy /tmp/mu-mirror-dist.tar.gz
+      - name: 完成
+        run: echo "构建产物已发布，服务器将在 3 分钟内自动拉取部署"
