@@ -43,5 +43,18 @@ jobs:
             --target main 2>/dev/null || true
           gh release upload deploy mu-mirror-dist.tar.gz --clobber
 
-      - name: 完成
-        run: echo "构建产物已发布，服务器将在 3 分钟内自动拉取部署"
+      - name: 通知服务器立即部署
+        continue-on-error: true    # 通知失败不影响构建结果，兜底靠每小时轮询
+        run: |
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 25 -X POST \
+              -H "X-Token: ${{ secrets.DEPLOY_HOOK_TOKEN }}" \
+              http://112.74.94.42:8899/hook)
+            echo "第 $i 次通知: HTTP $code"
+            if [ "$code" = "202" ]; then
+              echo "服务器已收到通知，正在部署"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "⚠️ 通知失败（国际链路抖动），服务器将在每小时轮询时自动部署"
