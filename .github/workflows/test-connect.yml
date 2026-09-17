@@ -1,0 +1,19 @@
+name: Test Connectivity
+
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 测试 SSH 端口 57822
+        run: timeout 20 nc -vz -w8 112.74.94.42 57822 || echo ">>> 57822 不通"
+
+      - name: 测试 HTTP 端口 80
+        run: timeout 20 nc -vz -w8 112.74.94.42 80 || echo ">>> 80 不通"
+
+      - name: 测试站点端口 10000
+        run: curl -s -o /dev/null -w "code=%{http_code} time=%{time_total}s\n" --max-time 25 http://112.74.94.42:10000/ || echo ">>> 10000 不通"
+
+      - name: 测试 HTTPS 端口 443
+        run: timeout 20 nc -vz -w8 112.74.94.42 443 || echo ">>> 443 不通"
