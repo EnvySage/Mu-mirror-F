@@ -59,6 +59,18 @@ export const useRecordsStore = defineStore('records', () => {
    */
   const calendarMarks = ref({})
 
+  /**
+   * 日历页「某天记录」独立存放（与 records 主列表解耦）
+   *
+   * records 是全局单例数组，记录页 loadAll（今天）/ 按日筛选 / 处理中轮询都会整体覆盖它；
+   * 日历若复用该数组，切页回来后「选中 9-13 却显示这天没有记录」。
+   * 这里单独存一份当天数据 + 当前 key，互不干扰。
+   */
+  const dayRecords = ref([])
+  const dayRecordsKey = ref(null)
+  const dayRecordsLoading = ref(false)
+  const dayRecordsError = ref(null)
+
   const totalCount = computed(() => records.value.length)
 
   /** 按日期分组的记录 */
@@ -103,6 +115,31 @@ export const useRecordsStore = defineStore('records', () => {
       console.error('Failed to fetch records:', err)
     } finally {
       loading.value = false
+    }
+  }
+
+  /**
+   * 拉取「某一天」的记录（日历页专用，写独立的 dayRecords）
+   *
+   * 不做缓存：单次点击一条请求，缓存会在删除/编辑后变脏。
+   * @param {string} dateStr - YYYY-MM-DD
+   * @returns {Promise<Record[]>}
+   */
+  async function fetchDayRecords(dateStr) {
+    dayRecordsKey.value = dateStr
+    dayRecordsLoading.value = true
+    dayRecordsError.value = null
+    try {
+      const res = await apiGetRecords({ startDate: dateStr, endDate: dateStr })
+      dayRecords.value = res.data || []
+      return dayRecords.value
+    } catch (err) {
+      dayRecords.value = []
+      dayRecordsError.value = err.message || '获取当天记录失败'
+      console.error('Failed to fetch day records:', err)
+      return []
+    } finally {
+      dayRecordsLoading.value = false
     }
   }
 
@@ -492,6 +529,11 @@ export const useRecordsStore = defineStore('records', () => {
     records,
     loading,
     error,
+    dayRecords,
+    dayRecordsKey,
+    dayRecordsLoading,
+    dayRecordsError,
+    fetchDayRecords,
     totalCount,
     groupedRecords,
     groupedRecordsWithSplit,

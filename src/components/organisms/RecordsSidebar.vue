@@ -5,7 +5,8 @@
  * 四卡自上而下（白卡细边晨纸 token）：
  *  1. 今日概览 —— 今天 N 条 + 8 类型分布 mini 条（CONTENT_TYPES 顺序，typeMap 色 = 墨蓝深浅阶梯）
  *  2. 每日总结 —— summaries store 最近 7 篇（日期 + 2 行摘要），点击内联展开全文（复用 fetchDetail）
- *  3. 本周情绪带 —— 7 个色点（每天出现最多的情绪，moodColor 13 色），下标周一~周日，无记录天灰点
+ *  3. 情绪周 —— 最近 7 天色点（每天出现最多的情绪，moodColor 13 色，数据源 stats.mood_daily），
+ *     无记录天灰点，今天加外圈；下方图例列出这 7 天出现过的情绪
  *  4. 待办速览 —— todo.chains 证据链卡（TodoChainCard，两层：L1 行 + L2 时间线）
  *     只读 + 导航：L1 点击跳来源记录、L2 只读；删除为特例（侧栏直点，影响清单弹框确认）；
  *     orphan/completed 建议（todo 不在 chains）降级为只读建议卡（点击跳证据记录）
@@ -16,6 +17,7 @@
  */
 import { computed, ref, onMounted } from 'vue'
 import { useRecordsStore } from '@/stores/records'
+import { useStatsStore } from '@/stores/stats'
 import { useSummariesStore } from '@/stores/summaries'
 import { useSettingsStore } from '@/stores/settings'
 import { useTodoStore } from '@/stores/todo'
@@ -28,6 +30,7 @@ import { parseDate } from '@/utils/time'
 const emit = defineEmits(['open-record', 'open-summaries'])
 
 const recordsStore = useRecordsStore()
+const statsStore = useStatsStore()
 const summariesStore = useSummariesStore()
 const settingsStore = useSettingsStore()
 const todoStore = useTodoStore()
@@ -101,41 +104,84 @@ function briefLines(item) {
   return lines.slice(0, 2)
 }
 
-// ==================== 3. 本周情绪带 ====================
+// ==================== 3. 情绪周（最近 7 天） ====================
 
-/** 本周周一（周一为一周起点） */
-function mondayOfThisWeek() {
-  const d = new Date()
-  const dow = (d.getDay() + 6) % 7 // 周一=0
-  d.setDate(d.getDate() - dow)
-  return d
+const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+
+/** 最近 7 天（含今天）日期序列，从早到晚，最后一个是今天 */
+const weekDays = computed(() =>
+  Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return {
+      key: localDayKey(d),
+      label: `${d.getMonth() + 1}/${d.getDate()}`,
+      weekday: WEEK_LABELS[d.getDay()],
+      isToday: i === 6,
+    }
+  }),
+)
+
+/**
+ * stats.mood_daily → { 'yyyy-MM-dd': [{ mood, count }] }
+ *
+ * 数据源必须是 stats 而不是 recordsStore.records：GET /records 不传日期参数时后端
+ * 默认只返回「今天」（RecordServiceImpl#list: startDate/endDate 均为空 → LocalDate.now()），
+ * 拿它算 7 天就永远只有今天那个点有色。mood_daily 是后端 30 天窗口按日情绪聚合
+ * （无数据天 moods 为空数组，只统计 status=done 的已确认记录），覆盖整周绰绰有余。
+ */
+const moodByDate = computed(() => {
+  const map = {}
+  statsStore.mood_daily.forEach(d => {
+    const k = String(d.date || '').slice(0, 10)
+    if (k) map[k] = d.moods || []
+  })
+  return map
+})
+
+/** 本地记录按日情绪计数（stats 尚未就绪/接口失败时的兜底，只能覆盖今天那一段） */
+function localMoodCounts(key) {
+  const count = {}
+  recordsStore.records.forEach(r => {
+    if (localDayKey(r.created_at) !== key) return
+    ;(r.chunks || []).forEach(c => (c.metadata?.mood || []).forEach(m => { count[m] = (count[m] || 0) + 1 }))
+  })
+  return Object.entries(count)
 }
 
-/** 7 天（周一~周日）：每天出现最多的情绪（无则 null → 灰点） */
-const weekMoods = computed(() => {
-  const monday = mondayOfThisWeek()
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const count = {}
-    recordsStore.records.forEach(r => {
-      if (localDayKey(r.created_at) !== key) return
-      ;(r.chunks || []).forEach(c => (c.metadata?.mood || []).forEach(m => { count[m] = (count[m] || 0) + 1 }))
-    })
-    const top = Object.entries(count).sort((a, b) => b[1] - a[1])[0]
+/** 7 天：每天出现最多的情绪（无则 null → 灰点） */
+const weekMoods = computed(() =>
+  weekDays.value.map(d => {
+    const moods = moodByDate.value[d.key] || []
+    const pairs = moods.length ? moods.map(m => [m.mood, m.count || 0]) : localMoodCounts(d.key)
+    const top = pairs.sort((a, b) => b[1] - a[1])[0]
     return {
-      key,
-      label: `${d.getMonth() + 1}/${d.getDate()}`,
+      ...d,
       mood: top ? top[0] : null,
       count: top ? top[1] : 0,
       color: top ? (MOOD_COLOR[top[0]] || '#A8A8A0') : null,
       moodLabel: top ? (moodMap[top[0]] || top[0]) : '无记录',
     }
-  })
-})
+  }),
+)
 
-const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
+/** 图例：这 7 天实际出现过的情绪（按总量倒序，侧栏 320px 宽度克制取前 6 个） */
+const weekLegend = computed(() => {
+  const totals = {}
+  weekMoods.value.forEach(d => {
+    if (!d.mood) return
+    totals[d.mood] = (totals[d.mood] || 0) + d.count
+  })
+  return Object.entries(totals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([mood, count]) => ({
+      key: mood,
+      label: moodMap[mood] || mood,
+      color: MOOD_COLOR[mood] || '#A8A8A0',
+      count,
+    }))
+})
 
 // ==================== 4. 待办速览（证据链卡 + orphan 建议降级） ====================
 
@@ -219,21 +265,32 @@ const orphanSuggestions = computed(() => {
       </div>
     </section>
 
-    <!-- 3. 本周情绪带 -->
+    <!-- 3. 情绪周（最近 7 天） -->
     <section class="card side-card">
       <div class="side-head">
         <span class="section-label">MOOD WEEK</span>
-        <span class="side-head-note">每天最多的情绪</span>
+        <span class="side-head-note">最近 7 天 · 每天最多的情绪</span>
       </div>
       <div class="week-moods">
-        <div v-for="(d, i) in weekMoods" :key="d.key" class="week-col" :title="`${d.label} · ${d.moodLabel}${d.count ? ' ' + d.count : ''}`">
+        <div
+          v-for="d in weekMoods"
+          :key="d.key"
+          class="week-col"
+          :title="`${d.label} · ${d.moodLabel}${d.count ? ' ' + d.count : ''}`"
+        >
           <span
-            :class="['week-dot', { 'week-dot-empty': !d.color }]"
+            :class="['week-dot', { 'week-dot-empty': !d.color, 'week-dot-today': d.isToday }]"
             :style="d.color ? { background: d.color } : {}"
           />
-          <span class="week-label">{{ WEEK_LABELS[i] }}</span>
+          <span :class="['week-label', { 'week-label-today': d.isToday }]">{{ d.weekday }}</span>
         </div>
       </div>
+      <div v-if="weekLegend.length" class="week-legend">
+        <span v-for="item in weekLegend" :key="item.key" class="week-legend-item">
+          <i class="week-legend-dot" :style="{ background: item.color }" />{{ item.label }}
+        </span>
+      </div>
+      <div v-else class="side-empty side-empty-tight">最近 7 天还没有情绪记录</div>
     </section>
 
     <!-- 4. 待办速览（证据链卡；orphan 建议降级为独立卡） -->
@@ -322,7 +379,7 @@ const orphanSuggestions = computed(() => {
 }
 .sum-full { margin-top: 5px; font-size: 12px; line-height: 1.75; color: var(--text-mid); white-space: pre-wrap; }
 
-/* 3. 本周情绪带 */
+/* 3. 情绪周（最近 7 天） */
 .week-moods { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .week-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .week-dot {
@@ -331,7 +388,13 @@ const orphanSuggestions = computed(() => {
 }
 .week-col:hover .week-dot { transform: scale(1.18); }
 .week-dot-empty { background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
+/* 今天：外圈描边（--card 挖出与点之间的间隙，不额外占布局） */
+.week-dot-today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--line-strong); }
 .week-label { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-low); }
+.week-label-today { color: var(--text-hi); font-weight: 600; }
+.week-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 12px; }
+.week-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-mid); }
+.week-legend-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 /* 4. 待办速览 */
 /* 卡头 pending 角标（小蓝点 + 数字，与词典候选角标同语言） */

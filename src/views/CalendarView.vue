@@ -16,20 +16,29 @@ const ui = useUIStore()
 const selectedDate = ref(null)
 const filterInfo = ref('按月标记，点击日期看当天')
 
+/**
+ * 当天记录：读 dayRecords（日历专属存储）而不是 recordsStore.records——
+ * 后者是主列表单例，会被记录页 loadAll / 按日筛选 / 轮询整体覆盖。
+ */
 const filteredRecords = computed(() => {
   if (!selectedDate.value) return []
-  return recordsStore.getByDate(selectedDate.value).filter(
-    r => r.status === 'done' || r.status === 'reviewing'
-  )
+  return recordsStore.dayRecords.filter(r => r.status === 'done' || r.status === 'reviewing')
 })
+
+/** 选中的日期与已加载数据是否同一天（切页回来 / 请求失败时避免显示上一天的数据） */
+const daySynced = computed(() => !!selectedDate.value && recordsStore.dayRecordsKey === dayKey(selectedDate.value))
+
+function dayKey(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 function onDateSelect(date) {
   selectedDate.value = date
   filterInfo.value = formatFullDate(date)
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  recordsStore.fetchRecords({ startDate: `${y}-${m}-${d}`, endDate: `${y}-${m}-${d}` })
+  recordsStore.fetchDayRecords(dayKey(date))
 }
 
 /** 双击日期 → 跳转记录页按日筛选 */
@@ -64,7 +73,13 @@ function openRecord(id) {
         </div>
 
         <div v-if="selectedDate" class="calendar-records">
-          <div v-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
+          <div v-if="recordsStore.dayRecordsLoading || !daySynced" class="empty-state" style="padding:34px 0">
+            <div class="empty-title">加载中…</div>
+          </div>
+          <div v-else-if="recordsStore.dayRecordsError" class="empty-state" style="padding:34px 0">
+            <div class="empty-title">{{ recordsStore.dayRecordsError }}</div>
+          </div>
+          <div v-else-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
             <div class="empty-title">这一天没有记录</div>
             <div class="empty-desc">点下方写日记按钮补一条</div>
           </div>
