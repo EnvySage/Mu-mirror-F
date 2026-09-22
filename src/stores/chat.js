@@ -94,7 +94,10 @@ export const useChatStore = defineStore('chat', () => {
   function pushAiPlaceholder(route) {
     const msg = { id: String(++msgId), role: 'ai', content: '', thinking: '', route: route || null, typing: true, sources: [], toolsUsed: [], vaultRefs: [] }
     messages.value.push(msg)
-    return msg
+    // 必须返回数组里的响应式代理，不能返回原始 msg：之后 SSE 每一帧都往这个对象上写
+    // thinking/content，改原始对象不触发 Vue 更新——界面会一直停着，直到流结束时
+    // sending 翻转才一口气刷出全部内容（2026-09-21 联调：后端逐帧推送正常，浏览器仍"等一分钟一次性吐出"）
+    return messages.value[messages.value.length - 1]
   }
 
   /**
