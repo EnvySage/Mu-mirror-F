@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +47,20 @@ onMounted(() => {
   if (recordsStore.records.length === 0) recordsStore.fetchRecords()
   // 词典三组：设置图标角标数据源（AppSidebar / MobileHeader 共用，失败静默不打断导航）
   glossary.fetch()
+})
+
+/**
+ * 路由变化统一收起记录详情。
+ *
+ * DetailPanel 是 fixed 全屏层（z-index 30），盖在 RouterView 之上。侧栏/底栏点导航走
+ * ui.switchPage 已会复位，但浏览器前进后退、页内 router.push 等路径没经过它——那些情况下
+ * 详情层会继续压在新页面上。这里兜底：只要路由变了就收。
+ */
+watch(() => route.name, () => {
+  if (ui.showDetail) {
+    ui.showDetail = false
+    ui.selectedRecordId = null
+  }
 })
 
 function openWrite() {

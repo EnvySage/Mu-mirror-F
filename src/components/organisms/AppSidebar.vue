@@ -37,8 +37,14 @@ const tokenHint = computed(() => {
   return `${Math.max(1, Math.floor(ms / 60000))}m 后过期`
 })
 
+/**
+ * 切页：走 ui store 的 switchPage（会同时复位 showDetail / selectedRecordId）。
+ * 不要在这里自己 router.push —— DetailPanel 是 fixed 全屏层（z-index 30），只 push 路由
+ * 不复位 showDetail 的话，记录详情会盖在新页面上（2026-09-23 实测）。
+ */
 function switchPage(page) {
   if (page === 'records') ui.sidebarSelectedDate = null
+  ui.switchPage(page)
   router.push({ name: page })
 }
 
@@ -48,6 +54,13 @@ function openWrite() {
 
 /** 作者 GitHub（侧栏底部署名入口，新窗口打开） */
 const GITHUB_URL = 'https://github.com/EnvySage'
+
+/** 其他个人项目入口（侧栏底部，署名下方；顺序按用户指定 3-1-2） */
+const PROJECTS = [
+  { key: 'chat', label: 'MU聊', note: '实时群聊', url: 'http://112.74.94.42:90/' },
+  { key: 'blog', label: 'XS Blog', note: '技术博客', url: 'https://envysage.github.io/XS-Blog/' },
+  { key: 'music', label: '暮云音乐', note: '在线音乐', url: 'http://112.74.94.42/' },
+]
 </script>
 
 <template>
@@ -125,6 +138,24 @@ const GITHUB_URL = 'https://github.com/EnvySage'
       <span class="sidebar-github-id">EnvySage</span>
       <span class="sidebar-github-note">on GitHub</span>
     </a>
+
+    <!-- 其他个人项目（署名下方，同为外链行样式；顺序按用户指定 3-1-2） -->
+    <div class="sidebar-projects">
+      <div class="sidebar-projects-title">其他项目</div>
+      <a
+        v-for="p in PROJECTS"
+        :key="p.key"
+        class="sidebar-project"
+        :href="p.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        :title="`${p.label} · ${p.note}`"
+      >
+        <span class="sidebar-project-dot" />
+        <span class="sidebar-project-name">{{ p.label }}</span>
+        <span class="sidebar-project-note">{{ p.note }}</span>
+      </a>
+    </div>
   </aside>
 </template>
 
@@ -209,4 +240,26 @@ const GITHUB_URL = 'https://github.com/EnvySage'
 .sidebar-github:hover svg,
 .sidebar-github:hover .sidebar-github-note { fill: var(--text-hi); color: var(--text-hi); }
 .sidebar-github:hover .sidebar-github-id { color: var(--text-hi); }
+
+/* 其他项目（署名下方，与 GitHub 行同款静默样式） */
+.sidebar-projects { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sidebar-projects-title {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em;
+  color: var(--text-low); padding: 0 8px 4px;
+}
+.sidebar-project {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 8px; border-radius: var(--radius-sm);
+  transition: background .15s;
+}
+.sidebar-project:hover { background: var(--ink-2); }
+.sidebar-project-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text-low); transition: background .15s;
+}
+.sidebar-project:hover .sidebar-project-dot { background: var(--accent); }
+.sidebar-project-name { font-size: 12px; color: var(--text-mid); transition: color .15s; }
+.sidebar-project-note { font-size: 11px; color: var(--text-low); margin-left: auto; transition: color .15s; }
+.sidebar-project:hover .sidebar-project-name { color: var(--text-hi); }
+.sidebar-project:hover .sidebar-project-note { color: var(--text-mid); }
 </style>

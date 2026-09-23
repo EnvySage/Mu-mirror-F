@@ -24,8 +24,13 @@ const activePage = computed(() => route.name)
 /** 对话页不挂 FAB：底部是输入条，FAB 会紧贴甚至压住输入框（该页写日记走顶部 header 入口） */
 const isChat = computed(() => route.name === 'chat')
 
+/**
+ * 切页：走 ui store 的 switchPage（会同时复位 showDetail / selectedRecordId）。
+ * DetailPanel 是 fixed 全屏层，只 push 路由不复位的话记录详情会盖住新页面。
+ */
 function handleNav(item) {
   if (item.page === 'records') ui.sidebarSelectedDate = null
+  ui.switchPage(item.page)
   router.push({ name: item.page })
 }
 </script>
