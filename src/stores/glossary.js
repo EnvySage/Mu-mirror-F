@@ -26,7 +26,8 @@ import {
  * @property {string} [evidence]      佐证摘要（"近 14 天出现 3 次"）
  * @property {number} [query_hit_count]  用户提问命中（注入优先级）
  * @property {number} [content_hit_count] 入库内容命中（活跃度）
- * @property {number|string|null} [source_chunk_id] 佐证来源记录 id（跳记录详情）
+ * @property {number|string|null} [source_chunk_id] 佐证来源 chunks 主键（不等同记录 id，勿用于跳详情）
+ * @property {number|string|null} [source_record_id] 佐证所属记录 id（records 主键，跳记录详情用这个）
  * @property {string} [last_confirmed_at] 最后确认时间（ISO / yyyy-MM-dd）
  * @property {string} [last_seen_at]  最近一次语料出现
  * @property {'pending'|'confirmed'|'dismissed'} status

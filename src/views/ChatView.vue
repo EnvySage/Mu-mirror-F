@@ -617,7 +617,10 @@ async function onRemoveSession(id) {
   }
 }
 
-.chat-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; flex: 1; /* 阅读限宽居中：移动端 100% 不受影响，900~1439 回退原 820 级居中，≥1440 双栏内仍限 760 */ max-width: 760px; margin: 0 auto; }
+/* width:100% 必需：交叉轴上的 auto margin（margin:0 auto）会让 align-items:stretch 失效，
+   项目改按内容宽度收缩——气泡短则输入框跟着变窄，气泡长才把容器撑到 max-width。
+   显式给宽度恢复"固定限宽居中"（2026-09-23）。 */
+.chat-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; flex: 1; width: 100%; /* 阅读限宽居中：移动端 100% 不受影响，900~1439 回退原 820 级居中，≥1440 双栏内仍限 760 */ max-width: 760px; margin: 0 auto; }
 .chat-empty { text-align: center; padding: 60px 20px; }
 
 .chat-messages { flex: 1; overflow-y: auto; padding: 14px 4px 10px; }
@@ -707,18 +710,20 @@ async function onRemoveSession(id) {
 .chat-attach:hover:not(:disabled) svg { stroke: var(--accent); }
 .chat-attach:disabled { opacity: .5; cursor: not-allowed; }
 
-/* 拖拽高亮（dragover） */
-.chat-input-bar { border: 1px solid transparent; border-radius: 24px; transition: border-color .15s, background .15s; }
+/* 输入条（拖拽高亮复用同一条：dragover 时给边框+底色） */
+.chat-input-bar {
+  display: flex; gap: 10px; align-items: flex-end; padding: 10px 0 4px;
+  border: 1px solid transparent; border-radius: 24px; transition: border-color .15s, background .15s;
+}
 .chat-input-drag { border-color: var(--accent); background: var(--accent-soft); }
 .chat-drop-hint {
   font-family: var(--font-mono); font-size: 10.5px; color: var(--accent);
   text-align: center; padding-top: 6px; animation: cardIn .2s ease;
 }
 
-/* 输入条 */
-.chat-input-bar { display: flex; gap: 10px; align-items: flex-end; padding: 10px 0 4px; }
+/* textarea 自身无边框：视觉上由外层 .chat-input-bar 的圆角高亮承担 */
 .chat-input {
-  flex: 1; background: #FFFFFF; border: 1px solid var(--line);
+  flex: 1; background: #FFFFFF;
   border: none; border-radius: 20px; padding: 11px 16px;
   font-size: 14.5px; resize: none; max-height: 110px; color: var(--text-hi);
   overflow: hidden;

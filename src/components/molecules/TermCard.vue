@@ -58,8 +58,13 @@ const kindMark = computed(() => {
   return map[props.term.kind] || map.new
 })
 
-/** 依据行可跳转（有 source_chunk_id 才显示） */
-const hasSource = computed(() => props.term.source_chunk_id != null)
+/** 依据行可跳转（有 source_record_id 才显示）
+ *
+ * 必须用 source_record_id 而非 source_chunk_id：后者是 chunks 表主键，详情面板按
+ * records.id 查（GET /records/{id}），两表 BIGSERIAL 各自从 1 起、号段重叠，拿 chunk id
+ * 去查会翻到同号的另一条记录（2026-09-23 线上实测：10 条词条 9 条跳错）。
+ */
+const hasSource = computed(() => props.term.source_record_id != null)
 
 /** 别名展示（空数组不渲染） */
 const aliases = computed(() => props.term.aliases || [])
