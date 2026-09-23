@@ -10,7 +10,7 @@
  *  - 首屏 10 篇，滚动触底自动翻下一页；底部同时给「加载更早」按钮兜底（自动加载失效时可用）
  *  - 按月份分组 + sticky 月份标题（"2026 年 9 月"），长列表里能定位时间
  *  - 单篇展开为卡片内联展开，互斥（同时只展开一天，避免长列表跳动）
- * 「依据：查看原文」→ 关 sheet + 打开 source_chunk_id 对应记录详情（复用 openRecord 交互）。
+ * 「依据：查看原文」→ 关 sheet + 打开 source_record_id 对应记录详情（复用 openRecord 交互）。
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useSummariesStore } from '@/stores/summaries'
@@ -197,11 +197,15 @@ async function onDismiss(term) {
   else toast.error('操作失败')
 }
 
-/** 依据 → 关 sheet 打开来源记录详情（复用 openRecord 交互） */
+/** 依据 → 关 sheet 打开来源记录详情（复用 openRecord 交互）
+ *
+ * 用 source_record_id（records 主键），不是 source_chunk_id（chunks 主键）——详情面板按
+ * records.id 查，两表号段重叠会翻到同号的另一条记录。
+ */
 function openSource(term) {
-  if (term.source_chunk_id == null) return
+  if (term.source_record_id == null) return
   ui.closeSummarySheet()
-  ui.selectedRecordId = term.source_chunk_id
+  ui.selectedRecordId = term.source_record_id
   ui.showDetail = true
 }
 </script>

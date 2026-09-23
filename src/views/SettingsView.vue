@@ -70,10 +70,13 @@ function onTermRestore(term) {
   runTermAction(term.id, 'confirm', null, `「${term.term}」已恢复生效`)
 }
 
-/** 「依据：查看原文」（设置页确认弹窗里该行隐藏，防御性兜底） */
+/** 「依据：查看原文」（设置页确认弹窗里该行隐藏，防御性兜底）
+ *
+ * 用 source_record_id（records 主键）——详情面板按 records.id 查，传 chunks 主键会翻错记录。
+ */
 function onTermOpenSource(term) {
-  if (term.source_chunk_id == null) return
-  ui.selectedRecordId = term.source_chunk_id
+  if (term.source_record_id == null) return
+  ui.selectedRecordId = term.source_record_id
   ui.showDetail = true
 }
 
