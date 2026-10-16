@@ -4,262 +4,52 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useGlossaryStore } from '@/stores/glossary'
-
-const props = defineProps({
-  /** 移动端 bottom-nav 无需重复事件，桌面写日记按钮也走全局 ui store */
-  useStoreAction: { type: Boolean, default: true },
-})
-
-const router = useRouter()
-const route = useRoute()
-const ui = useUIStore()
-const auth = useAuthStore()
-const glossary = useGlossaryStore()
-
-const NAV = [
-  { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
-  { page: 'calendar', label: '日历', icon: 'calendar' },
-  { page: 'chat', label: '对话', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
-  { page: 'vault', label: '资产', icon: 'archive' },
-  { page: 'mirror', label: '镜子', icon: 'clock' },
-  { page: 'settings', label: '设置', icon: 'gear' },
-]
-
+const router = useRouter(), route = useRoute(), ui = useUIStore(), auth = useAuthStore(), glossary = useGlossaryStore()
 const activePage = computed(() => route.name)
-
-/** Token 有效期提示（小时粒度，<1h 显示分钟） */
-const tokenHint = computed(() => {
-  if (!auth.tokenExpires) return '长期有效'
-  const ms = parseInt(auth.tokenExpires) - Date.now()
-  if (ms <= 0) return '已过期'
-  const h = Math.floor(ms / 3600000)
-  if (h >= 1) return `${h}h 后过期`
-  return `${Math.max(1, Math.floor(ms / 60000))}m 后过期`
-})
-
-/**
- * 切页：走 ui store 的 switchPage（会同时复位 showDetail / selectedRecordId）。
- * 不要在这里自己 router.push —— DetailPanel 是 fixed 全屏层（z-index 30），只 push 路由
- * 不复位 showDetail 的话，记录详情会盖在新页面上（2026-09-23 实测）。
- */
-function switchPage(page) {
-  if (page === 'records') ui.sidebarSelectedDate = null
-  ui.switchPage(page)
-  router.push({ name: page })
-}
-
-function openWrite() {
-  ui.openWriteModal()
-}
-
-/** 作者 GitHub（侧栏底部署名入口，新窗口打开） */
-const GITHUB_URL = 'https://github.com/EnvySage'
-
-/** 其他个人项目入口（侧栏底部，署名下方；顺序按用户指定 3-1-2） */
-const PROJECTS = [
-  { key: 'chat', label: 'MU聊', note: '实时群聊', url: 'http://112.74.94.42:90/' },
-  { key: 'blog', label: 'XS Blog', note: '技术博客', url: 'https://envysage.github.io/XS-Blog/' },
-  { key: 'music', label: '暮云音乐', note: '在线音乐', url: 'http://112.74.94.42/' },
+const today = new Date()
+const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit' }).format(today)
+const weekday = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', weekday: 'short' }).format(today)
+const nav = [
+ { page:'records', label:'日常记录', en:'RECORDS', path:'M4 5h16M4 12h16M4 19h10' },
+ { page:'calendar', label:'时间日历', en:'CALENDAR', path:'M8 2v5M16 2v5M3 10h18M4 5h16v16H4z' },
+ { page:'mirror', label:'我的镜子', en:'MIRROR', path:'M12 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 19v3M8 22h8M8 10l3-3' },
+ { page:'chat', label:'与我对话', en:'DIALOGUE', path:'M4 4h16v13H9l-5 4V4zM8 9h8M8 13h5' },
+ { page:'vault', label:'记忆资产', en:'ARCHIVE', path:'M3 4h18v5H3zM5 9v12h14V9M9 13h6' },
 ]
+const projects = [{ label:'MU聊',url:'http://112.74.94.42:90/' },{ label:'XS Blog',url:'https://envysage.github.io/XS-Blog/' },{ label:'暮云音乐',url:'http://112.74.94.42/' }]
+function switchPage(page) {
+ if (page === 'records') ui.sidebarSelectedDate = null
+ ui.switchPage(page)
+ router.push({ name: page })
+}
 </script>
-
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="sidebar-logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
-      </div>
-      <div>
-        <div class="sidebar-logo-text">Mirror</div>
-        <div class="sidebar-logo-sub">AI 日记</div>
-      </div>
-    </div>
-
-    <nav class="sidebar-nav">
-      <button
-        v-for="item in NAV"
-        :key="item.page"
-        :class="['sidebar-nav-item', { active: activePage === item.page }]"
-        @click="switchPage(item.page)"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <template v-if="item.icon === 'calendar'">
-            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-          </template>
-          <template v-else-if="item.icon === 'archive'">
-            <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>
-          </template>
-          <template v-else-if="item.icon === 'clock'">
-            <circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/>
-          </template>
-          <template v-else-if="item.icon === 'gear'">
-            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </template>
-          <template v-else>
-            <path :d="item.icon" />
-          </template>
-        </svg>
-        <span>{{ item.label }}</span>
-        <!-- 词典 pending 角标：有候选才显示（lexicon-design.md 5b 入口角标，不弹窗不打断） -->
-        <span
-          v-if="item.page === 'settings' && glossary.pendingCount"
-          class="sidebar-nav-badge"
-          :title="`${glossary.pendingCount} 条词典候选待确认`"
-        >{{ glossary.pendingCount > 9 ? '9+' : glossary.pendingCount }}</span>
-      </button>
-    </nav>
-
-    <div class="sidebar-spacer" />
-
-    <button class="sidebar-write" @click="openWrite">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      写日记
-    </button>
-
-    <div class="sidebar-user">
-      <div class="sidebar-avatar">{{ (auth.user?.username || 'U').slice(0, 1).toUpperCase() }}</div>
-      <div>
-        <div class="sidebar-user-name">{{ auth.user?.username || '未登录' }}</div>
-        <div class="sidebar-user-hint">Token {{ tokenHint }}</div>
-      </div>
-    </div>
-
-    <!-- 作者署名：Mirror is built by EnvySage -->
-    <a
-      class="sidebar-github"
-      :href="GITHUB_URL"
-      target="_blank"
-      rel="noopener noreferrer"
-      title="Mirror · built by EnvySage"
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
-      </svg>
-      <span class="sidebar-github-id">EnvySage</span>
-      <span class="sidebar-github-note">on GitHub</span>
-    </a>
-
-    <!-- 其他个人项目（署名下方，同为外链行样式；顺序按用户指定 3-1-2） -->
-    <div class="sidebar-projects">
-      <div class="sidebar-projects-title">其他项目</div>
-      <a
-        v-for="p in PROJECTS"
-        :key="p.key"
-        class="sidebar-project"
-        :href="p.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        :title="`${p.label} · ${p.note}`"
-      >
-        <span class="sidebar-project-dot" />
-        <span class="sidebar-project-name">{{ p.label }}</span>
-        <span class="sidebar-project-note">{{ p.note }}</span>
-      </a>
-    </div>
-  </aside>
+ <aside class="sidebar" aria-label="主导航">
+  <a class="brand" href="/records" @click.prevent="switchPage('records')"><span class="brand-mark">M<span> / </span></span><span class="brand-name">MIRROR<small>记录，让自己显影</small></span></a>
+  <div class="sidebar-date"><strong>{{ dateLabel.replace('/', '.') }}</strong><span>{{ weekday }}<i>今天也值得被记住</i></span></div>
+  <nav class="sidebar-nav">
+   <button v-for="item in nav" :key="item.page" :class="['nav-row',{active:activePage===item.page}]" :aria-current="activePage===item.page?'page':undefined" @click="switchPage(item.page)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path :d="item.path" /></svg>
+    <span><b>{{ item.en }}</b><small>{{ item.label }}</small></span><span v-if="activePage===item.page" class="nav-arrow" aria-hidden="true">◀</span>
+   </button>
+  </nav>
+  <button class="sidebar-write" @click="ui.openWriteModal()"><span aria-hidden="true">＋</span> 写下此刻 <small>NEW RECORD</small></button>
+  <div class="sidebar-bottom">
+   <button :class="['settings-row',{active:activePage==='settings'}]" @click="switchPage('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg>设置<span v-if="glossary.pendingCount" class="pending">{{ glossary.pendingCount }}</span></button>
+   <div class="user-row"><div class="user-avatar">{{ (auth.user?.username || 'M').slice(0,1).toUpperCase() }}</div><div><strong>{{ auth.user?.username || 'Mirror' }}</strong><span>属于你的生活存档</span></div><span class="online-dot" title="已登录" /></div>
+   <a class="author" href="https://github.com/EnvySage" target="_blank" rel="noopener noreferrer">Made by EnvySage <span>↗</span></a>
+   <div class="projects"><a v-for="p in projects" :key="p.label" :href="p.url" target="_blank" rel="noopener noreferrer">{{ p.label }}</a></div>
+  </div>
+ </aside>
 </template>
-
 <style scoped>
-.sidebar {
-  display: none;
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  flex-direction: column;
-  border-right: 1px solid var(--line);
-  background: #FFFFFF;
-  padding: 22px 16px;
-  overflow-y: auto;
-}
-@media (min-width: 900px) { .sidebar { display: flex; } }
-
-.sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 2px 8px 20px; }
-.sidebar-logo-icon {
-  width: 34px; height: 34px; border-radius: 11px;
-  background: var(--accent); display: grid; place-items: center;
-}
-.sidebar-logo-icon svg { width: 18px; height: 18px; stroke: #FFFFFF; }
-.sidebar-logo-text { font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: .04em; }
-.sidebar-logo-sub { font-size: 11px; color: var(--text-low); letter-spacing: .18em; margin-top: -2px; }
-
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
-.sidebar-nav-item {
-  position: relative;
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; border-radius: var(--radius-sm);
-  color: var(--text-mid); font-size: 14.5px; transition: background .15s, color .15s; text-align: left;
-}
-.sidebar-nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; }
-.sidebar-nav-item:hover { background: var(--ink-2); color: var(--text-hi); }
-.sidebar-nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
-.sidebar-nav-item.active::before {
-  content: ""; position: absolute; left: 0; top: 9px; bottom: 9px;
-  width: 3px; border-radius: 2px; background: var(--accent);
-}
-.sidebar-nav-badge {
-  margin-left: auto;
-  min-width: 17px; height: 17px; padding: 0 5px;
-  border-radius: var(--radius-full);
-  background: var(--danger); color: #FFFFFF;
-  font-family: var(--font-mono); font-size: 10px; line-height: 17px; text-align: center;
-  animation: cardIn .25s ease;
-}
-.sidebar-spacer { flex: 1; min-height: 14px; }
-
-.sidebar-write {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 12px; border-radius: 12px;
-  background: var(--accent); color: #FFFFFF; font-weight: 600; font-size: 15px;
-  transition: transform .15s, background .15s;
-}
-.sidebar-write:hover { background: var(--accent-hover); }
-.sidebar-write:active { transform: scale(.97); }
-.sidebar-write svg { width: 17px; height: 17px; stroke: #FFFFFF; fill: none; }
-
-.sidebar-user {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 8px 0; border-top: 1px solid var(--line); margin-top: 16px;
-}
-.sidebar-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--accent-soft); display: grid; place-items: center;
-  font-size: 13px; color: var(--accent); font-weight: 600;
-}
-.sidebar-user-name { font-size: 14px; }
-.sidebar-user-hint { font-size: 11px; color: var(--text-low); }
-
-/* 底部署名（GitHub） */
-.sidebar-github {
-  display: flex; align-items: baseline; gap: 7px;
-  margin-top: 10px; padding: 7px 8px; border-radius: var(--radius-sm);
-  transition: background .15s, color .15s;
-}
-.sidebar-github svg { width: 14px; height: 14px; fill: var(--text-low); flex-shrink: 0; align-self: center; }
-.sidebar-github-id { font-family: var(--font-mono); font-size: 12px; color: var(--text-mid); }
-.sidebar-github-note { font-size: 11px; color: var(--text-low); }
-.sidebar-github:hover { background: var(--ink-2); }
-.sidebar-github:hover svg,
-.sidebar-github:hover .sidebar-github-note { fill: var(--text-hi); color: var(--text-hi); }
-.sidebar-github:hover .sidebar-github-id { color: var(--text-hi); }
-
-/* 其他项目（署名下方，与 GitHub 行同款静默样式） */
-.sidebar-projects { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
-.sidebar-projects-title {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em;
-  color: var(--text-low); padding: 0 8px 4px;
-}
-.sidebar-project {
-  display: flex; align-items: center; gap: 7px;
-  padding: 6px 8px; border-radius: var(--radius-sm);
-  transition: background .15s;
-}
-.sidebar-project:hover { background: var(--ink-2); }
-.sidebar-project-dot {
-  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
-  background: var(--text-low); transition: background .15s;
-}
-.sidebar-project:hover .sidebar-project-dot { background: var(--accent); }
-.sidebar-project-name { font-size: 12px; color: var(--text-mid); transition: color .15s; }
-.sidebar-project-note { font-size: 11px; color: var(--text-low); margin-left: auto; transition: color .15s; }
-.sidebar-project:hover .sidebar-project-name { color: var(--text-hi); }
-.sidebar-project:hover .sidebar-project-note { color: var(--text-mid); }
+.sidebar { display:none; flex:0 0 var(--sidebar-width); width:var(--sidebar-width); min-height:0; flex-direction:column; padding:30px 18px 18px; background:#040d30f2; border-right:1px solid #5580cf38; color:white; overflow-y:auto; }
+@media(min-width:900px){.sidebar{display:flex}}
+.brand{display:flex;gap:9px;align-items:center;padding:0 6px;color:white}.brand-mark{font:italic 900 48px/.8 var(--font-display);letter-spacing:-8px;color:var(--cyan)}.brand-mark span{color:white;font-size:39px}.brand-name{font:italic 900 31px/.85 var(--font-display);letter-spacing:-.04em}.brand-name small{display:block;font:10px/1.5 var(--font);letter-spacing:.08em;color:#9db7e5;margin-top:7px}
+.sidebar-date{margin:36px 6px 28px;display:flex;gap:12px;align-items:center}.sidebar-date strong{font:italic 700 43px/1 var(--font-display);letter-spacing:-.04em}.sidebar-date>span{font:700 17px/1.3 var(--font-display);color:var(--cyan);text-transform:uppercase}.sidebar-date i{display:block;font:normal 9px/1.8 var(--font);color:#8ba5cf}
+.sidebar-nav{display:flex;flex-direction:column;gap:9px}.nav-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;min-height:64px;padding:10px 15px;text-align:left;color:#91b0e2;isolation:isolate;transition:color .18s,transform .18s}.nav-row::before{content:'';position:absolute;inset:0;z-index:-1;background:transparent;transform:skewY(-3deg);border-left:3px solid transparent}.nav-row svg{width:20px;height:20px;flex-shrink:0}.nav-row b{display:block;font:italic 800 24px/.95 var(--font-display);letter-spacing:.015em}.nav-row small{display:block;font-size:10px;margin-top:5px}.nav-row:hover{color:white;transform:translateX(3px)}.nav-row.active{color:var(--night)}.nav-row.active::before{background:var(--cyan);border-left-color:white;box-shadow:4px 4px 0 var(--electric)}.nav-arrow{margin-left:auto;font-size:11px}
+.sidebar-write{margin:28px 6px 16px;padding:11px 10px;background:white;color:var(--night);font-size:13px;font-weight:800;transform:skew(-7deg);box-shadow:4px 4px 0 var(--pink)}.sidebar-write>span{font-size:18px;margin-right:5px}.sidebar-write small{display:block;font:italic 700 11px var(--font-display);letter-spacing:.08em;margin-left:15px}
+.sidebar-bottom{margin-top:auto;padding:22px 6px 0}.settings-row{display:flex;align-items:center;gap:10px;color:#a7bfe7;font-size:12px;width:100%;padding:8px 0 18px}.settings-row svg{width:19px;height:19px}.settings-row.active{color:var(--cyan)}.pending{margin-left:auto;background:var(--pink);color:white;padding:0 5px}
+.user-row{border-top:1px solid #5275b43d;padding:19px 0 16px;display:flex;gap:9px;align-items:center}.user-avatar{width:32px;height:35px;display:grid;place-items:center;background:#143570;color:var(--cyan);font:italic 800 23px var(--font-display);clip-path:polygon(0 0,100% 0,100% 83%,75% 100%,0 100%)}.user-row strong{display:block;font-size:12px}.user-row span{display:block;color:#809cc7;font-size:9px}.user-row .online-dot{margin-left:auto;width:5px;height:5px;background:var(--cyan);border-radius:50%}.author{display:flex;justify-content:space-between;color:#91aad3;font:12px var(--font-display)}.projects{display:flex;gap:12px;margin-top:11px}.projects a{color:#7794c1;font-size:9px}
+@media(max-height:820px){.sidebar{padding-top:24px}.sidebar-date{margin:28px 6px 18px}.nav-row{min-height:56px}.sidebar-write{margin-top:22px}.sidebar-bottom{padding-top:8px}}
 </style>
