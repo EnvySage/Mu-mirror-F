@@ -16,15 +16,52 @@ const props = defineProps({
   record: { type: Object, required: true },
 })
 
-const emit = defineEmits(['open-record'])
+const emit = defineEmits(['open-record', 'authorization-change'])
 
 const recordsStore = useRecordsStore()
 const todoStore = useTodoStore()
 
 const editable = computed(() => props.record.status === 'reviewing')
-/** done 记录只读：控件禁用而非点击报错 */
-const readonly = computed(() => props.record.status === 'done')
+const chunksEditable = computed(() => ['reviewing', 'done'].includes(props.record.status))
+const readonly = computed(() => !chunksEditable.value)
 const chunks = computed(() => props.record.chunks || [])
+const memorySelection = ref(new Set())
+const todoSelection = ref(new Set())
+
+function emitAuthorizationChange() {
+  emit('authorization-change', {
+    aiMemoryChunkIds: [...memorySelection.value],
+    todoChunkIds: [...todoSelection.value],
+  })
+}
+
+function syncAuthorizationSelection() {
+  memorySelection.value = new Set(chunks.value
+    .filter(c => c.ai_memory_approved ?? c.aiMemoryApproved)
+    .map(c => c.id))
+  todoSelection.value = new Set(chunks.value
+    .filter(c => c.todo_approved ?? c.todoApproved)
+    .map(c => c.id))
+  emitAuthorizationChange()
+}
+
+function toggleMemory(chunkId, checked) {
+  const next = new Set(memorySelection.value)
+  checked ? next.add(chunkId) : next.delete(chunkId)
+  memorySelection.value = next
+  emitAuthorizationChange()
+}
+
+function toggleTodo(chunkId, checked) {
+  const next = new Set(todoSelection.value)
+  checked ? next.add(chunkId) : next.delete(chunkId)
+  todoSelection.value = next
+  emitAuthorizationChange()
+}
+
+watch(() => props.record.id, syncAuthorizationSelection, { immediate: true })
+watch(() => chunks.value.map(c => [c.id, c.segment, c.metadata?.contentType,
+  c.ai_memory_approved ?? c.aiMemoryApproved, c.todo_approved ?? c.todoApproved]), syncAuthorizationSelection)
 
 /**
  * 审核态「关联待办」区块（本轮交互重构：状态变更唯一入口）
@@ -172,14 +209,19 @@ function onAddChunk() {
       <span>{{ chunks.length }}</span>
     </div>
 
-    <ChunkCard
-      v-for="(chunk, i) in chunks"
-      :key="chunk.id"
-      :chunk="chunk"
-      :index="i"
-      :editable="editable"
-      :readonly="readonly"
-    />
+    <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-review-item">
+      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" />
+      <div v-if="!String(chunk.id).startsWith('local_')" class="chunk-consent">
+        <label class="chunk-consent-option">
+          <input type="checkbox" :checked="memorySelection.has(chunk.id)" @change="toggleMemory(chunk.id, $event.target.checked)">
+          <span><b>加入 Mirror 记忆</b><small>允许后续检索、日报和画像引用这个片段</small></span>
+        </label>
+        <label v-if="['todo', 'plan'].includes(chunk.metadata?.contentType)" class="chunk-consent-option todo-consent">
+          <input type="checkbox" :checked="todoSelection.has(chunk.id)" :disabled="chunk.todo_approved ?? chunk.todoApproved" @change="toggleTodo(chunk.id, $event.target.checked)">
+          <span><b>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '已登记为待办' : '单独登记为待办' }}</b><small>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '后续状态请在待办页面管理' : '任务状态和片段记忆分别授权' }}</small></span>
+        </label>
+      </div>
+    </div>
 
     <div v-if="chunks.length === 0" class="chunks-empty">
       已无片段。新增至少 1 个片段后才能确认入库。
@@ -294,6 +336,7 @@ function onAddChunk() {
 </template>
 
 <style scoped>
+.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}
 .review-panel { animation: fadeIn .3s ease; }
 
 .review-original {

@@ -193,22 +193,6 @@ async function selectProtocol(protocol) {
   else toast.error(settingsStore.error || '保存失败')
 }
 
-/** 切换审核模式（5.5：auto 无审核窗口，权衡警告） */
-async function toggleReviewMode() {
-  const toAuto = settingsStore.settings.review_mode !== 'auto'
-  if (toAuto && !window.confirm('开启自动审核后，AI 处理完成将直接确认入库，你没有手动调整片段和标签的机会。确定开启？')) {
-    return
-  }
-  const newVal = toAuto ? 'auto' : 'manual'
-  const ok = await settingsStore.updateSettings({ review_mode: newVal })
-  if (ok) {
-    if (toAuto) toast.info('已开启 auto：新记录将跳过审核直接入库')
-    else toast.success('已切换为手动审核')
-  } else {
-    toast.error(settingsStore.error || '保存失败')
-  }
-}
-
 /** 切换 Embedding 来源（1024 维硬约束说明见下方 note） */
 async function toggleEmbeddingSource() {
   const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
@@ -347,23 +331,16 @@ function handleLogout() {
         </div>
       </div>
 
-      <!-- 审核（软禁用：仅后端 autoReviewAvailable=true 时渲染整组；字段缺失/undefined 按 false 隐藏，
-           连同下方提示文案一并隐藏。契约字段 autoReviewAvailable 经拦截器转 snake_case 为 auto_review_available） -->
-      <div v-if="settingsStore.settings.auto_review_available === true" class="settings-group">
-        <div class="settings-group-title">审核</div>
+      <div class="settings-group">
+        <div class="settings-group-title">AI 使用与授权</div>
         <div class="settings-card card">
           <SettingsItem
             icon="eye"
             icon-bg="var(--processing)"
-            label="自动审核（auto）"
-            :description="settingsStore.settings.review_mode === 'auto' ? '已开启：跳过审核窗口，AI 直接入库' : '关闭：AI 处理后需手动确认'"
-            action="toggle"
-            :toggle-value="settingsStore.settings.review_mode === 'auto'"
-            @toggle="toggleReviewMode"
+            label="逐片段确认后进入长期记忆"
+            description="仅记录不会调用 AI；主动整理后，记忆与待办仍需分别确认。"
+            action="none"
           />
-        </div>
-        <div class="settings-note warn">
-          开启后将没有手动调整片段的机会——AI 拆错了也无法纠正。默认建议保持手动。
         </div>
       </div>
 

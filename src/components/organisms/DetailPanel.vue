@@ -80,6 +80,8 @@ function updateDetailMode(r) {
     todoStore.fetchRecordSuggestions(r.id)
   } else if (r.status === 'failed') {
     ui.detailMode = 'failed'
+  } else if (r.status === 'record_only') {
+    ui.detailMode = 'view'
   } else {
     ui.detailMode = 'view'
   }
@@ -115,13 +117,14 @@ watch(record, (newRecord, oldRecord) => {
 const headerTitle = computed(() => {
   switch (ui.detailMode) {
     case 'processing': return 'AI 整理中'
-    case 'review': return `审核 · ${(record.value?.chunks || []).length} 个片段`
+    case 'review': return `片段确认 · ${(record.value?.chunks || []).length} 个片段`
     case 'failed': return '处理失败'
-    default: return '记录详情（只读）'
+    case 'view': return record.value?.status === 'record_only' ? '仅记录' : '片段记忆授权'
+    default: return '记录详情'
   }
 })
 
-const showConfirm = computed(() => ui.detailMode === 'review')
+const showConfirm = computed(() => ['reviewing', 'done'].includes(record.value?.status))
 
 function close() {
   stopPolling()
@@ -136,6 +139,13 @@ function close() {
 // ---- 确认入库（长时 loading 文案） ----
 const confirming = ref(false)
 const actionError = ref(null)
+const aiMemoryChunkIds = ref([])
+const todoChunkIds = ref([])
+
+function onAuthorizationChange(value) {
+  aiMemoryChunkIds.value = value.aiMemoryChunkIds
+  todoChunkIds.value = value.todoChunkIds
+}
 
 async function onConfirm() {
   if (confirming.value) return
@@ -144,11 +154,15 @@ async function onConfirm() {
   // 关联待办（AI 建议裁决 + 手动挂载）随「确认入库」一起提交（todoResolutions）；
   // 无任何关联项时不带该字段（body 可选扩展，契约见 api/records.js）
   const todoResolutions = todoStore.resolutionsPayload
-  const payload = todoResolutions.length ? { todoResolutions } : {}
+  const payload = {
+    aiMemoryChunkIds: aiMemoryChunkIds.value,
+    todoChunkIds: todoChunkIds.value,
+    ...(todoResolutions.length ? { todoResolutions } : {}),
+  }
   const updated = await recordsStore.confirmReview(ui.selectedRecordId, payload)
   confirming.value = false
   if (updated) {
-    toast.success('已入库，向量已生成')
+    toast.success('片段授权已更新')
     ui.detailMode = 'view'
     // 裁决已随 confirm 落库 → 清掉本地暂存
     todoStore.clearResolutions()
@@ -160,6 +174,31 @@ async function onConfirm() {
   } else {
     actionError.value = recordsStore.error || '确认失败，请重试'
   }
+}
+
+const rawEditing = ref(false)
+const rawDraft = ref('')
+watch(() => record.value?.id, () => {
+  rawDraft.value = record.value?.content || ''
+  rawEditing.value = false
+})
+
+async function saveRaw() {
+  const updated = await recordsStore.updateRawRecord(record.value.id, rawDraft.value)
+  if (updated) {
+    rawEditing.value = false
+    toast.success('仅记录已更新')
+  } else actionError.value = recordsStore.error || '更新原文失败'
+}
+
+async function organizeSavedRecord() {
+  const updated = await recordsStore.organizeRecord(record.value.id)
+  if (updated) {
+    ui.detailMode = 'processing'
+    startStepAnimation()
+    startPolling(updated.id)
+    toast.info('已请求 Mirror 整理')
+  } else actionError.value = recordsStore.error || '请求整理失败'
 }
 
 /** failed：重试 / 删除 */
@@ -208,7 +247,8 @@ async function deleteRecord() {
             class="detail-confirm"
             :disabled="confirming"
             @click="onConfirm"
-          >{{ confirming ? '补分类 → 向量化…' : '确认入库' }}</button>
+          >{{ confirming ? '保存授权…' : record.status === 'reviewing' ? '确认所选片段' : '更新记忆授权' }}</button>
+          <button v-else-if="record.status === 'record_only'" class="detail-confirm" @click="organizeSavedRecord">让 Mirror 整理</button>
           <span v-else class="detail-title" />
         </div>
 
@@ -254,8 +294,20 @@ async function deleteRecord() {
             </div>
           </div>
 
+          <div v-else-if="record.status === 'record_only'" class="record-only-view">
+            <p class="record-only-note">这条内容只保存在你的记录里，Mirror 尚未读取。</p>
+            <textarea v-if="rawEditing" v-model="rawDraft" class="record-only-editor" aria-label="编辑仅记录原文" />
+            <div v-else class="review-original-text">{{ record.content }}</div>
+            <div class="failed-actions">
+              <button v-if="!rawEditing" class="chip chip-accent" @click="rawEditing = true">编辑原文</button>
+              <button v-else class="chip chip-accent" @click="saveRaw">保存修改</button>
+              <button v-if="rawEditing" class="chip" @click="rawEditing = false; rawDraft = record.content">取消</button>
+              <button class="chip chip-danger" @click="deleteRecord">删除记录</button>
+            </div>
+          </div>
+
           <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
-          <ReviewPanel v-else :record="record" @open-record="openRecord" />
+          <ReviewPanel v-else :record="record" @open-record="openRecord" @authorization-change="onAuthorizationChange" />
         </div>
       </div>
     </Transition>
@@ -349,6 +401,7 @@ async function deleteRecord() {
 .processing-step.done .processing-step-dot { background: var(--success); }
 
 .failed-view { text-align: center; }
+.record-only-view{padding:16px;border:1px solid var(--line);background:var(--card);border-radius:var(--radius)}.record-only-note{font-size:12px;color:var(--text-mid);margin-bottom:14px}.record-only-editor{width:100%;min-height:220px;padding:14px;border:1px solid var(--line);font:14px/1.8 var(--font);color:var(--text-hi);background:var(--card)}
 .failed-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .failed-actions .chip { cursor: pointer; }
 .chip-accent { color: var(--accent); }

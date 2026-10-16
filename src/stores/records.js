@@ -5,6 +5,8 @@ import {
   getRecords as apiGetRecords,
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
+  organizeRecord as apiOrganizeRecord,
+  updateRawRecord as apiUpdateRawRecord,
   updateChunk as apiUpdateChunk,
   deleteChunk as apiDeleteChunk,
   createChunk as apiCreateChunk,
@@ -14,7 +16,7 @@ import {
   getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
 
-/** @typedef {'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
+/** @typedef {'record_only' | 'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
 
 /**
  * @typedef {Object} ChunkMetadata
@@ -170,14 +172,38 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {string} content
    * @returns {Promise<Record>}
    */
-  async function createRecord(content) {
-    const res = await apiCreateRecord({ content })
+  async function createRecord(content, requestAiProcessing = false) {
+    const res = await apiCreateRecord({ content, requestAiProcessing })
     const newRecord = res.data
     // 添加到本地列表开头
     if (!records.value.some(r => r.id === newRecord.id)) {
       records.value.unshift(newRecord)
     }
     return newRecord
+  }
+
+  async function organizeRecord(id) {
+    try {
+      const res = await apiOrganizeRecord(id)
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1 && res.data) records.value[index] = res.data
+      return res.data || null
+    } catch (err) {
+      error.value = err.message || '请求整理失败'
+      return null
+    }
+  }
+
+  async function updateRawRecord(id, content) {
+    try {
+      const res = await apiUpdateRawRecord(id, content)
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1 && res.data) records.value[index] = res.data
+      return res.data || null
+    } catch (err) {
+      error.value = err.message || '更新原文失败'
+      return null
+    }
   }
 
   /**
@@ -188,9 +214,14 @@ export const useRecordsStore = defineStore('records', () => {
    */
   async function updateChunk(chunkId, data) {
     try {
-      await apiUpdateChunk(chunkId, data)
+      const res = await apiUpdateChunk(chunkId, data)
       // 后端返回的 ChunkVO 不含完整状态，直接按参数更新本地缓存
       applyChunkEdit(chunkId, data)
+      const updated = res.data
+      for (const record of records.value) {
+        const chunk = (record.chunks || []).find(c => c.id === chunkId)
+        if (chunk && updated) Object.assign(chunk, updated)
+      }
       return true
     } catch (err) {
       console.error('Failed to update chunk:', err)
@@ -219,6 +250,8 @@ export const useRecordsStore = defineStore('records', () => {
       // taskStatus="" 表示"取消选择"（清空语义）：本地删除该字段让 UI 即时反映
       if (data.taskStatus === '') delete meta.taskStatus
       chunk.metadata = meta
+      chunk.ai_memory_approved = false
+      chunk.has_embedding = false
       return
     }
   }
@@ -544,6 +577,8 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecords,
     fetchRecord,
     createRecord,
+    organizeRecord,
+    updateRawRecord,
     updateChunk,
     deleteChunk,
     addChunk,

@@ -9,6 +9,14 @@ export function createRecord(data) {
   return request.post('/records', data)
 }
 
+export function organizeRecord(id) {
+  return request.post(`/records/${id}/organize`)
+}
+
+export function updateRawRecord(id, content) {
+  return request.put(`/records/${id}/content`, { content })
+}
+
 /**
  * 获取记录列表（支持分页和筛选）
  * @param {Object} [params] - 查询参数

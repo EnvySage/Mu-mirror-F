@@ -25,7 +25,7 @@ const todoStore = useTodoStore()
 const toast = useToastStore()
 
 const recordFilter = ref('all')
-const recordFilters = [{ key:'all',label:'全部记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
+const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
 const dayNumber = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',day:'2-digit' }).format(new Date())
 const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:'short' }).format(new Date())
 

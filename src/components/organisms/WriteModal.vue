@@ -17,6 +17,7 @@ const settingsStore = useSettingsStore()
 const toast = useToastStore()
 
 const content = ref('')
+const saveMode = ref('record-only')
 const loading = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
@@ -40,6 +41,7 @@ watch(() => props.show, async (val) => {
     openedAt.value = new Date()
     activePrompt.value = 0
     content.value = ''
+    saveMode.value = 'record-only'
     error.value = ''
     await nextTick()
     textareaEl.value?.focus()
@@ -49,7 +51,8 @@ watch(() => props.show, async (val) => {
 async function handleSubmit() {
   if (!enabled.value) return
 
-  if (!settingsStore.isModelConfigComplete) {
+  const requestAiProcessing = saveMode.value === 'organize'
+  if (requestAiProcessing && !settingsStore.isModelConfigComplete) {
     const msg = settingsStore.getModelConfigMissingMessage()
     toast.warning(msg || '请先完成 AI 模型配置后再写日记')
     emit('close')
@@ -60,10 +63,9 @@ async function handleSubmit() {
   loading.value = true
   error.value = ''
   try {
-    const record = await recordsStore.createRecord(content.value.trim())
+    const record = await recordsStore.createRecord(content.value.trim(), requestAiProcessing)
     emit('close')
-    toast.info('已提交，AI 拆分中…')
-    // processing 态记录留在列表轮询（RecordsView 列表级轮询接管）
+    toast.success(requestAiProcessing ? '已保存，Mirror 开始整理' : '已保存为仅记录')
     return record
   } catch (err) {
     error.value = err.message || '创建失败，请重试'
@@ -116,7 +118,19 @@ onBeforeUnmount(() => {
             <textarea ref="textareaEl" v-model="content" class="write-textarea" aria-label="日记内容" :placeholder="prompts[activePrompt]" :maxlength="MAX" :disabled="loading" aria-describedby="write-hint" />
             <div class="write-prompts" aria-label="书写灵感"><span>从这里开始</span><button v-for="(label, index) in ['一件小事', '此刻心情', '一点进展']" :key="label" :aria-pressed="activePrompt === index + 1" @click="choosePrompt(index + 1)">{{ label }} <i aria-hidden="true">↗</i></button></div>
           </div>
-          <footer class="write-footer"><div><p id="write-hint" class="write-hint">可以写多件事，Mirror 会帮你整理。</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '保存中…' : '保存此刻' }} <span aria-hidden="true">↗</span></button></footer>
+          <footer class="write-footer">
+            <div class="write-permission" role="radiogroup" aria-label="保存方式">
+              <label :class="['permission-option', { selected: saveMode === 'record-only' }]">
+                <input v-model="saveMode" type="radio" value="record-only" :disabled="loading">
+                <span><b>仅记录</b><small>保存、回看、编辑，不交给 AI 整理</small></span>
+              </label>
+              <label :class="['permission-option', { selected: saveMode === 'organize' }]">
+                <input v-model="saveMode" type="radio" value="organize" :disabled="loading">
+                <span><b>让 Mirror 整理</b><small>只授权这次处理，记忆片段之后再逐项确认</small></span>
+              </label>
+            </div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'record-only' ? '默认仅保存。之后也可以再请求 Mirror 整理。' : 'AI 会生成片段候选，确认后才进入后续记忆。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '保存中…' : saveMode === 'record-only' ? '仅保存' : '保存并整理' }} <span aria-hidden="true">↗</span></button></div>
+          </footer>
         </div>
       </section>
     </Transition>
@@ -137,10 +151,10 @@ onBeforeUnmount(() => {
 .write-body { flex:1; min-height:0; display:flex; flex-direction:column; padding:28px 34px 20px; overflow:auto; }.write-address{font:italic 600 31px/1 var(--font-display);color:var(--accent);margin-bottom:24px}
 .write-textarea { width:100%; flex:1; min-height:220px; resize:none; background:transparent; border:0; border-radius:0; padding:0; font:16px/2.1 var(--font);color:var(--text-hi);caret-color:var(--accent); }.write-textarea:focus{outline:none}.write-textarea::placeholder{color:#8091af}.write-error{padding:10px 12px;margin-bottom:14px;background:var(--danger-bg);color:var(--danger);font-size:12px;border-left:3px solid var(--pink)}
 .write-prompts{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:22px}.write-prompts>span{font-size:10px;color:var(--text-low);margin-right:3px}.write-prompts button{font-size:11px;color:var(--text-mid);border:1px solid var(--line);padding:7px 10px;background:white}.write-prompts button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}.write-prompts i{font-style:normal;margin-left:10px;color:var(--accent)}
-.write-footer{display:flex;align-items:center;gap:18px;flex-shrink:0;padding:20px 34px 24px;border-top:1px solid var(--line)}.write-hint{font-size:10px;color:var(--text-mid);line-height:1.5}.write-shortcut{display:block;font:11px var(--font-display);color:var(--text-low);margin-top:5px}.write-counter{margin-left:auto;white-space:nowrap;font:16px var(--font-display);color:var(--text-low)}.write-counter b{font-weight:600;color:var(--text-hi)}.write-counter.full b{color:var(--danger)}
+.write-footer{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:16px 34px 20px;border-top:1px solid var(--line);flex-wrap:wrap}.write-permission{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-basis:100%}.permission-option{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);background:white;cursor:pointer}.permission-option.selected{border-color:var(--accent);background:var(--accent-soft)}.permission-option input{margin:3px 0 0;accent-color:var(--accent)}.permission-option span{display:flex;flex-direction:column;gap:3px}.permission-option b{font-size:11px;color:var(--text-hi)}.permission-option small{font-size:10px;color:var(--text-mid);line-height:1.4}.write-footer-main{display:flex;align-items:center;gap:18px;width:100%}.write-hint{font-size:10px;color:var(--text-mid);line-height:1.5}.write-shortcut{display:block;font:11px var(--font-display);color:var(--text-low);margin-top:5px}.write-counter{margin-left:auto;white-space:nowrap;font:16px var(--font-display);color:var(--text-low)}.write-counter b{font-weight:600;color:var(--text-hi)}.write-counter.full b{color:var(--danger)}
 .write-submit{display:flex;align-items:center;justify-content:space-between;gap:26px;padding:13px 18px;min-height:46px;font-size:13px;font-weight:800;background:#dce5f3;color:#8091ad;white-space:nowrap;transition:background .15s,box-shadow .15s}.write-submit.enabled{background:var(--accent);color:white;box-shadow:4px 4px 0 var(--cyan)}.write-submit.enabled:hover{background:var(--accent-hover)}.write-submit:disabled{cursor:not-allowed}.write-submit span{font-size:19px}
 @media(min-width:900px){.write-modal.desktop{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 80px));height:min(740px,88dvh);grid-template-columns:310px minmax(0,1fr)} }
-@media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:150px;font-size:16px}.write-footer{padding:15px 22px 20px;gap:12px;flex-wrap:wrap}.write-footer>div{flex-basis:100%}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
+@media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:120px;font-size:16px}.write-footer{padding:12px 22px 16px;gap:9px}.write-permission{gap:6px}.permission-option{padding:8px}.permission-option small{font-size:9px}.write-footer-main{gap:10px}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
 @media(max-height:650px) and (min-width:900px){.write-stage-copy{margin-top:40px}.write-stage h2{font-size:30px}.write-stage p{margin-top:12px}.write-body{padding-top:20px}.write-textarea{min-height:130px}.write-prompts{margin-top:14px}.write-footer{padding-top:14px;padding-bottom:16px}}
 .sheet-enter-active,.sheet-leave-active{transition:transform .34s cubic-bezier(.16,1,.3,1)}.sheet-enter-from,.sheet-leave-to{transform:translate(-50%,110%)}
 .modal-enter-active{transition:transform .38s cubic-bezier(.16,1,.3,1),opacity .25s,clip-path .38s}.modal-leave-active{transition:opacity .18s,transform .18s}.modal-enter-from{opacity:0;transform:translate(-46%,-48%);clip-path:polygon(0 0,0 0,-20% 100%,0 100%)}.modal-enter-to{clip-path:polygon(0 0,120% 0,100% 100%,0 100%)}.modal-leave-to{opacity:0;transform:translate(-50%,-48%)}

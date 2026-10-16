@@ -67,6 +67,19 @@ const processingPreview = computed(() => {
     </div>
   </div>
 
+  <div v-else-if="status === 'record_only'"
+    :class="['record-card', 'card', status, { active }]"
+    role="button" tabindex="0" :aria-label="record.content || '仅记录'"
+    @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')"
+    @click="emit('open')"
+  >
+    <div class="record-meta">
+      <span class="record-time">{{ timeText }}</span>
+      <span class="tag tag-record-only">仅记录 · 尚未交给 AI</span>
+    </div>
+    <div class="record-summary record-raw-preview">{{ record.content || '（空记录）' }}</div>
+  </div>
+
   <!-- reviewing / done -->
   <div
     v-else
@@ -118,6 +131,9 @@ const processingPreview = computed(() => {
 .record-card.processing::before, .record-card.failed::before { background: none; }
 .record-card.processing { border-color: var(--processing); }
 .record-card.failed { border-color: var(--danger); }
+.record-card.record_only::before { opacity: 1; background: var(--cyan); }
+.tag-record-only { color: var(--cyan); background: #00d9ff16; }
+.record-raw-preview { white-space: pre-line; }
 
 .record-meta {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;

@@ -23,7 +23,7 @@ const filterInfo = ref('按月标记，点击日期看当天')
  */
 const filteredRecords = computed(() => {
   if (!selectedDate.value) return []
-  return recordsStore.dayRecords.filter(r => r.status === 'done' || r.status === 'reviewing')
+  return recordsStore.dayRecords
 })
 
 /** 选中的日期与已加载数据是否同一天（切页回来 / 请求失败时避免显示上一天的数据） */
