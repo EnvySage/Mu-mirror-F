@@ -1,4 +1,5 @@
 <script setup>
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 /**
  * 「我的资产」页（任务 1/3/4 · 设计稿 4.4 + §3.3b 确认门禁 + Q2 防误删）
  *
@@ -260,12 +261,8 @@ const digestSummary = computed(() => {
 
 <template>
   <div class="page vault-page">
-    <div class="page-header">
-      <div class="page-title">我的资产</div>
-      <div class="page-subtitle">文件交给镜子保管 · 确认过的才进记忆</div>
-    </div>
-
     <div class="page-content">
+      <PageMasthead title="记忆资产" english="MEMORY ARCHIVE" description="把文件与灵感，留在自己的记忆里" />
       <!-- 配额条 -->
       <div class="card quota-card">
         <div class="quota-row">
@@ -281,18 +278,21 @@ const digestSummary = computed(() => {
       <div
         :class="['dropzone', { over: dragOver }]"
         role="button"
+        aria-label="上传文件"
         tabindex="0"
         @click="pickFile"
         @keydown.enter="pickFile"
+        @keydown.space.prevent="pickFile"
         @dragover.prevent="onDragOver"
         @dragleave="onDragLeave"
         @drop.prevent="onDrop"
       >
-        <FileTypeIcon kind="file" />
-        <div class="dropzone-text">
+        <div class="vault-folder" aria-hidden="true"><svg viewBox="0 0 120 100" fill="none"><path d="M8 18h36l12 13h54v60H8z" fill="#0b2370" stroke="#50edfa" stroke-width="3"/><path d="M18 43h97L96 91H8z" fill="#50edfa"/><path d="M28 14h47v45H28z" fill="white" transform="rotate(-9 28 14)"/><path d="M18 43h97L96 91H8z" fill="#50edfa" fill-opacity=".85"/></svg></div>
+        <div class="dropzone-text"><span class="dropzone-title">让灵感，有处可寻。</span>
           拖文件进来，或点击选择
           <span class="dropzone-hint">单文件 20MB 内 · {{ VAULT_WHITELIST.join(' / ') }}</span>
         </div>
+        <span class="dropzone-plus" aria-hidden="true">＋</span>
         <input ref="fileInput" type="file" hidden @change="onPickChange">
       </div>
 
@@ -536,4 +536,17 @@ const digestSummary = computed(() => {
 .as-btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 .as-btn-ghost { color: var(--text-mid); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .as-btn-ghost:hover:not(:disabled) { background: var(--ink-2); color: var(--text-hi); }
+
+.vault-page .page-content { padding-top:0; max-width:none; width:100%; margin:0; }
+.quota-card { background:#0a245f; border:1px solid #629bdf40; box-shadow:none; color:white; padding:14px 20px; margin-bottom:18px; }
+.quota-label { color:#d0e5ff; font-family:var(--font); font-size:11px; }.quota-sub{color:#9ebde9}.quota-bar{background:#264578;height:4px;border-radius:0}.quota-fill{background:var(--cyan);border-radius:0}
+.dropzone { position:relative; min-height:185px; padding:25px 32px; gap:28px; border:1px solid #7dd8ff80; border-left:5px solid var(--cyan); border-radius:2px; color:white; background:#0a3aab; overflow:hidden; }
+.dropzone::before { content:''; position:absolute; inset:0; background:url('/art/water-surface.webp') center / cover; opacity:.22; pointer-events:none; }
+.dropzone:hover,.dropzone.over { background:#1049c1; border-color:var(--cyan); }
+.vault-folder { position:relative; width:120px; flex-shrink:0; transform:rotate(-9deg); }.vault-folder svg{display:block;width:100%}
+.dropzone-text { position:relative; font-size:12px; gap:8px; }.dropzone-title{font-size:27px;font-weight:900;letter-spacing:-.035em;margin-bottom:4px}.dropzone-hint{font:10px/1.6 var(--font);color:#b5d8ff}
+.dropzone-plus{position:relative;margin-left:auto;color:var(--cyan);font:60px/1 var(--font-display);padding:10px}
+.filter-row{margin:22px 0 18px;padding-bottom:16px;border-bottom:1px solid #80b9ff45}.filter-row .chip{border-radius:2px;background:#0b275f;color:#c4dbff;box-shadow:none;border:1px solid #6893ce60;padding:7px 17px}.filter-row .chip.selected{background:var(--cyan);color:var(--night);border-color:var(--cyan);font-weight:800;transform:skew(-7deg)}
+.vault-empty { color:#bed4f5; }.confirm-zone,.lowinfo-zone{border-radius:2px}.quota-card + .dropzone{margin-top:0}
+@media(max-width:599px){.dropzone{padding:24px 18px;gap:15px;min-height:170px}.vault-folder{width:65px}.dropzone-title{font-size:20px}.dropzone-plus{display:none}.dropzone-text{font-size:11px}.filter-row .chip{padding:7px 12px}.quota-card{padding:13px 16px}.dropzone-hint{font-size:9px}}
 </style>
