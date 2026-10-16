@@ -11,7 +11,7 @@
  --shadow:4px 5px 0 #020c3420; --shadow-hover:5px 7px 0 #020c3430; --shadow-float:0 20px 70px #020c3460;
  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
  --font-display:"Barlow Condensed","Arial Narrow","Microsoft YaHei",sans-serif;
- --font-mono:"Barlow Condensed","Arial Narrow",monospace;
+ --font-mono:"Barlow Condensed","Arial Narrow","Microsoft YaHei",sans-serif;
  --nav-height:66px; --sidebar-width:222px; --safe-bottom:env(safe-area-inset-bottom,0px);
  --page-bottom-clearance:calc(152px + var(--safe-bottom)); --surface:#f8fbff; --text-primary:#11244b;
 }

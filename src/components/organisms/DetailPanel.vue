@@ -47,7 +47,7 @@ function startPolling(recordId) {
 
 onBeforeUnmount(stopPolling)
 
-/** 处理中三步动画（Clean → Classify → 生成片段） */
+/** 处理中三步动画（正在整理原文、识别主题并生成片段。） */
 const processingStep = ref(0)
 let stepTimers = []
 
@@ -219,13 +219,13 @@ async function deleteRecord() {
           <div v-if="ui.detailMode === 'processing'" class="processing-view">
             <div class="processing-ring" />
             <div class="processing-title">正在分析你的记录</div>
-            <div class="processing-desc">Clean → Classify → 生成片段</div>
+            <div class="processing-desc">正在整理原文、识别主题并生成片段。</div>
             <div class="processing-steps">
               <div :class="['processing-step', { active: processingStep === 0, done: processingStep > 0 }]">
-                <div class="processing-step-dot" />文本清洗（Clean）
+                <div class="processing-step-dot" />整理原文
               </div>
               <div :class="['processing-step', { active: processingStep === 1, done: processingStep > 1 }]">
-                <div class="processing-step-dot" />拆分与分类（Classify）
+                <div class="processing-step-dot" />识别主题
               </div>
               <div :class="['processing-step', { active: processingStep === 2 }]">
                 <div class="processing-step-dot" />生成片段卡片
@@ -353,4 +353,9 @@ async function deleteRecord() {
 .failed-actions .chip { cursor: pointer; }
 .chip-accent { color: var(--accent); }
 .chip-danger { color: var(--danger); }
+
+.detail-header { background:#071b50; border-bottom:3px solid var(--cyan); color:white; min-height:64px; }
+.detail-back,.detail-title { color:#d4e7ff; }.detail-title{font-weight:800}.detail-back:hover{color:var(--cyan)}
+.detail-confirm { background:var(--cyan); color:var(--night); border-radius:2px; font-weight:800; min-height:38px; }.detail-confirm:hover{background:white}
+.detail-page { background:#eaf1ff; }.review-original{border-radius:2px}.processing-title{font-family:var(--font);font-weight:800}
 </style>

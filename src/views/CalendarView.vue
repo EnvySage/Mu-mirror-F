@@ -146,7 +146,7 @@ function openRecord(id) {
 .calendar-records .empty-title { color:white; }.calendar-records .empty-desc { color:var(--on-dark); }
 .calendar-invitation { position:relative; min-height:520px; overflow:hidden; color:white; border-bottom:1px solid #89b4ff50; }
 .calendar-invitation > span { position:absolute; top:12px; left:0; font:italic 800 66px var(--font-display); color:#8edbff22; white-space:nowrap; }
-.calendar-invitation img { position:absolute; height:580px; width:580px; top:-6px; left:50%; transform:translateX(-50%); opacity:.95; }
+.calendar-invitation img { position:absolute; height:580px; width:580px; top:-6px; left:50%; transform:translateX(-50%); opacity:.95; mask-image:linear-gradient(#000 65%,transparent 100%); }
 .calendar-invitation > div { position:absolute; left:0; bottom:15px; right:0; padding:25px 20px; background:linear-gradient(0deg,#06123f 55%,#06123f00); }
 .calendar-invitation h2 { font-size:27px; font-weight:900; line-height:1.4; }
 .calendar-invitation p { font-size:11px; color:var(--on-dark); margin-top:15px; line-height:1.9; }
