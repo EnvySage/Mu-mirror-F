@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
       <div v-if="show" class="modal-overlay" @click="onClose" />
     </Transition>
     <Transition :name="isDesktop ? 'modal' : 'sheet'">
-      <div v-if="show" :class="['write-modal', { desktop: isDesktop }]">
+      <div v-if="show" :class="['write-modal', { desktop: isDesktop }]" role="dialog" aria-modal="true" aria-label="写日记" @keydown.esc="onClose">
         <div class="write-header">
           <button class="write-cancel" @click="onClose">取消</button>
           <span class="write-header-title">写日记</span>
@@ -105,6 +105,7 @@ onBeforeUnmount(() => {
             ref="textareaEl"
             v-model="content"
             class="write-textarea"
+            aria-label="日记内容"
             placeholder="今天发生了什么？"
             :maxlength="MAX"
           />
@@ -202,4 +203,7 @@ onBeforeUnmount(() => {
   opacity: 0;
   transform: translate(-50%, -50%) scale(.96) !important;
 }
+
+.write-modal, .write-modal.desktop { border-radius:3px; border-top:4px solid var(--cyan); box-shadow:8px 10px 0 #02113b80,0 20px 90px #010a3470; }
+.write-header { background:#071b50; color:white; }.write-header-title{font-family:var(--font);font-size:15px;font-weight:800}.write-cancel{color:#c0d7ff}.write-submit{border-radius:2px}.write-submit.enabled{background:var(--cyan);color:var(--night);font-weight:800}.write-textarea{border-radius:0}.write-hint{font-size:10px}
 </style>
