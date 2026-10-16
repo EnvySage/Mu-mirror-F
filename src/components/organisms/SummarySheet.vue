@@ -18,7 +18,7 @@ import { useGlossaryStore } from '@/stores/glossary'
 import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
 import TermCard from '@/components/molecules/TermCard.vue'
-import { useDialogFocus } from '@/composables/useDialogFocus'
+import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
 
 const props = defineProps({
   show: Boolean,
@@ -46,12 +46,15 @@ const busyTermId = ref(null)
 /** 滚动容器（触底判定 + 打开时复位到顶部） */
 const bodyEl = ref(null)
 const dialogEl = ref(null)
-useDialogFocus(() => props.show, dialogEl, '.sheet-close')
+const focusOpen = ref(false)
+useDialogFocus(() => focusOpen.value, dialogEl, '.sheet-close', () => emit('close'))
+function afterSheetLeave() { if (!props.show) focusOpen.value = false }
 function retrySummaries() { summaries.fetchList({ limit: PAGE_SIZE }); summaries.fetchMissing(MISSING_LOOKBACK) }
-function startWriting() { emit('close'); ui.openWriteModal() }
+function startWriting() { prepareDialogFocusHandoff(); emit('close'); ui.openWriteModal() }
 
 watch(() => props.show, (val) => {
   if (val) {
+    focusOpen.value = true
     expandedDate.value = null
     summaries.fetchList({ limit: PAGE_SIZE })
     // 缺失日（有记录但没生成成功）：渲染成流里的一行，补生成按钮挂在那一天上
@@ -209,6 +212,7 @@ async function onDismiss(term) {
  */
 function openSource(term) {
   if (term.source_record_id == null) return
+  prepareDialogFocusHandoff()
   ui.closeSummarySheet()
   ui.selectedRecordId = term.source_record_id
   ui.showDetail = true
@@ -220,8 +224,8 @@ function openSource(term) {
     <Transition name="fade">
       <div v-if="show" class="modal-overlay" @click="emit('close')" />
     </Transition>
-    <Transition name="sheet">
-      <section v-if="show" ref="dialogEl" class="sheet" role="dialog" aria-modal="true" aria-labelledby="summary-title" tabindex="-1" @keydown.esc="emit('close')">
+    <Transition name="sheet" @after-leave="afterSheetLeave">
+      <section v-if="show" ref="dialogEl" class="sheet" role="dialog" aria-modal="true" aria-labelledby="summary-title" tabindex="-1">
         <header class="sheet-header">
           <div><span class="summary-edition">DAILY REFLECTION</span><h2 id="summary-title">每日总结</h2></div>
           <button class="sheet-close" @click="emit('close')">关闭 <span aria-hidden="true">×</span></button>

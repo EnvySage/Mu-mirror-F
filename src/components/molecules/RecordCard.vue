@@ -7,6 +7,9 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 const props = defineProps({
   record: { type: Object, required: true },
   active: { type: Boolean, default: false },
+  featured: { type: Boolean, default: false },
+  arrival: { type: Boolean, default: false },
+  layoutVariant: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['open', 'retry', 'delete'])
@@ -42,7 +45,7 @@ const processingPreview = computed(() => {
 
 <template>
   <!-- processing：转圈 + "AI 整理中" -->
-  <div v-if="status === 'processing'" class="record-card card processing" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')" @click="emit('open')">
+  <div v-if="status === 'processing'" :class="['record-card', 'card', 'processing', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag tag-processing"><span class="spinner" />AI 整理中</span>
@@ -51,7 +54,7 @@ const processingPreview = computed(() => {
   </div>
 
   <!-- failed：红字原因 + 重试 + 删除 -->
-  <div v-else-if="status === 'failed'" class="record-card card failed" @click="emit('open')">
+  <div v-else-if="status === 'failed'" :class="['record-card', 'card', 'failed', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" @keydown.enter.self="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag" style="color:var(--danger);background:var(--danger-bg)">失败</span>
@@ -68,10 +71,12 @@ const processingPreview = computed(() => {
   </div>
 
   <div v-else-if="status === 'record_only'"
-    :class="['record-card', 'card', status, { active }]"
+    :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
+    data-object-source="record"
+    :data-object-id="record.id"
     role="button" tabindex="0" :aria-label="record.content || '仅记录'"
-    @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')"
-    @click="emit('open')"
+    @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)"
+    @click="emit('open', $event)"
   >
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
@@ -83,10 +88,12 @@ const processingPreview = computed(() => {
   <!-- reviewing / done -->
   <div
     v-else
-    :class="['record-card', 'card', status, { active }]"
+    :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
+    data-object-source="record"
+    :data-object-id="record.id"
     role="button" tabindex="0" :aria-label="title"
-    @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')"
-    @click="emit('open')"
+    @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)"
+    @click="emit('open', $event)"
   >
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
@@ -159,6 +166,8 @@ const processingPreview = computed(() => {
 .chip-danger { color: var(--danger); }
 
 .record-card { padding:20px 22px; border-radius:2px; border:1px solid #d9e6ff; box-shadow:4px 5px 0 #020c3425; animation:none; }
+.record-card.arrival { animation:record-arrival 1.4s ease both; }
+@keyframes record-arrival { 0%,100%{box-shadow:4px 5px 0 #020c3425} 25%,65%{box-shadow:0 0 0 3px var(--cyan),0 0 30px #50edfa70;transform:translateX(5px)} }
 .record-card::before { top:0; bottom:0; width:4px; border-radius:0; }
 .record-card:hover, .record-card:focus-visible { border-color:var(--cyan); box-shadow:5px 6px 0 #020c3445; }
 .record-title { font-family:var(--font); font-size:16px; font-weight:800; line-height:1.6; }

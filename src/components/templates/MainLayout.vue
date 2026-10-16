@@ -15,6 +15,7 @@ import WriteModal from '@/components/organisms/WriteModal.vue'
 import SummarySheet from '@/components/organisms/SummarySheet.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
+import { cancelObjectTransitions } from '@/composables/useObjectTransition'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,6 +25,11 @@ const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
+
+router.beforeEach((to, from) => {
+  if (to.fullPath !== from.fullPath && !ui.consumeNavigationApproval(to.fullPath) && !ui.confirmNavigationDrafts()) return false
+  return true
+})
 
 /**
  * 待办建议轮询（15s，全局）
@@ -57,6 +63,7 @@ onMounted(() => {
  * 详情层会继续压在新页面上。这里兜底：只要路由变了就收。
  */
 watch(() => route.name, () => {
+  cancelObjectTransitions()
   if (ui.showDetail) {
     ui.showDetail = false
     ui.selectedRecordId = null
@@ -91,7 +98,7 @@ function openWrite() {
       <DetailPanel />
     </main>
     <BottomNav />
-    <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" />
+    <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <ToastContainer />
   </div>

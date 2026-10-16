@@ -18,8 +18,10 @@ const nav = [
 ]
 const projects = [{ label:'MU聊',url:'http://112.74.94.42:90/' },{ label:'XS Blog',url:'https://envysage.github.io/XS-Blog/' },{ label:'暮云音乐',url:'http://112.74.94.42/' }]
 function switchPage(page) {
+ if (!ui.confirmNavigationDrafts()) return
+ ui.approveNavigation(router.resolve({ name: page }).fullPath)
  if (page === 'records') ui.sidebarSelectedDate = null
- ui.switchPage(page)
+ ui.switchPage(page, true)
  router.push({ name: page })
 }
 </script>

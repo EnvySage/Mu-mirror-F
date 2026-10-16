@@ -59,3 +59,13 @@ User feedback: remove the game character cutouts and make movement carry more of
 - Added placeholder-only writing prompts, Ctrl/Cmd+Enter save, disabled editing during submission, visible errors, and shared dialog focus containment/return. The existing 500-character API limit and model configuration check are preserved.
 - Redesigned Daily Summary as a 980px daily journal: blue cover, sticky month labels, dated reading cards, expanded prose, and explicit empty/error/retry states. Existing cursor pagination, missing-day generation, regeneration, and glossary candidate actions remain connected to their stores.
 - Public demo receives matching sample summaries, full articles, pagination and generation fixtures. These fixtures stay only in the separate public-demo checkout.
+
+
+## Records, reading detail and archive — 2026-10-17
+
+- Reframed records as a date-anchored stream with a featured first entry, compact continuous entries, and a responsive dark overview area. The writing entry remains tied to today while browsing historical dates.
+- Reworked record detail into a full-width reading surface. The selected type and mood stay visible as larger, angled summary marks; the full attribute editor starts collapsed and opens on demand, keeping the reading view compact on tablets. Opening and returning use a temporary source-to-reader shape transition; record data requests remain generation-guarded, and the source receives focus when returning.
+- Preserved the independent memory and todo authorization paths. Metadata synchronization no longer overwrites a pending authorization selection; metadata and authorization controls expose their distinct save states.
+- Reframed archive items as a responsive 1–3 column file shelf, compacted the upload slot, and connected preview open/close to the source file. Preview remains user-initiated and stale preview requests are discarded.
+- Added dirty-draft guards and focus handoff for writing and related dialogs. Reduced-motion mode bypasses large object travel while keeping keyboard open/close available.
+- Verification in the isolated `codex/mirror-ui-motion` worktree: production build and browser smoke pass. The smoke uses explicitly mocked local fixtures and checks 375, 768, 1280, 1440, and 1920px widths, record open/return and focus restoration, keyboard activation, filtering, one on-demand preview request, and reduced motion. Upload/confirm, save failure retention, authorization submit outcomes, delete undo, and live-backend behavior remain unverified; see the execution report under `.superpowers/sdd/2026-10-17-0111-feat-mirror-ui-motion/report.md`.

@@ -19,6 +19,7 @@ const props = defineProps({
   /** 只读态（done 记录）：所有编辑控件禁用/隐藏，一眼可见"不可修改" */
   readonly: { type: Boolean, default: false },
 })
+const emit = defineEmits(['dirty-change'])
 
 const recordsStore = useRecordsStore()
 const toast = useToastStore()
@@ -31,7 +32,14 @@ const isNew = computed(() => String(props.chunk.id).startsWith('local_'))
 const showTaskStatus = computed(() => ['todo', 'plan'].includes(edit.contentType))
 const textEdited = ref(false)
 const saving = ref(false)
+const saveError = ref('')
+const failedFields = ref(null)
 const textareaEl = ref(null)
+// Detail opens as a reading surface; keep the full taxonomy behind an explicit edit action.
+const attributesExpanded = ref(false)
+const selectedTypeLabel = computed(() => CONTENT_TYPES.find(t => t.key === edit.contentType)?.label || '未分类')
+const selectedMoodItems = computed(() => ALL_MOODS.filter(m => edit.mood.includes(m.key)))
+watch(() => props.chunk.id, () => { attributesExpanded.value = false })
 
 const edit = reactive({
   segment: '',
@@ -70,14 +78,14 @@ function autoGrow(el) {
 
 function onSegmentInput(e) {
   textEdited.value = true
+  emit('dirty-change', { id: props.chunk.id, dirty: true })
   autoGrow(e.target)
 }
 
 async function onSegmentBlur() {
   if (!edit.segment.trim()) return
   if (!textEdited.value) return
-  await save({ segment: edit.segment })
-  textEdited.value = false
+  if (await save({ segment: edit.segment })) textEdited.value = false
 }
 
 function toggleMood(m) {
@@ -104,13 +112,16 @@ function selectTask(t) {
 
 async function onKeywordsBlur() {
   const keywords = edit.keywords.split(/[，,]/).map(s => s.trim()).filter(Boolean)
-  await save({ keywords })
+  if (await save({ keywords })) emit('dirty-change', { id: props.chunk.id, dirty: false })
 }
 
 /** 组装扁平 payload（ChunkDTO 契约） */
 async function save(fields) {
   if (saving.value) return
   saving.value = true
+  emit('dirty-change', { id: props.chunk.id, dirty: true })
+  saveError.value = ''
+  failedFields.value = null
   const payload = {
     segment: edit.segment,
     contentType: edit.contentType || undefined,
@@ -131,8 +142,24 @@ async function save(fields) {
     ok = await recordsStore.updateChunk(props.chunk.id, payload)
     if (ok) toast.success('片段已保存')
   }
-  if (!ok) toast.error(recordsStore.error || '保存失败，请重试')
+  if (!ok) {
+    saveError.value = recordsStore.error || '保存失败，请重试'
+    failedFields.value = fields
+    toast.error(saveError.value)
+    emit('dirty-change', { id: props.chunk.id, dirty: true })
+  } else {
+    emit('dirty-change', { id: props.chunk.id, dirty: false })
+  }
   saving.value = false
+  return !!ok
+}
+
+async function retryFailedSave() {
+  if (!failedFields.value || saving.value) return
+  const fields = failedFields.value
+  if (await save(fields)) {
+    if (Object.hasOwn(fields, 'segment')) textEdited.value = false
+  }
 }
 
 async function removeChunk() {
@@ -146,7 +173,7 @@ async function removeChunk() {
   <div :class="['chunk-card', 'card', { 'chunk-readonly': readonly }]">
     <div class="chunk-top">
       <span class="chunk-top-left">
-        <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
+        <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ saving ? ' · 保存中' : saveError ? ' · 未保存' : textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
         <!-- 待办终态徽标：待办已删除优先于待办已完成（todoRemoved 由后端软删待办时回写 metadata；记录内容完整保留） -->
         <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed" title="关联待办已被删除，记录内容保留">待办已删除</span>
         <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done" title="关联待办已完成，记录内容保留">待办已完成</span>
@@ -155,6 +182,7 @@ async function removeChunk() {
         <button v-if="canEdit" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
         </button>
+        <button v-if="saveError && canEdit" class="chunk-retry" :disabled="saving" @click="retryFailedSave">重试保存</button>
       </div>
     </div>
 
@@ -178,7 +206,18 @@ async function removeChunk() {
       <div style="font-size:12.5px;color:var(--text-mid)">{{ chunk.metadata?.summary || '确认时 AI 将自动补分类' }}</div>
     </div>
 
+    <div class="attribute-toolbar">
+      <span class="attribute-summary" aria-label="已选属性">
+        <span class="attribute-summary-type">{{ selectedTypeLabel }}</span>
+        <span v-for="mood in selectedMoodItems" :key="mood.key" class="attribute-summary-mood" :style="{ '--mood-color': MOOD_COLOR[mood.key] }">{{ mood.label }}</span>
+      </span>
+      <button type="button" class="attribute-toggle" :aria-expanded="attributesExpanded" @click="attributesExpanded = !attributesExpanded">
+        {{ attributesExpanded ? '收起属性' : canEdit ? '编辑属性' : '查看属性' }}
+      </button>
+    </div>
+
     <!-- 内容类型 chips（8 选 1） -->
+    <div v-show="attributesExpanded" class="chunk-attributes">
     <div class="chunk-field">
       <div class="chunk-field-label">内容类型 TYPE · 8 选 1</div>
       <div class="chip-row">
@@ -186,7 +225,7 @@ async function removeChunk() {
           v-for="t in CONTENT_TYPES"
           :key="t.key"
           :class="['chip', { selected: edit.contentType === t.key }]"
-          :disabled="!canEdit"
+          :disabled="!canEdit || saving"
           @click="selectType(t.key)"
         >{{ t.label }}</button>
       </div>
@@ -201,7 +240,7 @@ async function removeChunk() {
           :key="m.key"
           :class="['chip', 'mood-chip', { selected: edit.mood.includes(m.key) }]"
           :style="{ color: edit.mood.includes(m.key) ? MOOD_COLOR[m.key] : undefined }"
-          :disabled="!canEdit"
+          :disabled="!canEdit || saving"
           @click="toggleMood(m.key)"
         ><span class="dot" />{{ m.label }}</button>
       </div>
@@ -215,7 +254,7 @@ async function removeChunk() {
           v-for="t in TASK_STATUSES"
           :key="t.key"
           :class="['chip', { selected: edit.taskStatus === t.key }]"
-          :disabled="!canEdit"
+          :disabled="!canEdit || saving"
           @click="selectTask(t.key)"
         >{{ t.label }}</button>
       </div>
@@ -230,11 +269,13 @@ async function removeChunk() {
         class="keywords-input"
         placeholder="用逗号分隔"
         :disabled="saving"
+        @input="emit('dirty-change', { id: chunk.id, dirty: true })"
         @blur="onKeywordsBlur"
       >
       <div v-else class="record-keywords" style="margin-top:0">
         <span v-for="k in (chunk.metadata?.keywords || [])" :key="k" class="keyword">{{ k }}</span>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -345,4 +386,14 @@ async function removeChunk() {
   color: var(--text-mid);
 }
 .chunk-card.chunk-readonly .chunk-index { color: var(--text-low); }
+.attribute-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+.attribute-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}
+.attribute-summary-type,.attribute-summary-mood{display:inline-flex;align-items:center;min-height:36px;padding:7px 15px;font-size:15px;font-weight:800;line-height:1.2;letter-spacing:.015em}
+.attribute-summary-type{color:#073e9d;background:#dceaff;border-left:4px solid var(--cyan);clip-path:polygon(0 0,100% 0,calc(100% - 5px) 100%,0 100%)}
+.attribute-summary-mood{color:var(--mood-color);background:#fff;border:1px solid color-mix(in srgb,var(--mood-color) 48%,white);box-shadow:inset 0 -3px color-mix(in srgb,var(--mood-color) 28%,white)}
+.attribute-toggle{font-size:11px;color:#0756ce;padding:5px 9px;border:1px solid #afc7ee;background:#f4f8ff;flex-shrink:0;transition:background .16s,color .16s}
+.attribute-toggle:hover,.attribute-toggle:focus-visible{background:var(--cyan);color:var(--night)}
+.chunk-attributes{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;animation:attribute-open .24s var(--motion-enter)}
+.chunk-attributes .chunk-field{min-width:0;margin-top:0}
+@keyframes attribute-open{from{opacity:.3;transform:translateY(-5px)}to{opacity:1;transform:none}}
 </style>

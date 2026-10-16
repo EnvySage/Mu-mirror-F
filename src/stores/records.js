@@ -150,11 +150,12 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {string|number} id
    * @returns {Promise<Record|null>}
    */
-  async function fetchRecord(id) {
+  async function fetchRecord(id, { isCurrent = () => true } = {}) {
     try {
       const res = await apiGetRecord(id)
+      if (!isCurrent()) return null
       // 更新本地缓存
-      const index = records.value.findIndex(r => r.id === id)
+      const index = records.value.findIndex(r => String(r.id) === String(id))
       if (index !== -1) {
         records.value[index] = res.data
       } else {
@@ -185,7 +186,7 @@ export const useRecordsStore = defineStore('records', () => {
   async function organizeRecord(id) {
     try {
       const res = await apiOrganizeRecord(id)
-      const index = records.value.findIndex(r => r.id === id)
+      const index = records.value.findIndex(r => String(r.id) === String(id))
       if (index !== -1 && res.data) records.value[index] = res.data
       return res.data || null
     } catch (err) {
@@ -391,9 +392,10 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {Object} [payload] - 可选扩展 body（todoResolutions 关联待办裁决）
    * @returns {Promise<Object|null>} 更新后的记录（失败返回 null）
    */
-  async function confirmReview(id, payload) {
+  async function confirmReview(id, payload, { isCurrent = () => true } = {}) {
     try {
       const res = await apiConfirmReview(id, payload)
+      if (!isCurrent()) return null
       const index = records.value.findIndex(r => r.id === id)
       if (index !== -1 && res.data) {
         records.value[index] = res.data

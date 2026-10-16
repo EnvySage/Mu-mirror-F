@@ -15,13 +15,16 @@
  * 走查口径：digest_status 非 confirmed/extracted（pending/skipped/failed）时预览照常
  * 可用——保管完整就可看（设计稿 §3.3b「未确认：可下载预览」）；仅 deleted 不可。
  */
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '@/api/request'
 import { renderMarkdown } from '@/utils/mdPreview'
+import { findObjectSource, playObjectTransition, playElementExit, cancelObjectTransitions } from '@/composables/useObjectTransition'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 
 const props = defineProps({
   /** vault 条目（snake_case；对话文件卡传 camelCase 时兼容取值） */
   item: { type: Object, required: true },
+  origin: { type: Object, default: null },
 })
 
 const emit = defineEmits(['close'])
@@ -32,6 +35,12 @@ const mime = ref('')
 const filename = ref('')
 const objectUrl = ref('')
 const textContent = ref('')
+const dialogEl = ref(null)
+const maskEl = ref(null)
+const active = ref(false)
+const closing = ref(false)
+let requestGeneration = 0
+useDialogFocus(() => active.value, dialogEl, '.fpm-close', closeWithMotion)
 
 /** 展示名（显示名优先，回退接口 Content-Disposition 文件名） */
 const displayName = computed(() =>
@@ -77,19 +86,37 @@ const unsupportedTip = computed(() => {
   return '该类型暂不支持内嵌预览 · 可下载原文件'
 })
 
-function onKeydown(e) {
-  if (e.key === 'Escape') emit('close')
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
+onMounted(async () => {
+  active.value = true
   load()
+  await nextTick()
+    const target = dialogEl.value?.getBoundingClientRect?.()
+  if (props.origin && target) playObjectTransition(props.origin, target, { duration: 440, title: displayName.value })
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
+  active.value = false
+  requestGeneration += 1
   revoke()
+  cancelObjectTransitions()
 })
+
+async function closeWithMotion() {
+  if (closing.value) return
+  closing.value = true
+  cancelObjectTransitions()
+  requestGeneration += 1
+  loading.value = false
+  const source = findObjectSource('asset', props.item.id)
+  const rect = source?.getBoundingClientRect?.()
+  const visible = rect && rect.width && rect.height && rect.bottom > 0 && rect.top < window.innerHeight
+  const from = dialogEl.value?.getBoundingClientRect?.()
+  const exit = playElementExit(dialogEl.value, { duration: 300, reduced: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches })
+  const maskExit = playElementExit(maskEl.value, { duration: 220, reduced: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches })
+  const flight = from && visible ? playObjectTransition(from, rect, { duration: 300, title: displayName.value, reverse: true }) : Promise.resolve(false)
+  await Promise.all([exit, maskExit, flight])
+  emit('close')
+}
 
 function revoke() {
   if (objectUrl.value) {
@@ -99,6 +126,8 @@ function revoke() {
 }
 
 async function load() {
+  const generation = ++requestGeneration
+  active.value = true
   loading.value = true
   error.value = ''
   try {
@@ -106,20 +135,23 @@ async function load() {
     // 返回值就是 Blob 本身（headers 不经手）。真 headers/文件名需另走原生 axios 或按
     // blob.type 推断；此处 mime 用 blob.type，文件名用前端已知字段兜底。
     const blob = await request.get(`/vault/${props.item.id}/preview`, { responseType: 'blob', timeout: 60000 })
+    if (!active.value || generation !== requestGeneration) return
     const realBlob = blob instanceof Blob ? blob : new Blob([blob])
     mime.value = String(realBlob.type || 'application/octet-stream').split(';')[0].trim()
     filename.value = props.item.original_name || props.item.originalName || props.item.display_name || `preview-${props.item.id}`
     if (isTextLike(mime.value)) {
       textContent.value = await realBlob.text()
+      if (!active.value || generation !== requestGeneration) return
     } else {
       revoke()
+      if (!active.value || generation !== requestGeneration) return
       objectUrl.value = URL.createObjectURL(realBlob)
     }
   } catch (err) {
     console.error('Preview load failed:', err)
-    error.value = err?.message || '预览加载失败'
+    if (active.value && generation === requestGeneration) error.value = err?.message || '预览加载失败'
   } finally {
-    loading.value = false
+    if (active.value && generation === requestGeneration) loading.value = false
   }
 }
 
@@ -177,13 +209,13 @@ function saveBlob(blob, name) {
 
 <template>
   <Teleport to="body">
-    <div class="fpm-mask" @click.self="emit('close')">
-      <div class="fpm-card" role="dialog" aria-modal="true" :aria-label="displayName">
+    <div ref="maskEl" :class="['fpm-mask', { closing }]" @click.self="closeWithMotion">
+      <div ref="dialogEl" :class="['fpm-card', { closing }]" role="dialog" aria-modal="true" :aria-label="displayName" tabindex="-1">
         <!-- 顶部：文件名 + mime 徽标 + 关闭 -->
         <div class="fpm-head">
           <span class="fpm-badge">{{ mimeBadge }}</span>
           <div class="fpm-title" :title="displayName">{{ displayName }}</div>
-          <button class="fpm-close" aria-label="关闭预览" @click="emit('close')">
+          <button class="fpm-close" aria-label="关闭预览" @click="closeWithMotion">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -241,7 +273,7 @@ function saveBlob(blob, name) {
   background: rgba(26, 26, 23, .4);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
-  animation: fpmIn .18s ease;
+  animation: fpmIn .44s cubic-bezier(.16,1,.3,1);
 }
 @keyframes fpmIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -254,9 +286,12 @@ function saveBlob(blob, name) {
   box-shadow: var(--shadow-float);
   display: flex; flex-direction: column;
   overflow: hidden;
-  animation: fpmCardIn .2s ease;
+  animation: fpmCardIn .48s cubic-bezier(.16,1,.3,1);
+  clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%);
+  transition:clip-path .3s var(--motion-enter),border-color .3s;
 }
-@keyframes fpmCardIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes fpmCardIn { 0% { opacity: 0; transform: translateY(38px) translateX(24px) scale(.92); clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%); } 72% { opacity:1; transform:translateY(-5px) translateX(-3px) scale(1.01); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,0 100%); } 100% { opacity:1; transform:none; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); } }
+.fpm-card.closing { clip-path:polygon(0 0,100% 0,100% 0,0 100%); border-color:var(--pink); }
 
 .fpm-head {
   display: flex; align-items: center; gap: 9px;

@@ -11,7 +11,7 @@
  *   confirmed 绿"已可检索" / skipped 灰"仅保管" / failed 红"读取失败"
  * - 未确认文件灰标"未确认 · 检索不到"（§3.3b 资产页低信息置顶区）
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { formatBytes, CATEGORY_LABELS } from '@/constants/fileTypes'
 import { CONTENT_TYPES } from '@/constants/tags'
@@ -20,15 +20,20 @@ const props = defineProps({
   /** vault item（snake_case，见 vault store typedef） */
   item: { type: Object, required: true },
   busy: { type: Boolean, default: false },
+  shelfVariant: { type: String, default: 'cut-a' },
 })
 
-const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview'])
+const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview', 'draft-change'])
 
 const editing = ref(false)
 const confirmingDelete = ref(false)
 const confirmInput = ref('')
 const leaving = ref(false)
 const draft = ref({ display_name: '', description: '', category: 'document' })
+const initialDraft = ref(null)
+const draftDirty = computed(() => !!initialDraft.value && JSON.stringify(draft.value) !== JSON.stringify(initialDraft.value))
+watch(draft, () => emit('draft-change', { id: props.item.id, dirty: editing.value && draftDirty.value }), { deep: true })
+watch(editing, (value) => { if (!value) emit('draft-change', { id: props.item.id, dirty: false }) })
 
 /** digest 五态点 + 文案（任务 1：四态改五态） */
 const digest = computed(() => {
@@ -87,6 +92,7 @@ function startEdit() {
     description: props.item.description || '',
     category: current,
   }
+  initialDraft.value = { ...draft.value }
   editing.value = true
 }
 
@@ -96,8 +102,7 @@ function saveEdit() {
     display_name: draft.value.display_name.trim(),
     description: draft.value.description.trim(),
     category: draftCategory.value,
-  })
-  editing.value = false
+  }, (ok) => { if (ok) editing.value = false })
 }
 
 /** 补确认（extracted/failed）：直接展开确认表单（同回执编辑心智，确认即进检索） */
@@ -108,7 +113,13 @@ function startConfirm() {
     description: props.item.description || '',
     category: CONTENT_TYPES.some(t => t.key === props.item.category) ? props.item.category : fallback,
   }
+  initialDraft.value = { ...draft.value }
   editing.value = true
+}
+
+function cancelEdit() {
+  if (draftDirty.value && !window.confirm('文件信息尚未保存。放弃修改吗？')) return
+  editing.value = false
 }
 
 /** 编辑态保存时若原状态是 extracted/failed → 走 confirm 门禁动作（key/description/category） */
@@ -121,11 +132,10 @@ function saveOrConfirm() {
   }
   if (unconfirmed.value || props.item.digest_status === 'failed') {
     if (!data.description.trim()) return // 确认门禁：确认必须带一句描述（Y4 图片强制描述同口径）
-    emit('confirm', { key: data.display_name, description: data.description, category: data.category })
+    emit('confirm', { key: data.display_name, description: data.description, category: data.category }, (ok) => { if (ok) editing.value = false })
   } else {
-    emit('save', data)
+    emit('save', data, (ok) => { if (ok) editing.value = false })
   }
-  editing.value = false
 }
 
 /** 编辑/确认态按钮文案与禁用逻辑 */
@@ -165,18 +175,18 @@ function onPreview() {
 </script>
 
 <template>
-  <div :class="['asset-card', { 'asset-leaving': leaving, 'asset-low': lowInfo && !editing && !confirmingDelete, 'asset-unconfirmed': dimmed }]">
+  <div :class="['asset-card', `shelf-${shelfVariant}`, { 'is-editing': editing || confirmingDelete, 'asset-leaving': leaving, 'asset-low': lowInfo && !editing && !confirmingDelete, 'asset-unconfirmed': dimmed }]" data-object-source="asset" :data-object-id="item.id">
     <!-- 原地编辑（confirmed/skipped=保存编辑；extracted/failed=确认门禁动作） -->
     <template v-if="editing">
       <div class="as-fields">
         <label class="as-field">
           <span class="as-field-label">名称</span>
-          <input v-model="draft.display_name" class="as-input" placeholder="显示名">
+          <input v-model="draft.display_name" class="as-input" placeholder="显示名" :disabled="busy">
         </label>
         <label class="as-field">
           <span class="as-field-label">描述</span>
           <textarea v-model="draft.description" class="as-input as-textarea" rows="2"
-            :placeholder="unconfirmed || item.digest_status === 'failed' ? '告诉镜子这是什么，才能被找到' : '以后想怎么找到它？'" />
+            :placeholder="unconfirmed || item.digest_status === 'failed' ? '告诉镜子这是什么，才能被找到' : '以后想怎么找到它？'" :disabled="busy" />
         </label>
         <div class="as-field">
           <span class="as-field-label">属于哪类</span>
@@ -185,6 +195,7 @@ function onPreview() {
               v-for="t in categoryOptions"
               :key="t.key"
               :class="['as-cat', { selected: draft.category === t.key }]"
+              :disabled="busy"
               @click="draft.category = t.key"
             >{{ t.label }}</button>
           </div>
@@ -194,7 +205,7 @@ function onPreview() {
         确认后镜子才能凭描述找到它；未确认只是保管，检索不到
       </div>
       <div class="as-actions">
-        <button class="as-btn as-btn-ghost" :disabled="busy" @click="editing = false">取消</button>
+        <button class="as-btn as-btn-ghost" :disabled="busy" @click="cancelEdit">取消</button>
         <button class="as-btn as-btn-primary" :disabled="saveDisabled" @click="saveOrConfirm">{{ saveLabel }}</button>
       </div>
     </template>

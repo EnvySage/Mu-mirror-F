@@ -9,7 +9,7 @@ import { useToastStore } from '@/stores/toast'
 const props = defineProps({
   show: Boolean,
 })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'saved'])
 
 const router = useRouter()
 const recordsStore = useRecordsStore()
@@ -22,13 +22,15 @@ const loading = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
 const dialogEl = ref(null)
+const focusOpen = ref(false)
 const openedAt = ref(new Date())
 const prompts = ['今天发生了什么？', '有什么小事，让你觉得今天值得？', '现在的你，是什么心情？', '有哪件事，比昨天更进一步？']
 const activePrompt = ref(0)
 const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(openedAt.value))
 const dateNumber = computed(() => String(openedAt.value.getDate()).padStart(2, '0'))
 const monthLabel = computed(() => new Intl.DateTimeFormat('en', { month: 'short' }).format(openedAt.value).toUpperCase())
-useDialogFocus(() => props.show, dialogEl, 'textarea')
+useDialogFocus(() => focusOpen.value, dialogEl, 'textarea', onClose)
+function afterModalLeave() { if (!props.show) focusOpen.value = false }
 function choosePrompt(index) { activePrompt.value = index; textareaEl.value?.focus() }
 
 const MAX = 500
@@ -38,6 +40,7 @@ const enabled = computed(() => content.value.trim().length > 0 && !loading.value
 
 watch(() => props.show, async (val) => {
   if (val) {
+    focusOpen.value = true
     openedAt.value = new Date()
     activePrompt.value = 0
     content.value = ''
@@ -64,6 +67,7 @@ async function handleSubmit() {
   error.value = ''
   try {
     const record = await recordsStore.createRecord(content.value.trim(), requestAiProcessing)
+    emit('saved', record)
     emit('close')
     toast.success(requestAiProcessing ? '已保存，Mirror 开始整理' : '已保存为仅记录')
     return record
@@ -76,6 +80,7 @@ async function handleSubmit() {
 
 function onClose() {
   if (loading.value) return
+  if (content.value.trim() && !window.confirm('这段日记还没有保存。放弃并关闭吗？')) return
   emit('close')
 }
 
@@ -102,8 +107,8 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <Transition name="fade"><div v-if="show" class="modal-overlay" @click="onClose" /></Transition>
-    <Transition :name="isDesktop ? 'modal' : 'sheet'">
-      <section v-if="show" ref="dialogEl" :class="['write-modal', { desktop: isDesktop }]" role="dialog" aria-modal="true" aria-labelledby="write-title" tabindex="-1" @keydown.esc="onClose" @keydown.ctrl.enter.prevent="handleSubmit" @keydown.meta.enter.prevent="handleSubmit">
+    <Transition :name="isDesktop ? 'modal' : 'sheet'" @after-leave="afterModalLeave">
+      <section v-if="show" ref="dialogEl" :class="['write-modal', { desktop: isDesktop }]" role="dialog" aria-modal="true" aria-labelledby="write-title" tabindex="-1" @keydown.ctrl.enter.prevent="handleSubmit" @keydown.meta.enter.prevent="handleSubmit">
         <aside class="write-stage">
           <span class="write-stage-word" aria-hidden="true">DEAR<br>MYSELF.</span>
           <div class="write-date"><b>{{ dateNumber }}</b><span>{{ monthLabel }}<small>{{ openedAt.getFullYear() }}</small></span></div>
@@ -157,6 +162,6 @@ onBeforeUnmount(() => {
 @media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:120px;font-size:16px}.write-footer{padding:12px 22px 16px;gap:9px}.write-permission{gap:6px}.permission-option{padding:8px}.permission-option small{font-size:9px}.write-footer-main{gap:10px}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
 @media(max-height:650px) and (min-width:900px){.write-stage-copy{margin-top:40px}.write-stage h2{font-size:30px}.write-stage p{margin-top:12px}.write-body{padding-top:20px}.write-textarea{min-height:130px}.write-prompts{margin-top:14px}.write-footer{padding-top:14px;padding-bottom:16px}}
 .sheet-enter-active,.sheet-leave-active{transition:transform .34s cubic-bezier(.16,1,.3,1)}.sheet-enter-from,.sheet-leave-to{transform:translate(-50%,110%)}
-.modal-enter-active{transition:transform .38s cubic-bezier(.16,1,.3,1),opacity .25s,clip-path .38s}.modal-leave-active{transition:opacity .18s,transform .18s}.modal-enter-from{opacity:0;transform:translate(-46%,-48%);clip-path:polygon(0 0,0 0,-20% 100%,0 100%)}.modal-enter-to{clip-path:polygon(0 0,120% 0,100% 100%,0 100%)}.modal-leave-to{opacity:0;transform:translate(-50%,-48%)}
+.modal-enter-active{transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s,clip-path .42s}.modal-leave-active{transition:opacity .3s,transform .3s}.modal-enter-from{opacity:0;transform:translate(-46%,-48%);clip-path:polygon(0 0,0 0,-20% 100%,0 100%)}.modal-enter-to{clip-path:polygon(0 0,120% 0,100% 100%,0 100%)}.modal-leave-to{opacity:0;transform:translate(-50%,-48%)}
 @media(prefers-reduced-motion:reduce){.modal-enter-from,.modal-leave-to{transform:translate(-50%,-50%);clip-path:none}}
 </style>

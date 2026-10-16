@@ -12,6 +12,9 @@
  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
  --font-display:"Barlow Condensed","Arial Narrow","Microsoft YaHei",sans-serif;
  --font-mono:"Barlow Condensed","Arial Narrow","Microsoft YaHei",sans-serif;
+ --motion-enter:cubic-bezier(.16,1,.3,1); --motion-shift:cubic-bezier(.22,.61,.36,1);
+ --motion-fast:160ms; --motion-panel:240ms; --motion-open:540ms; --motion-close:360ms;
+ --surface-stage:#09235f; --surface-reader:#f8fbff;
  --nav-height:66px; --sidebar-width:222px; --safe-bottom:env(safe-area-inset-bottom,0px);
  --page-bottom-clearance:calc(152px + var(--safe-bottom)); --surface:#f8fbff; --text-primary:#11244b;
 }
