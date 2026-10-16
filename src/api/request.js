@@ -1,5 +1,7 @@
 import axios from 'axios'
 import { getStorage, removeStorage } from '@/utils/storage'
+import { IS_DEMO_PREVIEW } from '@/preview/mode'
+import { demoApiAdapter } from '@/preview/mockApi'
 
 /**
  * 将 camelCase 转为 snake_case
@@ -51,6 +53,7 @@ function isMetadataObject(data) {
 const request = axios.create({
   baseURL: '/api',
   timeout: 15000,
+  ...(IS_DEMO_PREVIEW ? { adapter: demoApiAdapter } : {}),
   headers: {
     'Content-Type': 'application/json',
   },

@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getStorage, setStorage, removeStorage as removeAppStorage } from '@/utils/storage'
+import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import {
   getSessions as apiGetSessions,
   getSession as apiGetSession,
@@ -167,6 +168,15 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = true
     // 续聊中路由未知：不发眉标，等 meta 事件补上
     const aiMsg = pushAiPlaceholder(null)
+
+    if (IS_DEMO_PREVIEW) {
+      await new Promise(resolve => setTimeout(resolve, 650))
+      aiMsg.typing = false
+      aiMsg.route = 'reflection'
+      aiMsg.content = `这是预览环境中的示例回应。你提到“${text.slice(0, 80)}”，可以先把它拆成一件具体的小事，再看看它和最近的节奏、感受有什么联系。演示对话不会发送到 AI 服务，也不会保存。`
+      sending.value = false
+      return
+    }
 
     abortController = new AbortController()
     let received = false
