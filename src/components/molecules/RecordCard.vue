@@ -42,7 +42,7 @@ const processingPreview = computed(() => {
 
 <template>
   <!-- processing：转圈 + "AI 整理中" -->
-  <div v-if="status === 'processing'" class="record-card card processing" @click="emit('open')">
+  <div v-if="status === 'processing'" class="record-card card processing" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')" @click="emit('open')">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag tag-processing"><span class="spinner" />AI 整理中</span>
@@ -71,6 +71,8 @@ const processingPreview = computed(() => {
   <div
     v-else
     :class="['record-card', 'card', status, { active }]"
+    role="button" tabindex="0" :aria-label="title"
+    @keydown.enter.self="emit('open')" @keydown.space.self.prevent="emit('open')"
     @click="emit('open')"
   >
     <div class="record-meta">
@@ -139,4 +141,13 @@ const processingPreview = computed(() => {
 .failed-ops .chip { cursor: pointer; }
 .chip-accent { color: var(--accent); }
 .chip-danger { color: var(--danger); }
+
+.record-card { padding:20px 22px; border-radius:2px; border:1px solid #d9e6ff; box-shadow:4px 5px 0 #020c3425; animation:none; }
+.record-card::before { top:0; bottom:0; width:4px; border-radius:0; }
+.record-card:hover, .record-card:focus-visible { border-color:var(--cyan); box-shadow:5px 6px 0 #020c3445; }
+.record-title { font-family:var(--font); font-size:16px; font-weight:800; line-height:1.6; }
+.record-summary { line-height:1.9; font-size:12px; }
+.record-time { font-family:var(--font); font-size:10px; }
+.record-card :deep(.tag) { border-radius:2px; font-size:10px; padding:2px 6px; }
+@media(max-width:599px){.record-card{padding:17px 18px}.record-meta{flex-wrap:wrap;gap:7px}.record-title{font-size:15px}}
 </style>

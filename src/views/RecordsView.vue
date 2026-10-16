@@ -11,6 +11,7 @@ import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
 import { dateLabel, formatFullDate } from '@/utils/time'
 import RecordCard from '@/components/molecules/RecordCard.vue'
 import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 
 const props = defineProps({
   date: { type: String, default: null },
@@ -23,10 +24,16 @@ const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const toast = useToastStore()
 
+const recordFilter = ref('all')
+const recordFilters = [{ key:'all',label:'全部记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
+const dayNumber = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',day:'2-digit' }).format(new Date())
+const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:'short' }).format(new Date())
+
 /** 按日期分组（倒序） */
 const grouped = computed(() => {
   const groups = {}
   recordsStore.records.forEach(r => {
+    if (recordFilter.value !== 'all' && r.status !== recordFilter.value) return
     const key = dateKey(r.created_at)
     if (!groups[key]) groups[key] = []
     groups[key].push(r)
@@ -204,11 +211,14 @@ async function onRetryRecord(record) {
 
 <template>
   <div class="page records-page">
-    <div class="page-header">
-      <div class="page-title">记录</div>
-      <div class="page-subtitle">{{ subtitle }}</div>
-    </div>
     <div class="page-content">
+      <PageMasthead title="日常记录" english="DAILY RECORDS" :description="subtitle"><button class="p3-button secondary" @click="openSummarySheet">每日总结</button></PageMasthead>
+      <section class="record-intro" aria-label="记录此刻">
+        <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
+        <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
+        <img src="/art/p3r/yukari.webp" class="record-character" alt="" width="1080" height="1080">
+      </section>
+      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><span class="record-count">{{ subtitle }}</span></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
       <div class="records-layout">
         <div class="records-main">
@@ -217,13 +227,14 @@ async function onRetryRecord(record) {
             <span class="spinner" style="width:22px;height:22px" />
           </div>
 
+          <div v-else-if="recordsStore.error" class="records-error" role="alert"><p>{{ recordsStore.error }}</p><button class="p3-button secondary" @click="filterDate ? loadByDate(filterDate) : loadAll()">重新加载</button></div>
           <!-- 空状态 -->
           <div v-else-if="grouped.length === 0" class="empty-state">
             <div class="empty-icon">
               <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
             </div>
-            <div class="empty-title">还没有记录</div>
-            <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
+            <div class="empty-title">{{ recordsStore.records.length ? '这个分类下暂时没有记录' : '还没有记录' }}</div>
+            <div class="empty-desc">写下此刻的一件小事，让生活开始留下痕迹</div>
           </div>
 
           <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
@@ -360,4 +371,31 @@ async function onRetryRecord(record) {
 }
 
 .loading-state { display: flex; justify-content: center; padding: 60px 0; }
+
+.records-page .page-content { padding-top:0; }
+.record-intro { position:relative; display:flex; align-items:center; gap:25px; overflow:hidden; min-height:170px; padding:26px 34px; background:#0d43c0; border-left:5px solid var(--cyan); color:white; }
+.record-intro::before { content:''; position:absolute; inset:0; background:url('/art/water-surface.webp') center 20% / cover; opacity:.3; pointer-events:none; }
+.record-date { position:relative; display:flex; gap:12px; align-items:center; padding-right:25px; border-right:1px solid #84bbff70; }
+.record-date strong { font:italic 800 94px/.8 var(--font-display); letter-spacing:-.05em; }
+.record-date span { color:var(--cyan); font:italic 800 27px/1 var(--font-display); text-transform:uppercase; }
+.record-date small { display:block; font:10px var(--font); color:#bed9ff; margin-top:10px; }
+.record-intro-copy { position:relative; flex:1; max-width:64%; z-index:1; }
+.record-intro-copy h2 { font-size:21px; font-weight:900; letter-spacing:-.035em; margin-bottom:15px; }
+.record-capture { display:flex; align-items:center; justify-content:space-between; min-height:45px; width:min(100%,430px); padding:10px 16px; border:1px solid #afdcff80; background:#071c6550; color:#d3eaff; text-align:left; font-size:12px; }
+.record-capture:hover { background:#052562; border-color:var(--cyan); }
+.record-capture b { font-size:24px; line-height:1; color:var(--cyan); }
+.record-character { position:absolute; width:470px; height:470px; top:-32px; right:-161px; pointer-events:none; }
+.record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 6px; padding-bottom:13px; border-bottom:1px solid #7bafff45; }
+.record-filters { display:flex; gap:6px; }
+.record-filters button { min-height:36px; padding:6px 16px; font-size:12px; color:#adc8f4; }
+.record-filters button.selected { color:var(--night); background:var(--cyan); font-weight:800; transform:skew(-7deg); box-shadow:3px 3px 0 var(--electric); }
+.record-filters span { margin-left:7px; background:var(--pink); color:white; font-size:10px; padding:0 5px; }
+.record-count { font-size:11px; color:#b7ccef; }
+.records-error { color:white; background:#09215c; padding:24px; border:1px solid #ffabc4; }
+.records-error button { margin-top:16px; }
+.records-main > .empty-state .empty-title { color:white; }
+.records-main > .empty-state .empty-desc { color:var(--on-dark); }
+@media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:60%}.record-character{right:-184px}}
+@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-character{width:400px;height:400px;right:-190px;top:-7px;opacity:.7}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
+
 </style>

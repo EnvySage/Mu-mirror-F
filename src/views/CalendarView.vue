@@ -8,6 +8,7 @@ import { typeMap, moodMap } from '@/constants/tags'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import CalendarWidget from '@/components/molecules/CalendarWidget.vue'
 import RecordCard from '@/components/molecules/RecordCard.vue'
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 
 const router = useRouter()
 const recordsStore = useRecordsStore()
@@ -57,13 +58,10 @@ function openRecord(id) {
 
 <template>
   <div class="page calendar-page">
-    <div class="page-header">
-      <div class="page-title">日历</div>
-      <div class="page-subtitle">{{ filterInfo }}</div>
-    </div>
     <div class="page-content">
+      <PageMasthead title="时间日历" english="CALENDAR" :description="filterInfo" />
       <div class="calendar-layout">
-        <div class="calendar-full card">
+        <div class="calendar-full">
           <CalendarWidget
             mode="full"
             :model-value="selectedDate"
@@ -97,6 +95,7 @@ function openRecord(id) {
             />
           </template>
         </div>
+        <aside v-else class="calendar-invitation"><span aria-hidden="true">DAY BY DAY</span><img src="/art/p3r/yukari.webp" alt="" width="1080" height="1080"><div><h2>选个日子，<br>重逢那天的你。</h2><p>点亮的日期里，藏着你留下的生活。<br>选择一天，看看当时发生了什么。</p></div></aside>
       </div>
     </div>
   </div>
@@ -137,4 +136,20 @@ function openRecord(id) {
 .calendar-records-count {
   font-family: var(--font-mono); font-size: 11px; color: var(--accent); font-weight: 400;
 }
+
+.calendar-page .page-content { padding-top:0; }
+.calendar-layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:25px; align-items:start; }
+.calendar-full { width:auto; padding:26px; background:#0a38a7b3; border:1px solid #7bd8ff80; border-bottom:4px solid var(--cyan); }
+.calendar-records { min-width:0; margin-top:0; }
+.calendar-records-header { color:white; font-size:15px; padding:16px 0; border-bottom:1px solid #73afff60; margin-bottom:18px; }
+.calendar-records-count { color:var(--cyan); font-size:16px; }
+.calendar-records .empty-title { color:white; }.calendar-records .empty-desc { color:var(--on-dark); }
+.calendar-invitation { position:relative; min-height:520px; overflow:hidden; color:white; border-bottom:1px solid #89b4ff50; }
+.calendar-invitation > span { position:absolute; top:12px; left:0; font:italic 800 66px var(--font-display); color:#8edbff22; white-space:nowrap; }
+.calendar-invitation img { position:absolute; height:580px; width:580px; top:-6px; left:50%; transform:translateX(-50%); opacity:.95; }
+.calendar-invitation > div { position:absolute; left:0; bottom:15px; right:0; padding:25px 20px; background:linear-gradient(0deg,#06123f 55%,#06123f00); }
+.calendar-invitation h2 { font-size:27px; font-weight:900; line-height:1.4; }
+.calendar-invitation p { font-size:11px; color:var(--on-dark); margin-top:15px; line-height:1.9; }
+@media(max-width:1099px){.calendar-layout{grid-template-columns:minmax(0,1fr)}.calendar-invitation{display:none}.calendar-full{padding:22px}.calendar-records{margin-top:8px}}
+@media(max-width:599px){.calendar-full{padding:16px}.calendar-layout{gap:16px}}
 </style>
