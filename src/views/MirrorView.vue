@@ -15,6 +15,7 @@ import KeywordBars from '@/components/charts/KeywordBars.vue'
 import TodoRing from '@/components/charts/TodoRing.vue'
 import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
@@ -36,7 +37,10 @@ onMounted(() => {
 
 /** 镜子名：当前月份 */
 const now = new Date()
-const mirrorName = computed(() => `你的镜子 · ${now.getMonth() + 1} 月`)
+const mirrorName = computed(() => '这一刻的你')
+const monthNumber = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', month: '2-digit' }).format(now)
+const yearNumber = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', year: 'numeric' }).format(now)
+const openTodoCount = computed(() => (statsStore.todo.not_started || 0) + (statsStore.todo.in_progress || 0))
 
 // ---- 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） ----
 // 注：原 JS rAF 数字滚动动画已移除——卸载竞态（__vnode null）反复复发，稳定性优先于装饰性动效。
@@ -74,9 +78,9 @@ watch(() => mirror.profile, (p) => {
 /** 情绪分布（从记录 chunks mood 统计，top5） */
 const moodSegments = computed(() => {
   const count = {}
-  recordsStore.records.forEach(r => (r.chunks || []).forEach(c =>
-    (c.metadata?.mood || []).forEach(m => { count[m] = (count[m] || 0) + 1 })
-  ))
+  statsStore.mood_daily.forEach(d => (d.moods || []).forEach(m => {
+    count[m.mood] = (count[m.mood] || 0) + (m.count || 0)
+  }))
   const total = Object.values(count).reduce((a, b) => a + b, 0)
   if (!total) return []
   return Object.entries(count)
@@ -133,6 +137,7 @@ const freqSummary = computed(() => {
  * 此时不能让图表走"暂无数据"分支——那会把"还没取到"说成"你没有记录"。
  */
 const statsFirstLoad = computed(() => statsStore.loading && !statsStore.record_daily.length)
+const statsUnavailable = computed(() => statsFirstLoad.value || (!!statsStore.error && !statsStore.stats))
 
 // ===== 任务 A：快照历史轨迹 + 查看 + 对比 =====
 
@@ -323,16 +328,36 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page mirror-page">
-    <div class="page-header">
-      <div class="page-title">镜子</div>
-      <div class="page-subtitle">快照 · 漂移 · 变化轨迹</div>
-    </div>
     <div class="page-content">
+      <PageMasthead title="我的镜子" english="MY REFLECTION" description="回望记录，看见这段时间的自己">
+        <span class="period-caption">近 30 天</span>
+        <button class="p3-button" :disabled="mirror.generating || mirror.loading" @click="onGenerate">{{ mirror.generating ? '正在显影…' : '生成新快照' }}<span aria-hidden="true">↗</span></button>
+      </PageMasthead>
+      <section class="reflection-stage" aria-label="近 30 天生活回顾">
+        <div class="stage-word" aria-hidden="true">REFLECT.</div>
+        <div class="stage-orbit" aria-hidden="true" />
+        <img class="stage-character" src="/art/p3r/protagonist-battle.webp" alt="" width="1080" height="1080" fetchpriority="high">
+        <div class="stage-month" aria-hidden="true"><b>{{ monthNumber }}</b><span>{{ yearNumber }}<br>YOUR DAYS</span></div>
+        <div class="stage-copy"><span class="stage-kicker">LIFE, IN REFLECTION</span><h2>原来，<br>你做了这么多。</h2><p>那些认真生活的瞬间，<br>正在拼成越来越清晰的你。</p></div>
+        <div class="stage-stats">
+          <div><strong>{{ statsUnavailable ? '—' : stats[0].display }}</strong><span>次记录<small>留下生活的痕迹</small></span></div>
+          <div><strong>{{ statsUnavailable ? '—' : stats[1].display }}</strong><span>个活跃日<small>每一天都有回响</small></span></div>
+          <div><strong>{{ statsUnavailable ? '—' : statsStore.todo.completed }}</strong><span>件已完成<small>努力已经有了答案</small></span></div>
+          <span class="stage-stats-note">近 30 天实时统计</span>
+        </div>
+      </section>
+      <div class="reflection-status" aria-label="近期状态概览">
+        <div><span>最近的情绪</span><strong>{{ statsUnavailable ? '正在读取…' : moodSegments[0]?.label || '等待记录' }}</strong><i :style="{ background: moodSegments[0]?.color || 'var(--cyan)' }" /></div>
+        <div><span>经常关注</span><strong>{{ statsStore.keyword_top[0]?.keyword || '从下一条记录开始' }}</strong></div>
+        <div><span>仍在推进</span><strong>{{ statsUnavailable ? '—' : openTodoCount }} <small>件待办</small></strong></div>
+      </div>
+      <div v-if="statsStore.error" class="stats-error" role="alert"><span>近期统计暂时无法加载</span><button class="p3-link" @click="statsStore.fetchStats(30, true)">重试</button></div>
+      <div v-if="mirror.error && !mirror.profile" class="mirror-error" role="alert"><p>{{ mirror.error }}</p><button class="p3-button secondary" @click="mirror.fetchMirror()">重新加载快照</button></div>
       <!-- 生成中 -->
-      <div v-if="mirror.generating" class="processing-view">
+      <div v-else-if="mirror.generating" class="processing-view">
         <div class="processing-ring" />
         <div class="processing-title">正在生成画像快照</div>
-        <div class="processing-desc">五维统计 + 最近记录 → GenerateProfile</div>
+        <div class="processing-desc">正在整理你的经历、成长和近期状态，请稍等片刻。</div>
       </div>
 
       <!-- 首次使用：引导生成 -->
@@ -353,14 +378,14 @@ onBeforeUnmount(() => {
         <div class="portrait-section card timeline-card">
           <!-- 头行：眉标 + 份数摘要 + 对比开关（对比原独占一行，合并进头行省一整行高度） -->
           <div class="timeline-head">
-            <span class="section-label">SNAPSHOT TIMELINE</span>
+            <span class="section-label">快照时间线</span>
             <span class="chart-head-note" :title="timeline.length ? TIMELINE_RETENTION : null">{{ timelineNote }}</span>
             <div v-if="timeline.length >= 2" class="timeline-actions">
               <button type="button" :class="['compare-toggle', { on: compareMode }]" @click="toggleCompare">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M8 3v18M16 3v18M3 8h10M11 16h10"/></svg>
                 {{ compareMode ? '退出对比' : '对比两份快照' }}
               </button>
-              <span v-if="!compareMode" class="compare-hint">对比 overall 与六维变化</span>
+              <span v-if="!compareMode" class="compare-hint">看看两个阶段的自己有什么不同</span>
             </div>
           </div>
           <div v-if="timeline.length" class="snapshot-strip" role="tablist" aria-label="快照历史时间线">
@@ -411,7 +436,7 @@ onBeforeUnmount(() => {
         <!-- ===== 对比区（compareMode 开启时插入 hero 上方） ===== -->
         <div v-if="compareMode" class="portrait-section card compare-card">
           <div class="chart-head" style="margin-bottom:12px">
-            <span class="section-label">SNAPSHOT COMPARE</span>
+            <span class="section-label">阶段对比</span>
             <span v-if="driftDelta !== null" :class="['delta-chip', `tier-${driftDeltaTier}`]">
               Δ 漂移 {{ driftDelta.toFixed(3) }} · {{ driftDeltaLabel }}
             </span>
@@ -529,7 +554,7 @@ onBeforeUnmount(() => {
         <div :class="['mirror-hero', 'card', { settled: justSettled }]">
           <div class="mirror-hero-inner">
             <div class="mirror-hero-main">
-              <div class="mirror-greeting">这是我在你身上看到的</div>
+              <div class="mirror-greeting">从你的记录中，看到这些变化</div>
               <div class="mirror-name">{{ mirrorName }}</div>
               <div v-if="!mirror.isEmpty" class="mirror-viewing-line">
                 正在查看：{{ shortDateTime(mirror.profile.created_at) }}
@@ -550,16 +575,10 @@ onBeforeUnmount(() => {
               <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
               <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
-                {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
+                {{ mirror.generating ? '生成中…' : '更新这一刻的快照' }}
               </button>
             </div>
-            <aside class="mirror-hero-stats" aria-label="近 30 天实时统计">
-              <div class="hero-stats-cap">近 30 天 · 实时</div>
-              <div v-for="(s, i) in stats" :key="i" class="hero-stat">
-                <b class="hero-stat-num">{{ s.display }}</b>
-                <span class="hero-stat-label">{{ s.label }}</span>
-              </div>
-            </aside>
+
           </div>
         </div>
 
@@ -568,7 +587,7 @@ onBeforeUnmount(() => {
         <!-- 30 天活动带（全宽）：情绪与记录数融合在同一根时间轴上 -->
         <div class="portrait-section card chart-card zone-start">
           <div class="chart-head">
-            <span class="section-label">ACTIVITY · 30D</span>
+            <span class="section-label">生活留下的轨迹</span>
             <span class="chart-head-note">柱高 = 当日记录数 · 柱内按情绪占比分色</span>
           </div>
           <ActivityBand v-if="!statsFirstLoad" :daily="statsStore.record_daily" :moods="statsStore.mood_daily" />
@@ -585,7 +604,7 @@ onBeforeUnmount(() => {
         <div class="chart-row-2">
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">RHYTHM</span>
+              <span class="section-label">你的生活节奏</span>
               <span class="chart-head-note">实时统计 · 哪个时段 / 哪一天在记录</span>
             </div>
             <RhythmDist v-if="!statsFirstLoad" :hours="statsStore.hour_dist" :weekdays="statsStore.weekday_dist" />
@@ -593,7 +612,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">TODO</span>
+              <span class="section-label">那些完成的事</span>
               <span class="chart-head-note">近 30 天完成度</span>
             </div>
             <!-- 口径注释由 TodoRing 自带（.ring-note），此处不再重复渲染 -->
@@ -608,7 +627,7 @@ onBeforeUnmount(() => {
         <div class="chart-row-2">
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">KEYWORDS</span>
+              <span class="section-label">反复出现的关注</span>
               <span class="chart-head-note">实时统计 · Top 10</span>
             </div>
             <div class="chart-body">
@@ -621,7 +640,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="portrait-section card chart-card">
             <div class="chart-head">
-              <span class="section-label">MOOD MIX</span>
+              <span class="section-label">最近的情绪底色</span>
               <span class="chart-head-note">近 30 天 · 按出现次数</span>
             </div>
             <div class="chart-body">
@@ -1071,4 +1090,72 @@ onBeforeUnmount(() => {
 }
 .processing-title { font-family: var(--font-display); font-size: 17px; }
 .processing-desc { font-size: 12.5px; color: var(--text-low); margin-top: 6px; }
+
+.stats-error { display:flex; justify-content:space-between; color:white; padding:12px 16px; margin-bottom:18px; border:1px solid #88b6ff50; font-size:12px; }
+.portrait-section { min-width:0; }
+.portrait-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.portrait-evidence-item { min-width:0; }
+.portrait-evidence-item > span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+@media(max-width:1199px) { .portrait-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:899px) { .portrait-grid { grid-template-columns:minmax(0,1fr); } }
+/* Blue-hour module: expressive stage, quiet reading surfaces. */
+.mirror-page .page-content { padding-top: 0; }
+.period-caption { color: var(--on-dark); font-size: 12px; white-space: nowrap; }
+.reflection-stage { position: relative; min-height: 420px; isolation: isolate; overflow: hidden; background: #083dc4 url('/art/water-surface.webp') center 28% / cover; color: white; border: 1px solid #65baff70; }
+.reflection-stage::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg,#082b99e8 0%,#0838bba0 38%,#072a9140 70%); }
+.stage-word { position: absolute; right: -8px; bottom: 103px; font: italic 900 clamp(100px,13vw,200px)/.8 var(--font-display); color: #94eaff24; letter-spacing: -.04em; pointer-events: none; }
+.stage-orbit { position: absolute; right: -70px; top: -150px; width: 530px; height: 530px; border: 53px solid #b9faffbd; border-radius: 50%; transform: rotate(-22deg) scaleX(.72); z-index: -1; }
+.stage-character { position: absolute; right: -116px; top: -44px; height: 780px; width: 780px; max-width: none; object-fit: contain; filter: drop-shadow(12px 8px 0 #03134a50); pointer-events: none; }
+.stage-month { position: absolute; display: flex; align-items: center; gap: 8px; top: 23px; right: 24px; text-shadow: 0 2px 12px #07175470; }
+.stage-month b { font: italic 800 73px/.8 var(--font-display); letter-spacing: -.04em; }
+.stage-month span { font: 700 12px/1.2 var(--font-display); }
+.stage-copy { position: relative; padding: 35px 36px 140px; max-width: 64%; }
+.stage-kicker { display: inline-block; font: italic 700 15px var(--font-display); background: var(--cyan); color: var(--night); padding: 3px 10px; transform: skew(-7deg); }
+.stage-copy h2 { margin-top: 22px; font-size: clamp(34px,3.8vw,58px); line-height: 1.25; font-weight: 900; letter-spacing: -.04em; text-shadow: 3px 3px 0 #092b8d; }
+.stage-copy p { margin-top: 17px; font-size: 13px; line-height: 1.8; color: #c5e8ff; }
+.stage-stats { position: absolute; display: flex; align-items: center; gap: clamp(18px,3vw,50px); bottom: 0; left: 0; right: 0; padding: 17px 36px 20px; background: #03184fdc; border-top: 1px solid #8ac3ff50; }
+.stage-stats > div { display: flex; align-items: center; gap: 10px; }
+.stage-stats strong { font: italic 800 52px/1 var(--font-display); color: var(--cyan); }
+.stage-stats span { font-size: 12px; font-weight: 700; }
+.stage-stats small { display: block; margin-top: 4px; color: #a4bee9; font-size: 9px; font-weight: 400; }
+.stage-stats .stage-stats-note { margin-left: auto; align-self: flex-end; color: #9ebbe7; font-size: 10px; font-weight: 400; }
+.reflection-status { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid #88b6ff40; background: #08276190; }
+.reflection-status > div { position: relative; display: flex; align-items: center; gap: 13px; flex: 1; padding: 18px 24px; border-right: 1px solid #88b6ff30; }
+.reflection-status > div:last-child { border-right: 0; }
+.reflection-status span { font-size: 11px; color: #adc4eb; }
+.reflection-status strong { font-size: 14px; font-weight: 700; color: white; }
+.reflection-status small { font-size: 11px; font-weight: 400; }
+.reflection-status i { width: 7px; height: 7px; border-radius: 50%; margin-left: auto; }
+.mirror-hero { margin-top: 18px; border-left: 5px solid var(--electric); background: #f5faff; border-radius: 2px; }
+.mirror-hero-inner { display: block; }
+.mirror-greeting { font-size: 11px; letter-spacing: .05em; }
+.mirror-name { font-family: var(--font); font-size: 25px; font-weight: 900; }
+.mirror-overall { max-width: 80ch; line-height: 1.9; }
+.mirror-generate { background: var(--accent); border-radius: 2px; font-size: 12px; }
+.timeline-card { background: #ecf5ff; border-radius: 2px; padding: 19px 22px; }
+.snapshot-node { border-radius: 2px; padding: 9px 13px; border: 1px solid #bacce8; }
+.snapshot-node.current { background: var(--night); color: white; border-color: var(--night); box-shadow: 3px 3px 0 var(--cyan); }
+.snapshot-node.current .snapshot-node-date { color: white; }
+.snapshot-viewing-tag { color: var(--cyan); }
+.snapshot-node-date { font: 700 23px var(--font-display); }
+.chart-card { border-top: 3px solid var(--electric); }
+.chart-head { align-items: center; gap: 12px; flex-wrap: wrap; }
+.chart-head .section-label { font-family: var(--font); font-size: 14px; font-weight: 800; letter-spacing: 0; }
+.portrait-section-title { font-family: var(--font); font-size: 15px; font-weight: 800; }
+.portrait-section-icon { border-radius: 2px; transform: skew(-7deg); }
+.portrait-text { line-height: 1.9; }
+.user-tag { border-radius: 2px; }
+.processing-view, .mirror-page .page-content > .empty-state { background: #f0f7ff; padding: 36px 24px !important; margin: 16px 0; border-top: 4px solid var(--cyan); color: var(--text-hi); }
+.mirror-page .page-content > .empty-state .empty-title { color: var(--text-hi); }
+.mirror-page .page-content > .empty-state .empty-desc { color: var(--text-mid); }
+.processing-desc { max-width: 50ch; }
+.mirror-error { display: flex; gap: 20px; align-items: center; justify-content: space-between; padding: 20px; background: #ffffff10; color: white; border: 1px solid #ffadc6; margin: 18px 0; }
+@media (max-width: 1199px) { .stage-character { right: -175px; } .stage-copy { padding-left: 28px; } .stage-stats { gap: 22px; padding-left: 28px; } .stage-stats .stage-stats-note { display: none; } .reflection-status > div { padding: 16px; gap: 8px; } }
+@media (max-width: 599px) {
+ .period-caption { display: none; } .reflection-stage { min-height: 435px; } .stage-copy { padding: 28px 20px 145px; max-width: 77%; } .stage-copy h2 { font-size: 28px; } .stage-copy p { font-size: 11px; } .stage-kicker { font-size: 12px; } .stage-character { height: 560px; width: 560px; right: -234px; top: 9px; opacity: .9; } .stage-month { right: 14px; top: 18px; } .stage-month b { font-size: 48px; } .stage-month span { font-size: 10px; } .stage-word { font-size: 100px; bottom: 113px; } .stage-orbit { right: -150px; width: 380px; height: 380px; }
+ .stage-stats { justify-content: space-between; gap: 8px; padding: 17px 16px; } .stage-stats > div { display: block; } .stage-stats strong { font-size: 43px; } .stage-stats span { display: block; font-size: 10px; } .stage-stats small { display: none; }
+ .reflection-status { flex-wrap: wrap; } .reflection-status > div { flex: 1 1 100%; padding: 11px 16px; border-right: 0; border-bottom: 1px solid #88b6ff25; justify-content: space-between; } .reflection-status i { display: none; } .reflection-status strong { font-size: 12px; }
+ .timeline-head { flex-wrap: wrap; } .mirror-error { flex-direction: column; align-items: flex-start; }
+}
+
 </style>

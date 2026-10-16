@@ -1,5 +1,5 @@
-@font-face { font-family: 'Barlow Condensed'; src: url('/art/fonts/barlow-condensed-latin.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Barlow Condensed'; src: url('/art/fonts/barlow-condensed-italic-latin.woff2') format('woff2'); font-weight: 800; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('/art/fonts/barlow-condensed-latin.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Barlow Condensed'; src: url('/art/fonts/barlow-condensed-italic-latin.ttf') format('truetype'); font-weight: 800; font-style: italic; font-display: swap; }
 body { background: var(--night); }
 ::selection { background: var(--cyan); color: var(--night); }
 button:disabled { cursor: not-allowed; }
@@ -17,7 +17,7 @@ button:disabled { cursor: not-allowed; }
 .app .date-separator { color: #c4dcff; font: 600 16px var(--font-display); letter-spacing: .04em; }
 .app .date-separator::after { background: #87adff40; }
 .app .section-label { font-weight: 800; font-size: 15px; letter-spacing: .035em; color: var(--accent); }
-.app .bottom-nav { background: #05113f; border-top: 2px solid var(--cyan); }
+.app .bottom-nav.bottom-nav { background: #05113f; border-top: 2px solid var(--cyan); }
 .app .bottom-nav .nav-item { color: #a9c5f4; min-height: 44px; }
 .app .bottom-nav .nav-item.active { color: var(--cyan); }
 .app .bottom-nav .nav-item.active span { background: var(--cyan); color: var(--night); padding: 0 8px; transform: skew(-9deg); font-weight: 800; }

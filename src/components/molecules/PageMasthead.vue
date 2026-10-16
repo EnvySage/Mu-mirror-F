@@ -15,6 +15,6 @@ defineProps({ title: String, english: String, description: String })
 h1 { font-size: 17px; font-weight: 800; white-space: nowrap; }
 p { margin-top: 3px; font-size: 11px; color: var(--on-dark); }
 .masthead-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-@media (max-width: 1100px) { .masthead-copy { display: none; } }
-@media (max-width: 599px) { .masthead { padding: 22px 0 18px; gap: 10px; flex-wrap: wrap; } .masthead-en { font-size: 47px; } .masthead-actions { gap: 8px; } }
+@media (max-width: 1100px) { .masthead-copy { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; padding:0; border:0; } }
+@media (max-width: 599px) { .masthead { padding: 22px 0 18px; gap: 10px; flex-wrap: wrap; } .masthead-en { font-size: 36px; } .masthead-actions { gap: 8px; } }
 </style>

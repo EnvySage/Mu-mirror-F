@@ -95,6 +95,6 @@ function openWrite() {
 
 <style scoped>
 .app { position: relative; isolation: isolate; z-index: 1; display: flex; height: 100dvh; background: #06123f; }
-.app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #04236450, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
+.app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #03133d99, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 </style>
