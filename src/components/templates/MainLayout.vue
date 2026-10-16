@@ -84,6 +84,10 @@ function openWrite() {
           <component :is="Component" :key="route.name" />
         </Transition>
       </RouterView>
+      <div :key="route.name" class="route-wipe" aria-hidden="true">
+        <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[route.name] }}</span>
+      </div>
       <DetailPanel />
     </main>
     <BottomNav />

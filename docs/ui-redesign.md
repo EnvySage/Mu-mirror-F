@@ -40,3 +40,14 @@ Build with `npm run build`. Local verification artifacts and fixture servers bel
 - Mirror empty-data state shows a first-record action. Simulated API failures show unknown metrics as dashes and provide retry controls. Retrying reloads the profile and snapshot history together; statistics retry independently.
 - Local backend was unavailable during visual verification. A separate ignored local fixture server supplies clearly marked sample data for the preview; no fixtures, authentication bypasses, or mock switches are added to production source.
 - Screenshots and measurement reports are saved under ignored `.verify/` in the local checkout. The legacy coordination import-check script was absent; Vite compilation and navigation through every route validate imports instead.
+
+
+## Revision — portraits and motion, 2026-10-16
+
+User feedback: remove the game character cutouts and make movement carry more of the P3R influence.
+
+- Removed all rendered character cutouts from Mirror, Records, Calendar, Dialogue, and authentication. The independent water background remains. Old cutout assets are retained as unused historical sources; no page loads them.
+- Rebalanced headline widths and calendar/login typography around open water, oversized lettering, and abstract rings.
+- Navigation now uses a shared sliding cyan selection block. Page changes use two diagonal color wipes, a brief destination label, and a clipped incoming view (about 600ms total).
+- Added clipped title/copy entrances, directional calendar month transitions, and cut-in desktop writing/detail panels. Motion layers do not intercept clicks; system reduced-motion settings disable the route wipe and shorten transitions.
+- Verification: production build and diff whitespace check pass. Browser preview verifies portrait count zero, route wipe CSS applied, page content restored after navigation, September/October calendar navigation, and mobile horizontal overflow checks. Preview uses the existing local sample-data fixture, not a live backend.

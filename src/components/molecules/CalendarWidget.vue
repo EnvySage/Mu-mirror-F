@@ -14,6 +14,7 @@ const recordsStore = useRecordsStore()
 
 const calendarDate = ref(new Date())
 const selectedDate = ref(null)
+const monthDirection = ref(1)
 
 const effectiveSelected = computed(() => props.modelValue || selectedDate.value)
 
@@ -66,6 +67,7 @@ watch([year, month], loadCalendarMarks)
 onMounted(loadCalendarMarks)
 
 function changeMonth(delta) {
+  monthDirection.value = delta
   const d = new Date(calendarDate.value)
   d.setDate(1)
   d.setMonth(d.getMonth() + delta)
@@ -91,7 +93,7 @@ function selectDay(dayObj) {
 </script>
 
 <template>
-  <div :class="['calendar-widget', mode]">
+  <div :class="['calendar-widget', mode]" :style="{ '--month-direction': monthDirection }">
     <div class="calendar-header">
       <button class="calendar-nav-btn" aria-label="上一个月" @click="changeMonth(-1)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -101,7 +103,7 @@ function selectDay(dayObj) {
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <Transition name="fade" mode="out-in">
+    <Transition name="month-cut" mode="out-in">
       <div :key="monthText" class="calendar-grid">
         <div class="calendar-weekdays">
           <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
@@ -210,4 +212,10 @@ function selectDay(dayObj) {
 .full .calendar-dot.has-record, .full .calendar-dot.selected { background:var(--cyan); }
 .full .calendar-dot.today { box-shadow:inset 0 0 0 1.5px var(--cyan); }
 @media(max-width:599px){.full .calendar-month b{font-size:112px}.full .calendar-month i{display:none}.full .calendar-header{min-height:125px}.full .calendar-day{font-size:22px}}
+.month-cut-leave-active { transition:opacity .12s,transform .12s; }
+.month-cut-enter-active { transition:opacity .24s,transform .3s cubic-bezier(.16,1,.3,1),clip-path .3s; }
+.month-cut-leave-to { opacity:0; transform:translateX(calc(var(--month-direction) * -20px)); }
+.month-cut-enter-from { opacity:0; transform:translateX(calc(var(--month-direction) * 35px)); clip-path:inset(0 100% 0 0); }
+.month-cut-enter-to { clip-path:inset(0); }
+@media(prefers-reduced-motion:reduce){.month-cut-enter-from,.month-cut-leave-to{transform:none;clip-path:none}}
 </style>

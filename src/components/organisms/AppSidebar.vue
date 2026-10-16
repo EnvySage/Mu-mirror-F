@@ -27,7 +27,8 @@ function switchPage(page) {
  <aside class="sidebar" aria-label="主导航">
   <a class="brand" href="/records" @click.prevent="switchPage('records')"><span class="brand-mark">M<span> / </span></span><span class="brand-name">MIRROR<small>记录，让自己显影</small></span></a>
   <div class="sidebar-date"><strong>{{ dateLabel.replace('/', '.') }}</strong><span>{{ weekday }}<i>今天也值得被记住</i></span></div>
-  <nav class="sidebar-nav">
+  <nav class="sidebar-nav" :style="{ '--nav-index': Math.max(0, nav.findIndex(item => item.page === activePage)) }">
+   <div class="nav-track" :class="{ hidden: !nav.some(item => item.page === activePage) }" aria-hidden="true" />
    <button v-for="item in nav" :key="item.page" :class="['nav-row',{active:activePage===item.page}]" :aria-current="activePage===item.page?'page':undefined" @click="switchPage(item.page)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path :d="item.path" /></svg>
     <span><b>{{ item.en }}</b><small>{{ item.label }}</small></span><span v-if="activePage===item.page" class="nav-arrow" aria-hidden="true">◀</span>
@@ -52,4 +53,12 @@ function switchPage(page) {
 .sidebar-bottom{margin-top:auto;padding:22px 6px 0}.settings-row{display:flex;align-items:center;gap:10px;color:#a7bfe7;font-size:12px;width:100%;padding:8px 0 18px}.settings-row svg{width:19px;height:19px}.settings-row.active{color:var(--cyan)}.pending{margin-left:auto;background:var(--pink);color:white;padding:0 5px}
 .user-row{border-top:1px solid #5275b43d;padding:19px 0 16px;display:flex;gap:9px;align-items:center}.user-avatar{width:32px;height:35px;display:grid;place-items:center;background:#143570;color:var(--cyan);font:italic 800 23px var(--font-display);clip-path:polygon(0 0,100% 0,100% 83%,75% 100%,0 100%)}.user-row strong{display:block;font-size:12px}.user-row span{display:block;color:#809cc7;font-size:9px}.user-row .online-dot{margin-left:auto;width:5px;height:5px;background:var(--cyan);border-radius:50%}.author{display:flex;justify-content:space-between;color:#91aad3;font:12px var(--font-display)}.projects{display:flex;gap:12px;margin-top:11px}.projects a{color:#7794c1;font-size:9px}
 @media(max-height:820px){.sidebar{padding-top:24px}.sidebar-date{margin:28px 6px 18px}.nav-row{min-height:56px}.sidebar-write{margin-top:22px}.sidebar-bottom{padding-top:8px}}
+.sidebar-nav { position:relative; --nav-row-height:64px; }
+.nav-row { height:var(--nav-row-height); min-height:var(--nav-row-height); z-index:1; }
+.nav-track { position:absolute; left:0; right:0; top:0; height:var(--nav-row-height); background:var(--cyan); border-left:3px solid white; box-shadow:4px 4px 0 var(--electric); transform:translateY(calc(var(--nav-index) * (var(--nav-row-height) + 9px))) skewY(-3deg); transition:transform .32s cubic-bezier(.2,.85,.2,1.12),opacity .18s; pointer-events:none; }
+.nav-track.hidden { opacity:0; }
+.nav-row.active::before { background:none; border-color:transparent; box-shadow:none; }
+.nav-row.active b { animation:nav-type-cut .32s cubic-bezier(.16,1,.3,1); }
+@keyframes nav-type-cut { from { transform:translateX(14px); clip-path:inset(0 100% 0 0); } to { transform:none; clip-path:inset(0); } }
+@media(max-height:820px){.sidebar-nav{--nav-row-height:56px}}
 </style>

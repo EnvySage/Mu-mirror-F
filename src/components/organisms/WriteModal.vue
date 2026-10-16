@@ -206,4 +206,8 @@ onBeforeUnmount(() => {
 
 .write-modal, .write-modal.desktop { border-radius:3px; border-top:4px solid var(--cyan); box-shadow:8px 10px 0 #02113b80,0 20px 90px #010a3470; }
 .write-header { background:#071b50; color:white; }.write-header-title{font-family:var(--font);font-size:15px;font-weight:800}.write-cancel{color:#c0d7ff}.write-submit{border-radius:2px}.write-submit.enabled{background:var(--cyan);color:var(--night);font-weight:800}.write-textarea{border-radius:0}.write-hint{font-size:10px}
+.modal-enter-active { transition:opacity .3s,transform .32s cubic-bezier(.16,1,.3,1),clip-path .32s; }
+.modal-enter-from { transform:translate(-46%,-46%) skewX(-3deg) !important; clip-path:polygon(0 0,0 0,-20% 100%,0 100%); }
+.modal-enter-to { clip-path:polygon(0 0,120% 0,100% 100%,0 100%); }
+@media(prefers-reduced-motion:reduce){.modal-enter-from{transform:translate(-50%,-50%) !important;clip-path:none}}
 </style>
