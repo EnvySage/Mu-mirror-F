@@ -1,4 +1,5 @@
 <script setup>
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
@@ -377,15 +378,7 @@ async function onRemoveSession(id) {
 
 <template>
   <div class="page chat-page">
-    <div class="page-header">
-      <div class="page-title">对话</div>
-      <div class="page-subtitle">每个结论都能点回原始记录</div>
-      <!-- ≥1440px 常驻栏已展示会话列表，按钮隐藏避免重复入口 -->
-      <button class="chat-sessions-btn" @click="showSessions = !showSessions">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
-        会话
-      </button>
-    </div>
+    <div class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">新对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button></PageMasthead></div>
 
     <!-- 会话列表抽屉（<1440px 主入口；≥1440px 隐藏按钮但仍可通过 MobileHeader 打开） -->
     <Transition name="fade">
@@ -408,15 +401,15 @@ async function onRemoveSession(id) {
         <div class="chat-wrap">
           <!-- 空态（含加载中 / 失败兜底 + vault 演示入口） -->
           <div v-if="chat.messages.length === 0" class="chat-empty">
-            <div class="empty-icon" style="width:52px;height:52px;margin:0 auto 14px;border-radius:16px;background:var(--ink-2);border:1px solid var(--line);display:grid;place-items:center">
-              <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--text-low);fill:none;stroke-width:1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </div>
-            <div class="empty-title">{{ emptyTitle }}</div>
-            <div class="empty-desc">{{ emptyDesc }}</div>
+            <div class="chat-portrait" aria-hidden="true"><img src="/art/p3r/aigis.webp" alt="" width="1080" height="1080"></div>
+            <span class="chat-empty-en" aria-hidden="true">HELLO, MYSELF.</span>
+            <h2>{{ chat.historyLoading ? emptyTitle : chat.historyError ? '暂时没能找回这段对话' : '和另一个自己，聊聊。' }}</h2>
+            <p>{{ emptyDesc }}</p>
+            <div v-if="!chat.historyLoading && !chat.historyError" class="chat-prompts"><button v-for="prompt in ['最近我做了哪些事情？','这段时间，我的状态怎么样？','有什么事情还在等我完成？']" :key="prompt" @click="input = prompt; send()">{{ prompt }}<span aria-hidden="true">↗</span></button></div>
           </div>
 
           <!-- 消息列表 -->
-          <div ref="messagesEl" class="chat-messages">
+          <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions">
             <div
               v-for="msg in chat.messages"
               :key="msg.id"
@@ -520,13 +513,14 @@ async function onRemoveSession(id) {
               ref="inputEl"
               v-model="input"
               class="chat-input"
+              aria-label="对话内容"
               rows="1"
               placeholder="问我任何关于你的事…"
               :disabled="chat.sending"
               @input="autoGrow"
               @keydown="onKeydown"
             />
-            <button :class="['chat-send', { enabled: canSend }]" :disabled="!canSend" @click="send">
+            <button aria-label="发送消息" :class="['chat-send', { enabled: canSend }]" :disabled="!canSend" @click="send">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
@@ -766,4 +760,27 @@ async function onRemoveSession(id) {
 
 .sessions-drawer-enter-active, .sessions-drawer-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
 .sessions-drawer-enter-from, .sessions-drawer-leave-to { transform: translate(-50%, 110%) !important; }
+
+.chat-masthead-wrap { flex-shrink:0; padding:0 clamp(24px,3.5vw,56px); }
+.chat-page .page-content { padding-top:0; }
+.chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-height:0; overflow-y:auto; padding:18px 10px 26px; color:white; }
+.chat-portrait { position:relative; width:150px; height:150px; overflow:hidden; flex-shrink:0; background:#38e5ee; clip-path:polygon(10% 0,100% 0,90% 100%,0 100%); margin-bottom:18px; }
+.chat-portrait img { position:absolute; width:620px; height:620px; max-width:none; left:50%; transform:translateX(-50%); top:-62px; }
+.chat-empty-en { font:italic 800 57px/.9 var(--font-display); letter-spacing:-.025em; }
+.chat-empty h2 { font-size:20px; font-weight:800; margin-top:15px; }
+.chat-empty p { font-size:12px; color:var(--on-dark); margin-top:10px; }
+.chat-prompts { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:24px; }
+.chat-prompts button { display:flex; align-items:center; gap:12px; min-height:40px; padding:8px 13px; font-size:11px; color:#cfe8ff; background:#1637777a; border:1px solid #81bdff50; }
+.chat-prompts button span { color:var(--cyan); }.chat-prompts button:hover { background:#164acc; border-color:var(--cyan); }
+.chat-input-bar { background:#f5faff; border-radius:2px; border:1px solid white; border-top:3px solid var(--cyan); padding:10px; box-shadow:5px 5px 0 #010a30; }
+.chat-input { background:transparent; border:none; border-radius:0; box-shadow:none; font-size:14px; padding:10px 8px; }
+.chat-attach { color:var(--accent); background:#e3edff; border-radius:2px; }
+.chat-send { border-radius:2px; background:#cfdbef; }.chat-send.enabled { background:var(--pink); }
+.chat-msg { animation:none; }.chat-msg-bubble { border-radius:2px; font-size:14px; line-height:1.9; padding:16px 19px; }
+.chat-msg-user .chat-msg-bubble { background:#174acb; border:1px solid #6d9eff; border-radius:2px; }
+.chat-msg-ai .chat-msg-bubble { border-radius:2px; border-left:4px solid var(--cyan); box-shadow:4px 4px 0 #010b3330; }
+.chat-rail { border-radius:2px; border-top:3px solid var(--cyan); }
+@media(min-width:1440px){.history-btn{display:none}}
+@media(max-width:899px){.chat-masthead-wrap{padding:0 16px}.history-btn{display:none}.chat-masthead-wrap :deep(.masthead){padding:18px 0}.chat-masthead-wrap :deep(.masthead-en){font-size:39px}.chat-empty-en{font-size:45px}.chat-portrait{width:125px;height:125px}.chat-portrait img{width:550px;height:550px;top:-60px}.chat-empty h2{font-size:18px}.chat-prompts{margin-top:18px;gap:7px}.chat-prompts button{font-size:10px;padding:7px 11px}.chat-input-bar{padding:7px}.chat-msg-bubble{max-width:93%;font-size:13px;padding:13px 15px}}
+@media(max-height:720px){.chat-portrait{width:95px;height:95px;margin-bottom:12px}.chat-portrait img{width:500px;height:500px;top:-55px}.chat-empty-en{font-size:40px}.chat-empty h2{margin-top:10px}.chat-prompts{margin-top:14px}}
 </style>
