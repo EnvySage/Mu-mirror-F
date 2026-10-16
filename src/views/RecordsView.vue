@@ -216,7 +216,6 @@ async function onRetryRecord(record) {
       <section class="record-intro" aria-label="记录此刻">
         <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
         <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
-        <img src="/art/p3r/yukari.webp" class="record-character" alt="" width="1080" height="1080">
       </section>
       <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><span class="record-count">{{ subtitle }}</span></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
@@ -379,12 +378,12 @@ async function onRetryRecord(record) {
 .record-date strong { font:italic 800 94px/.8 var(--font-display); letter-spacing:-.05em; }
 .record-date span { color:var(--cyan); font:italic 800 27px/1 var(--font-display); text-transform:uppercase; }
 .record-date small { display:block; font:10px var(--font); color:#bed9ff; margin-top:10px; }
-.record-intro-copy { position:relative; flex:1; max-width:64%; z-index:1; }
+.record-intro-copy { position:relative; flex:1; max-width:90%; z-index:1; }
 .record-intro-copy h2 { font-size:21px; font-weight:900; letter-spacing:-.035em; margin-bottom:15px; }
 .record-capture { display:flex; align-items:center; justify-content:space-between; min-height:45px; width:min(100%,430px); padding:10px 16px; border:1px solid #afdcff80; background:#071c6550; color:#d3eaff; text-align:left; font-size:12px; }
 .record-capture:hover { background:#052562; border-color:var(--cyan); }
 .record-capture b { font-size:24px; line-height:1; color:var(--cyan); }
-.record-character { position:absolute; width:470px; height:470px; top:-32px; right:-161px; pointer-events:none; }
+
 .record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 6px; padding-bottom:13px; border-bottom:1px solid #7bafff45; }
 .record-filters { display:flex; gap:6px; }
 .record-filters button { min-height:36px; padding:6px 16px; font-size:12px; color:#adc8f4; }
@@ -395,7 +394,7 @@ async function onRetryRecord(record) {
 .records-error button { margin-top:16px; }
 .records-main > .empty-state .empty-title { color:white; }
 .records-main > .empty-state .empty-desc { color:var(--on-dark); }
-@media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:60%}.record-character{right:-184px}}
-@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-character{width:400px;height:400px;right:-190px;top:-7px;opacity:.7}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
+@media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:90%}}
+@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
 
 </style>

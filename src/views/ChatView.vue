@@ -401,7 +401,7 @@ async function onRemoveSession(id) {
         <div class="chat-wrap">
           <!-- 空态（含加载中 / 失败兜底 + vault 演示入口） -->
           <div v-if="chat.messages.length === 0" class="chat-empty">
-            <div class="chat-portrait" aria-hidden="true"><img src="/art/p3r/aigis.webp" alt="" width="1080" height="1080"></div>
+
             <span class="chat-empty-en" aria-hidden="true">HELLO, MYSELF.</span>
             <h2>{{ chat.historyLoading ? emptyTitle : chat.historyError ? '暂时没能找回这段对话' : '和另一个自己，聊聊。' }}</h2>
             <p>{{ emptyDesc }}</p>
@@ -764,8 +764,8 @@ async function onRemoveSession(id) {
 .chat-masthead-wrap { flex-shrink:0; padding:0 clamp(24px,3.5vw,56px); }
 .chat-page .page-content { padding-top:0; }
 .chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-height:0; overflow-y:auto; padding:18px 10px 26px; color:white; }
-.chat-portrait { position:relative; width:150px; height:150px; overflow:hidden; flex-shrink:0; background:#38e5ee; clip-path:polygon(10% 0,100% 0,90% 100%,0 100%); margin-bottom:18px; }
-.chat-portrait img { position:absolute; width:620px; height:620px; max-width:none; left:50%; transform:translateX(-50%); top:-62px; }
+
+
 .chat-empty-en { font:italic 800 57px/.9 var(--font-display); letter-spacing:-.025em; }
 .chat-empty h2 { font-size:20px; font-weight:800; margin-top:15px; }
 .chat-empty p { font-size:12px; color:var(--on-dark); margin-top:10px; }
@@ -781,6 +781,6 @@ async function onRemoveSession(id) {
 .chat-msg-ai .chat-msg-bubble { border-radius:2px; border-left:4px solid var(--cyan); box-shadow:4px 4px 0 #010b3330; }
 .chat-rail { border-radius:2px; border-top:3px solid var(--cyan); }
 @media(min-width:1440px){.history-btn{display:none}}
-@media(max-width:899px){.chat-masthead-wrap{padding:0 16px}.history-btn{display:none}.chat-masthead-wrap :deep(.masthead){padding:18px 0}.chat-masthead-wrap :deep(.masthead-en){font-size:39px}.chat-empty-en{font-size:45px}.chat-portrait{width:125px;height:125px}.chat-portrait img{width:550px;height:550px;top:-60px}.chat-empty h2{font-size:18px}.chat-prompts{margin-top:18px;gap:7px}.chat-prompts button{font-size:10px;padding:7px 11px}.chat-input-bar{padding:7px}.chat-msg-bubble{max-width:93%;font-size:13px;padding:13px 15px}}
-@media(max-height:720px){.chat-portrait{width:95px;height:95px;margin-bottom:12px}.chat-portrait img{width:500px;height:500px;top:-55px}.chat-empty-en{font-size:40px}.chat-empty h2{margin-top:10px}.chat-prompts{margin-top:14px}}
+@media(max-width:899px){.chat-masthead-wrap{padding:0 16px}.history-btn{display:none}.chat-masthead-wrap :deep(.masthead){padding:18px 0}.chat-masthead-wrap :deep(.masthead-en){font-size:39px}.chat-empty-en{font-size:45px}.chat-empty h2{font-size:18px}.chat-prompts{margin-top:18px;gap:7px}.chat-prompts button{font-size:10px;padding:7px 11px}.chat-input-bar{padding:7px}.chat-msg-bubble{max-width:93%;font-size:13px;padding:13px 15px}}
+@media(max-height:720px){.chat-empty-en{font-size:40px}.chat-empty h2{margin-top:10px}.chat-prompts{margin-top:14px}}
 </style>

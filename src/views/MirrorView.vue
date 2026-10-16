@@ -340,7 +340,6 @@ onBeforeUnmount(() => {
       <section class="reflection-stage" aria-label="近 30 天生活回顾">
         <div class="stage-word" aria-hidden="true">REFLECT.</div>
         <div class="stage-orbit" aria-hidden="true" />
-        <img class="stage-character" src="/art/p3r/protagonist-battle.webp" alt="" width="1080" height="1080" fetchpriority="high">
         <div class="stage-month" aria-hidden="true"><b>{{ monthNumber }}</b><span>{{ yearNumber }}<br>YOUR DAYS</span></div>
         <div class="stage-copy"><span class="stage-kicker">LIFE, IN REFLECTION</span><template v-if="!statsUnavailable && !stats[0].num"><h2>你的故事，<br>从今天开始。</h2><p>记下第一件小事，<br>让镜子慢慢认识你。</p><button class="stage-first-record" @click="ui.openWriteModal()">写下第一条记录 <span aria-hidden="true">＋</span></button></template><template v-else><h2>原来，<br>你做了这么多。</h2><p>那些认真生活的瞬间，<br>正在拼成越来越清晰的你。</p></template></div>
         <div class="stage-stats">
@@ -1113,11 +1112,11 @@ onBeforeUnmount(() => {
 .reflection-stage::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg,#082b99e8 0%,#0838bba0 38%,#072a9140 70%); }
 .stage-word { position: absolute; right: -8px; bottom: 103px; font: italic 900 clamp(100px,13vw,200px)/.8 var(--font-display); color: #94eaff24; letter-spacing: -.04em; pointer-events: none; }
 .stage-orbit { position: absolute; right: -70px; top: -150px; width: 530px; height: 530px; border: 53px solid #b9faffbd; border-radius: 50%; transform: rotate(-22deg) scaleX(.72); z-index: -1; }
-.stage-character { position: absolute; right: -116px; top: -44px; height: 780px; width: 780px; max-width: none; object-fit: contain; filter: drop-shadow(12px 8px 0 #03134a50); pointer-events: none; }
+
 .stage-month { position: absolute; display: flex; align-items: center; gap: 8px; top: 23px; right: 24px; text-shadow: 0 2px 12px #07175470; }
 .stage-month b { font: italic 800 73px/.8 var(--font-display); letter-spacing: -.04em; }
 .stage-month span { font: 700 12px/1.2 var(--font-display); }
-.stage-copy { position: relative; padding: 35px 36px 140px; max-width: 64%; }
+.stage-copy { position: relative; padding: 35px 36px 140px; max-width: 85%; }
 .stage-first-record { display:inline-flex; gap:20px; align-items:center; margin-top:16px; padding:8px 13px; background:var(--cyan); color:var(--night); font-size:11px; font-weight:800; min-height:38px; }
 .stage-kicker { display: inline-block; font: italic 700 15px var(--font-display); background: var(--cyan); color: var(--night); padding: 3px 10px; transform: skew(-7deg); }
 .stage-copy h2 { margin-top: 22px; font-size: clamp(34px,3.8vw,58px); line-height: 1.25; font-weight: 900; letter-spacing: -.04em; text-shadow: 3px 3px 0 #092b8d; }
@@ -1159,10 +1158,10 @@ onBeforeUnmount(() => {
 .mirror-page .page-content > .empty-state .empty-desc { color: var(--text-mid); }
 .processing-desc { max-width: 50ch; }
 .mirror-error { display: flex; gap: 20px; align-items: center; justify-content: space-between; padding: 20px; background: #ffffff10; color: white; border: 1px solid #ffadc6; margin: 18px 0; }
-@media (max-width: 1199px) { .stage-character { right: -175px; } .stage-copy { padding-left: 28px; } .stage-stats { gap: 22px; padding-left: 28px; } .stage-stats .stage-stats-note { display: none; } .reflection-status > div { padding: 16px; gap: 8px; } }
+@media (max-width: 1199px) {  .stage-copy { padding-left: 28px; } .stage-stats { gap: 22px; padding-left: 28px; } .stage-stats .stage-stats-note { display: none; } .reflection-status > div { padding: 16px; gap: 8px; } }
 @media (max-width: 599px) {
  .period-caption { display: none; } .reflection-stage { min-height: 435px; } .stage-copy { padding: 28px 20px 145px; max-width: 77%; } .stage-copy h2 { font-size: 28px; } .stage-copy p { font-size: 11px; } .stage-first-record { display:inline-flex; gap:20px; align-items:center; margin-top:16px; padding:8px 13px; background:var(--cyan); color:var(--night); font-size:11px; font-weight:800; min-height:38px; }
-.stage-kicker { font-size: 12px; } .stage-character { height: 560px; width: 560px; right: -234px; top: 9px; opacity: .9; } .stage-month { right: 14px; top: 18px; } .stage-month b { font-size: 48px; } .stage-month span { font-size: 10px; } .stage-word { font-size: 100px; bottom: 113px; } .stage-orbit { right: -150px; width: 380px; height: 380px; }
+.stage-kicker { font-size: 12px; }  .stage-month { right: 14px; top: 18px; } .stage-month b { font-size: 48px; } .stage-month span { font-size: 10px; } .stage-word { font-size: 100px; bottom: 113px; } .stage-orbit { right: -150px; width: 380px; height: 380px; }
  .stage-stats { justify-content: space-between; gap: 8px; padding: 17px 16px; } .stage-stats > div { display: block; } .stage-stats strong { font-size: 43px; } .stage-stats span { display: block; font-size: 10px; } .stage-stats small { display: none; }
  .reflection-status { flex-wrap: wrap; } .reflection-status > div { flex: 1 1 100%; padding: 11px 16px; border-right: 0; border-bottom: 1px solid #88b6ff25; justify-content: space-between; } .reflection-status i { display: none; } .reflection-status strong { font-size: 12px; }
  .timeline-head { flex-wrap: wrap; } .mirror-error { flex-direction: column; align-items: flex-start; }
