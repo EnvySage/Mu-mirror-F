@@ -51,3 +51,11 @@ User feedback: remove the game character cutouts and make movement carry more of
 - Navigation now uses a shared sliding cyan selection block. Page changes use two diagonal color wipes, a brief destination label, and a clipped incoming view (about 600ms total).
 - Added clipped title/copy entrances, directional calendar month transitions, and cut-in desktop writing/detail panels. Motion layers do not intercept clicks; system reduced-motion settings disable the route wipe and shorten transitions.
 - Verification: production build and diff whitespace check pass. Browser preview verifies portrait count zero, route wipe CSS applied, page content restored after navigation, September/October calendar navigation, and mobile horizontal overflow checks. Preview uses the existing local sample-data fixture, not a live backend.
+
+
+## Writing and daily reflections — 2026-10-16
+
+- Replaced the small writing modal with a wide two-column workspace (up to 1100px): date and water artwork on the left, a large quiet writing surface on the right. Mobile uses a tall sheet, retaining the counter and save action.
+- Added placeholder-only writing prompts, Ctrl/Cmd+Enter save, disabled editing during submission, visible errors, and shared dialog focus containment/return. The existing 500-character API limit and model configuration check are preserved.
+- Redesigned Daily Summary as a 980px daily journal: blue cover, sticky month labels, dated reading cards, expanded prose, and explicit empty/error/retry states. Existing cursor pagination, missing-day generation, regeneration, and glossary candidate actions remain connected to their stores.
+- Public demo receives matching sample summaries, full articles, pagination and generation fixtures. These fixtures stay only in the separate public-demo checkout.
