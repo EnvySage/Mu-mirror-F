@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
 import { useVaultStore } from '@/stores/vault'
@@ -113,10 +113,17 @@ watch(() => ui.chatSessionsRequested, (v) => {
   }
 })
 
-onBeforeUnmount(() => {
-  // 离开页面时若流未结束则中断，防止消息串到下次进入
-  if (chat.sending) chat.abort()
-})
+// 故意不在卸载时中断流式请求（2026-09-23）。
+//
+// 原实现是 `onBeforeUnmount(() => { if (chat.sending) chat.abort() })`，出发点是"防止消息
+// 串到下次进入"——但那个隐患早已由 chat store 的 restoreLastSession 挡住
+// （`if (sending.value) return false`，流进行中不重载历史）。abort 拦不到已经不存在的
+// 风险，代价却是实打实的：用户切页再切回，流已被掐断，后半段输出永远看不到。
+//
+// 后端也不依赖前端连接——streamAnswer 会把回答跑完并落库（insertMessage）才发 done，
+// 前端断开只影响自己收帧。所以这里放手：store 是全局的，流继续写 messages；切回来时
+// sending 仍为真 → 跳过重载 → 直接看到继续增长的内容。若切回时流已结束（sending 已
+// 翻假），restoreLastSession 会重新拉会话，那时后端已落库，历史里照样有完整回答。
 
 async function scrollToBottom() {
   await nextTick()
