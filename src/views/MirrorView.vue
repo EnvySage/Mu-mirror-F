@@ -6,6 +6,7 @@ import { useStatsStore } from '@/stores/stats'
 import { useTodoStore } from '@/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
@@ -23,17 +24,36 @@ const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const ui = useUIStore()
 const toast = useToastStore()
+const auth = useAuthStore()
+let mirrorViewMounted = false
+let mirrorOwnerId = null
+let mirrorOwnerInitialized = false
+
+function reloadMirrorForAccount(userId) {
+  const nextOwnerId = userId === null || userId === undefined ? null : String(userId)
+  if (mirrorOwnerInitialized && nextOwnerId === mirrorOwnerId) return
+  mirrorOwnerInitialized = true
+  mirrorOwnerId = nextOwnerId
+  mirror.resetForRefresh()
+  if (nextOwnerId === null) return
+  mirror.fetchMirror().catch(() => {})
+  // 归档首屏与可重建月份分开加载，任一失败都不阻断镜子正文。
+  mirror.fetchSnapshots().catch(() => {})
+  mirror.fetchSnapshotMonths().catch(() => {})
+}
 
 function reloadMirror() {
   return Promise.all([mirror.fetchMirror(), mirror.fetchSnapshots()])
 }
 
+watch(() => auth.user?.id ?? null, (userId) => {
+  if (mirrorViewMounted) reloadMirrorForAccount(userId)
+})
+
 onMounted(() => {
+  mirrorViewMounted = true
   // 异步回调统一过 isUnmounted 守卫：resolve 时组件可能已被 Transition 卸载（out-in 离场期间无 DOM 可更新）
-  mirror.fetchMirror().catch(() => {})
-  // 归档首屏与可重建月份分开加载，任一失败都不阻断镜子正文。
-  mirror.fetchSnapshots().catch(() => {})
-  mirror.fetchSnapshotMonths().catch(() => {})
+  reloadMirrorForAccount(auth.user?.id)
   // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
   statsStore.fetchStats().catch(() => {})
   // 证据链（「未完成的事」模块数据源；store 有缓存，两页共用一份 chains）
@@ -171,6 +191,7 @@ const timeline = computed(() => (mirror.snapshots || []).map((s, i) => ({
   contextStatus: s.context_status || 'usable',
   invalidatedReason: s.invalidated_reason || '',
   deletedSourceCount: Number(s.deleted_source_count || 0),
+  archiveDiscontinuity: Boolean(s.archive_discontinuity),
   drift: s.drift_distance,
   summary: s.overall_summary || '',
   latest: i === 0,
@@ -462,8 +483,8 @@ onBeforeUnmount(() => {
               role="tab"
               :aria-selected="node.viewing"
               :class="['snapshot-chip', 'snapshot-node', `state-${node.contextStatus}`, { current: node.viewing, latest: node.latest }]"
-              :aria-label="`${node.label}，${node.type === 'monthly' ? '月度镜子' : '手动镜子'}，第 ${node.version} 版，${node.contextStatus === 'usable' ? '可用于后续镜子' : '仅作归档'}`"
-              :title="`${shortDateTime(node.full)} · ${node.type} · V${node.version} · ${node.contextStatus === 'usable' ? '可续写' : '仅归档'}${node.invalidatedReason ? ` · ${invalidationReasonText(node.invalidatedReason)}` : ''}${node.drift !== null && node.drift !== undefined ? ` · 漂移 ${node.drift}` : ''}`"
+              :aria-label="`${node.label}，${node.type === 'monthly' ? '月度镜子' : '手动镜子'}，第 ${node.version} 版，${node.contextStatus === 'usable' ? '可用于后续镜子' : '仅作归档'}${node.archiveDiscontinuity ? '，累计历史有断点' : ''}`"
+              :title="`${shortDateTime(node.full)} · ${node.type} · V${node.version} · ${node.contextStatus === 'usable' ? '可续写' : '仅归档'}${node.archiveDiscontinuity ? ' · 历史链有断点' : ''}${node.invalidatedReason ? ` · ${invalidationReasonText(node.invalidatedReason)}` : ''}${node.drift !== null && node.drift !== undefined ? ` · 漂移 ${node.drift}` : ''}`"
               @click="onViewSnapshot(node)"
             >
               <span class="snapshot-node-date">{{ node.label }}</span>
@@ -472,6 +493,7 @@ onBeforeUnmount(() => {
               <span :class="['snapshot-context-tag', node.contextStatus === 'usable' ? 'context-usable' : 'context-archive']">
                 {{ node.contextStatus === 'usable' ? '可续写' : '仅归档' }}
               </span>
+              <span v-if="node.archiveDiscontinuity" class="snapshot-break-tag">历史断点</span>
               <span v-if="node.viewing" class="snapshot-viewing-tag">查看中</span>
               <span v-else-if="node.latest" class="snapshot-latest-tag">最新</span>
             </button>
@@ -659,10 +681,11 @@ onBeforeUnmount(() => {
                   @click="onBackToLatest"
                 >回到最新</button>
               </div>
-              <div v-if="mirror.profile.context_status === 'archive_only'" class="mirror-archive-note" role="status">
-                <strong>仅作归档</strong>
-                <span>这份镜子仍可查看，不会用于后续镜子的生成。</span>
-                <span>{{ invalidationReasonText(mirror.profile.invalidated_reason) }}</span>
+              <div v-if="mirror.profile.context_status === 'archive_only' || mirror.profile.archive_discontinuity" class="mirror-archive-note" role="status">
+                <strong>{{ mirror.profile.context_status === 'archive_only' ? '仅作归档' : '历史断点' }}</strong>
+                <span v-if="mirror.profile.context_status === 'archive_only'">这份镜子仍可查看，不会用于后续镜子的生成。</span>
+                <span v-if="mirror.profile.archive_discontinuity">更早的部分来源已无法完整重建，累计历史从这里存在断点。</span>
+                <span v-if="mirror.profile.context_status === 'archive_only'">{{ invalidationReasonText(mirror.profile.invalidated_reason) }}</span>
                 <span v-if="mirror.profile.deleted_source_count > 0" class="deleted-source-note">
                   原始记录已删除（{{ mirror.profile.deleted_source_count }} 条）
                 </span>
@@ -936,6 +959,11 @@ onBeforeUnmount(() => {
 .snapshot-node-date { grid-column: 1; font-family: var(--font-display); font-size: 14px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .snapshot-node-version { grid-column: 2; align-self: start; font-size: 9px; color: var(--text-low); }
 .snapshot-node .snapshot-type-badge, .snapshot-context-tag { grid-row: 2; justify-self: start; }
+.snapshot-break-tag {
+  grid-column: 1 / -1; justify-self: start; padding: 1px 5px;
+  color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 8px; letter-spacing: .04em;
+}
 .snapshot-type-badge {
   font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em;
   padding: 1.5px 6px; border-radius: var(--radius-full); line-height: 1.3;
