@@ -1,11 +1,12 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useMirrorStore } from '@/stores/mirror'
 import { useRecordsStore } from '@/stores/records'
 import { useStatsStore } from '@/stores/stats'
 import { useTodoStore } from '@/stores/todo'
 import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
@@ -22,12 +23,32 @@ const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const ui = useUIStore()
 const toast = useToastStore()
+const auth = useAuthStore()
+let mirrorViewMounted = false
+let mirrorOwnerId = null
+let mirrorOwnerInitialized = false
+
+function reloadMirrorForAccount(userId) {
+  const nextOwnerId = userId === null || userId === undefined ? null : String(userId)
+  if (mirrorOwnerInitialized && nextOwnerId === mirrorOwnerId) return
+  mirrorOwnerInitialized = true
+  mirrorOwnerId = nextOwnerId
+  mirror.resetForRefresh()
+  if (nextOwnerId === null) return
+  mirror.fetchMirror().catch(() => {})
+  // 归档首屏与可重建月份分开加载，任一失败都不阻断镜子正文。
+  mirror.fetchSnapshots().catch(() => {})
+  mirror.fetchSnapshotMonths().catch(() => {})
+}
+
+watch(() => auth.user?.id ?? null, (userId) => {
+  if (mirrorViewMounted) reloadMirrorForAccount(userId)
+})
 
 onMounted(() => {
+  mirrorViewMounted = true
   // 异步回调统一过 isUnmounted 守卫：resolve 时组件可能已被 Transition 卸载（out-in 离场期间无 DOM 可更新）
-  mirror.fetchMirror().catch(() => {})
-  // 快照历史轨迹（真接口：GET /mirror/snapshots，失败静默回落空轨迹）
-  mirror.fetchSnapshots().catch(() => {})
+  reloadMirrorForAccount(auth.user?.id)
   // 六图表数据源（B Agent 真接口，stats store 内 30s 缓存）
   statsStore.fetchStats().catch(() => {})
   // 证据链（「未完成的事」模块数据源；store 有缓存，两页共用一份 chains）
@@ -151,9 +172,17 @@ function shortDateTime(dateStr) {
 /** 轨迹节点：接口列表（倒序，最新在前），每节点标日期/类型/是否最新 */
 const timeline = computed(() => (mirror.snapshots || []).map((s, i) => ({
   id: s.id,
-  label: shortDay(s.created_at),
+  label: s.snapshot_type === 'monthly' && s.period_month
+    ? monthLabel(s.period_month)
+    : shortDay(s.created_at),
   full: s.created_at || '',
   type: s.snapshot_type === 'monthly' ? 'monthly' : 'manual',
+  periodMonth: s.period_month || null,
+  version: s.version_no || 1,
+  contextStatus: s.context_status || 'usable',
+  invalidatedReason: s.invalidated_reason || '',
+  deletedSourceCount: Number(s.deleted_source_count || 0),
+  archiveDiscontinuity: Boolean(s.archive_discontinuity),
   drift: s.drift_distance,
   summary: s.overall_summary || '',
   latest: i === 0,
@@ -170,9 +199,9 @@ const TIMELINE_RETENTION = '保留策略：手动最近 2 份 / 月度最近 12 
  */
 const timelineNote = computed(() => {
   const n = timeline.value.length
-  if (!n) return '暂无历史快照'
+  if (!n) return mirror.snapshotsLoading ? '正在读取归档' : '暂无历史快照'
   const monthly = timeline.value.filter(t => t.type === 'monthly').length
-  return `共 ${n} 份 · 手动 ${n - monthly} · 月度 ${monthly}`
+  return `已加载 ${n} 份 · 手动 ${n - monthly} · 月度 ${monthly}`
 })
 
 /** 查看历史快照（hero 切换为该快照内容）；卸载后不弹 toast（组件已不在 DOM） */
@@ -290,24 +319,63 @@ watch(() => mirror.generatableMonths, (list) => {
   if (!list.includes(ghostMonth.value)) ghostMonth.value = list[0] || ''
 }, { immediate: true })
 
-/** "2026-08" → "8 月"（幽灵卡与 toast 共用的月份口语化） */
+/** "2026-08" → "2026年8月"，月份标题遵循镜子的归属月。 */
 function monthLabel(ym) {
+  const year = Number(String(ym || '').slice(0, 4))
   const m = Number(String(ym || '').slice(5, 7))
-  return m ? `${m} 月` : String(ym || '')
+  return m ? `${year}年${m}月` : String(ym || '')
+}
+
+function invalidationReasonText(reason) {
+  const labels = {
+    record_deleted: '引用的原始记录已删除',
+    memory_revoked: '已取消这段内容的 AI 记忆授权',
+    approved_chunk_edited: '已编辑这段授权内容',
+    chunk_removed: '引用的内容片段已移除',
+    legacy_untracked_source_change: '旧版镜子没有来源清单；授权变化后已停止用于后续镜子',
+    legacy_invalidated: '该镜子在归档升级前已经失效',
+  }
+  return labels[reason] || (reason ? `归档原因：${reason}` : '来源发生变化，这份镜子仅保留查阅')
 }
 
 /** 幽灵卡月份下拉选项（SelectMenu 用；原生 select 的下拉面板无法样式化） */
 const ghostMonthOptions = computed(() =>
   mirror.generatableMonths.map(ym => ({ value: ym, label: monthLabel(ym) })))
 
+const confirmingMonth = ref(null)
+const cancelMonthConfirmButton = ref(null)
+const monthConfirmTrigger = ref(null)
+
+async function requestMonthGeneration(month, event) {
+  if (!month || mirror.generatingMonthly) return
+  monthConfirmTrigger.value = event?.currentTarget || null
+  confirmingMonth.value = month
+  await nextTick()
+  cancelMonthConfirmButton.value?.focus()
+}
+
+function closeMonthConfirmation() {
+  confirmingMonth.value = null
+  nextTick(() => monthConfirmTrigger.value?.focus?.())
+}
+
 /**
  * 生成该月 monthly 快照：
  * 成功 → toast「N 月的镜子已生成」+ store 内已 fetchSnapshots + viewSnapshot 定位新快照；
- * 失败 → toast 后端 message（400 当前/未来月、幂等替换失败等）。
+ * 失败 → toast 后端 message（400 当前/未来月等）。
  * 卸载守卫与其他长时操作同口径：卸载后不弹 toast。
  */
-async function onGenerateMonthly() {
-  const month = ghostMonth.value
+async function onGenerateMonthly(event) {
+  await requestMonthGeneration(ghostMonth.value, event)
+}
+
+async function confirmMonthGeneration() {
+  const month = confirmingMonth.value
+  if (!month) return
+  confirmingMonth.value = null
+  const trigger = monthConfirmTrigger.value
+  await nextTick()
+  trigger?.focus?.()
   if (!month || mirror.generatingMonthly) return
   const res = await mirror.generateForMonth(month)
   if (isUnmounted) return
@@ -335,8 +403,22 @@ onBeforeUnmount(() => {
         <div class="processing-desc">五维统计 + 最近记录 → GenerateProfile</div>
       </div>
 
+      <div v-else-if="mirror.isEmpty && (mirror.loading || mirror.snapshots === null || mirror.snapshotsLoading)" class="processing-view" role="status">
+        <div class="processing-ring" />
+        <div class="processing-title">正在读取镜子归档</div>
+        <div class="processing-desc">检查是否有可查阅的历史快照</div>
+      </div>
+
+      <div v-else-if="mirror.isEmpty && mirror.error" class="empty-state" style="padding:70px 20px">
+        <div class="empty-title">暂时无法打开镜子归档</div>
+        <div class="empty-desc">{{ mirror.error }}</div>
+        <button class="mirror-generate" style="max-width:260px;margin:20px auto 0" @click="mirror.fetchSnapshots">
+          重试读取归档
+        </button>
+      </div>
+
       <!-- 首次使用：引导生成 -->
-      <div v-else-if="mirror.isEmpty && !mirror.loading" class="empty-state" style="padding:70px 20px">
+      <div v-else-if="mirror.isEmpty" class="empty-state" style="padding:70px 20px">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
         </div>
@@ -363,30 +445,52 @@ onBeforeUnmount(() => {
               <span v-if="!compareMode" class="compare-hint">对比 overall 与六维变化</span>
             </div>
           </div>
-          <div v-if="timeline.length" class="snapshot-strip" role="tablist" aria-label="快照历史时间线">
+          <div v-if="timeline.length" class="snapshot-strip" role="tablist" aria-label="镜子归档时间线">
             <button
               v-for="node in timeline"
               :key="node.id"
               type="button"
               role="tab"
               :aria-selected="node.viewing"
-              :class="['snapshot-chip', 'snapshot-node', { current: node.viewing, latest: node.latest }]"
-              :title="`${shortDateTime(node.full)} · ${node.type}${node.drift !== null && node.drift !== undefined ? ` · 漂移 ${node.drift}` : ''}`"
+              :class="['snapshot-chip', 'snapshot-node', `state-${node.contextStatus}`, { current: node.viewing, latest: node.latest }]"
+              :aria-label="`${node.label}，${node.type === 'monthly' ? '月度镜子' : '手动镜子'}，第 ${node.version} 版，${node.contextStatus === 'usable' ? '可用于后续镜子' : '仅作归档'}${node.archiveDiscontinuity ? '，累计历史有断点' : ''}`"
+              :title="`${shortDateTime(node.full)} · ${node.type} · V${node.version} · ${node.contextStatus === 'usable' ? '可续写' : '仅归档'}${node.archiveDiscontinuity ? ' · 历史链有断点' : ''}${node.invalidatedReason ? ` · ${invalidationReasonText(node.invalidatedReason)}` : ''}${node.drift !== null && node.drift !== undefined ? ` · 漂移 ${node.drift}` : ''}`"
               @click="onViewSnapshot(node)"
             >
               <span class="snapshot-node-date">{{ node.label }}</span>
+              <span class="snapshot-node-version">V{{ node.version }}</span>
               <span :class="['snapshot-type-badge', `badge-${node.type}`]">{{ node.type === 'monthly' ? '月度' : '手动' }}</span>
+              <span :class="['snapshot-context-tag', node.contextStatus === 'usable' ? 'context-usable' : 'context-archive']">
+                {{ node.contextStatus === 'usable' ? '可续写' : '仅归档' }}
+              </span>
+              <span v-if="node.archiveDiscontinuity" class="snapshot-break-tag">历史断点</span>
               <span v-if="node.viewing" class="snapshot-viewing-tag">查看中</span>
               <span v-else-if="node.latest" class="snapshot-latest-tag">最新</span>
             </button>
           </div>
-          <div v-else class="portrait-text">暂无历史快照，生成第一份画像后这里会出现时间线。</div>
+          <div v-else-if="mirror.snapshotsError" class="timeline-load-error" role="status">
+            <span>{{ mirror.snapshotsError }}</span>
+            <button type="button" @click="mirror.fetchSnapshots()">重试</button>
+          </div>
+          <div v-else-if="!mirror.snapshotsLoading" class="portrait-text">暂无历史快照，生成第一份画像后这里会出现时间线。</div>
 
-          <!-- 按月生成入口（幽灵卡）：只列"有区间但无 monthly"的历史月份 -->
+          <div v-if="mirror.snapshotsHasMore || mirror.snapshotsLoadingMore || mirror.snapshotsError" class="timeline-more">
+            <span v-if="mirror.snapshotsError" class="timeline-more-error" role="status">{{ mirror.snapshotsError }}</span>
+            <button
+              type="button"
+              class="timeline-more-btn"
+              :disabled="mirror.snapshotsLoadingMore"
+              @click="mirror.snapshotsHasMore ? mirror.fetchMoreSnapshots() : mirror.fetchSnapshots()"
+            >
+              {{ mirror.snapshotsLoadingMore ? '正在载入…' : mirror.snapshotsError ? '重试加载' : '加载更早镜子' }}
+            </button>
+          </div>
+
+          <!-- 月份候选由后端依据授权记录与归属月计算；已失效归档月份仍可选择重建。 -->
           <div v-if="mirror.generatableMonths.length" class="ghost-card">
             <div class="ghost-head">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-              为没有镜子的月份照一镜
+              为历史月份生成镜子
             </div>
             <div class="ghost-actions">
               <SelectMenu
@@ -399,13 +503,17 @@ onBeforeUnmount(() => {
               />
               <button type="button" class="ghost-btn" :disabled="mirror.generatingMonthly || !ghostMonth" @click="onGenerateMonthly">
                 <svg v-if="!mirror.generatingMonthly" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                {{ mirror.generatingMonthly ? '照镜中…' : '生成' }}
+                {{ mirror.generatingMonthly ? '照镜中…' : '新建版本' }}
               </button>
             </div>
-            <div v-if="mirror.generatingMonthly" class="ghost-loading">照镜中…约需十几秒</div>
+            <div v-if="mirror.snapshotMonthsError" class="ghost-loading" role="status">{{ mirror.snapshotMonthsError }} <button type="button" @click="mirror.fetchSnapshotMonths()">重试</button></div>
+            <div v-else-if="mirror.generatingMonthly" class="ghost-loading">正在生成新镜子…</div>
           </div>
-          <!-- 淡态：无可生成月份（原虚线整卡占一整行，压缩为一行小字） -->
-          <p v-else-if="timeline.length" class="timeline-idle">近两个月都已有镜子</p>
+          <div v-else-if="mirror.snapshotMonthsLoading" class="timeline-idle" role="status">正在查找可生成的历史月份…</div>
+          <div v-else-if="mirror.snapshotMonthsError" class="timeline-idle" role="status">
+            {{ mirror.snapshotMonthsError }} <button type="button" @click="mirror.fetchSnapshotMonths()">重试</button>
+          </div>
+          <p v-else-if="timeline.length" class="timeline-idle">暂无可生成的历史月份</p>
         </div>
 
         <!-- ===== 对比区（compareMode 开启时插入 hero 上方） ===== -->
@@ -543,6 +651,15 @@ onBeforeUnmount(() => {
                   @click="onBackToLatest"
                 >回到最新</button>
               </div>
+              <div v-if="mirror.profile.context_status === 'archive_only' || mirror.profile.archive_discontinuity" class="mirror-archive-note" role="status">
+                <strong>{{ mirror.profile.context_status === 'archive_only' ? '仅作归档' : '历史断点' }}</strong>
+                <span v-if="mirror.profile.context_status === 'archive_only'">这份镜子仍可查看，不会用于后续镜子的生成。</span>
+                <span v-if="mirror.profile.archive_discontinuity">更早的部分来源已无法完整重建，累计历史从这里存在断点。</span>
+                <span v-if="mirror.profile.context_status === 'archive_only'">{{ invalidationReasonText(mirror.profile.invalidated_reason) }}</span>
+                <span v-if="mirror.profile.deleted_source_count > 0" class="deleted-source-note">
+                  原始记录已删除（{{ mirror.profile.deleted_source_count }} 条）
+                </span>
+              </div>
               <div v-if="mirror.drift" class="mirror-drift">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
                 较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
@@ -551,6 +668,15 @@ onBeforeUnmount(() => {
               <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
                 {{ mirror.generating ? '生成中…' : '重新生成快照（manual）' }}
+              </button>
+              <button
+                v-if="mirror.profile.snapshot_type === 'monthly' && mirror.profile.period_month && mirror.profile.context_status === 'usable' && mirror.profile.is_current"
+                type="button"
+                class="mirror-regenerate-month"
+                :disabled="mirror.generatingMonthly"
+                @click="requestMonthGeneration(mirror.profile.period_month, $event)"
+              >
+                为 {{ monthLabel(mirror.profile.period_month) }} 新建版本
               </button>
             </div>
             <aside class="mirror-hero-stats" aria-label="近 30 天实时统计">
@@ -702,6 +828,29 @@ onBeforeUnmount(() => {
       </template>
     </div>
   </div>
+  <Teleport to="body">
+    <div
+      v-if="confirmingMonth"
+      class="month-confirm-scrim"
+      @click.self="closeMonthConfirmation"
+      @keydown.esc.stop.prevent="closeMonthConfirmation"
+    >
+      <section class="month-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="month-confirm-title">
+        <div class="month-confirm-mark" aria-hidden="true">↻</div>
+        <div class="month-confirm-copy">
+          <h2 id="month-confirm-title">为 {{ monthLabel(confirmingMonth) }} 新建镜子？</h2>
+          <p>若这个月已有版本，旧版会完整保留在归档中；新结果将成为该月当前镜子。</p>
+          <p>已删除或取消授权的原始内容不会重新进入这次生成。</p>
+        </div>
+        <div class="month-confirm-actions">
+          <button ref="cancelMonthConfirmButton" type="button" class="month-confirm-cancel" @click="closeMonthConfirmation">
+            再看看
+          </button>
+          <button type="button" class="month-confirm-accept" @click="confirmMonthGeneration">确认生成</button>
+        </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -741,30 +890,56 @@ onBeforeUnmount(() => {
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 
-/* ===== 快照时间线（压缩：头行合并对比开关，淡态去整卡） ===== */
+/* ===== 快照时间线：日期卡像沿轨道钉入的档案票根 ===== */
 .timeline-card { padding: 12px 14px; }
 .timeline-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .timeline-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.timeline-idle { margin-top: 8px; font-size: 11.5px; color: var(--text-low); }
-.snapshot-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.timeline-idle { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 11.5px; color: var(--text-low); }
+.timeline-load-error { display: flex; align-items: center; gap: 12px; padding: 10px 0; color: var(--text-low); font-size: 12px; }
+.timeline-load-error button, .timeline-idle button, .ghost-loading button {
+  padding: 2px 8px; color: var(--accent); border-bottom: 1px solid currentColor;
+}
+.snapshot-strip {
+  position: relative; display: flex; align-items: flex-start; gap: 9px;
+  overflow-x: auto; padding: 9px 4px 14px; scrollbar-width: thin;
+}
+.snapshot-strip::before {
+  content: ''; position: absolute; top: 31px; left: 4px; right: 4px;
+  border-top: 1px solid var(--line-strong); pointer-events: none;
+}
 .snapshot-chip {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 10.5px;
-  padding: 5px 11px; border-radius: var(--radius-full);
-  border: 1px solid var(--line); color: var(--text-low);
+  padding: 5px 11px; border: 1px solid var(--line); color: var(--text-low);
   background: var(--card);
 }
-/* 可点击节点（button 化）：flex 纵排 + hover 反馈 */
+/* 各节点轻微错位，保持轨道秩序但不把档案排成一排同款按钮。 */
 .snapshot-node {
-  display: inline-flex; align-items: center; gap: 7px;
-  cursor: pointer; transition: all .15s;
-  font-family: var(--font-mono); font-size: 10.5px; line-height: 1;
+  position: relative; display: grid; grid-template-columns: 1fr auto; gap: 7px 10px;
+  min-width: 134px; padding: 10px 11px; text-align: left;
+  cursor: pointer; transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
 }
-.snapshot-node:hover { border-color: var(--accent); color: var(--accent); }
+.snapshot-node:nth-child(4n + 2) { transform: translateY(5px) rotate(.5deg); }
+.snapshot-node:nth-child(4n + 3) { transform: translateY(-2px) rotate(-.35deg); }
+.snapshot-node:nth-child(4n) { transform: translateY(3px); }
+.snapshot-node:hover, .snapshot-node:focus-visible { z-index: 1; transform: translateY(-3px) rotate(0); }
+.snapshot-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.snapshot-node.state-archive_only {
+  border-style: dashed; color: var(--text-low); background: var(--ink-2); opacity: .78;
+}
 .snapshot-node.current {
-  color: var(--accent); border-color: var(--accent);
-  background: var(--accent-soft); font-weight: 600;
+  z-index: 1; color: var(--accent); border-color: var(--accent);
+  background: var(--accent-soft); font-weight: 600; opacity: 1;
+  transform: translateY(-2px) rotate(-.8deg); box-shadow: 3px 3px 0 var(--accent);
 }
-.snapshot-node-date { font-variant-numeric: tabular-nums; }
+.snapshot-node-date { grid-column: 1; font-family: var(--font-display); font-size: 14px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.snapshot-node-version { grid-column: 2; align-self: start; font-size: 9px; color: var(--text-low); }
+.snapshot-node .snapshot-type-badge, .snapshot-context-tag { grid-row: 2; justify-self: start; }
+.snapshot-break-tag {
+  grid-column: 1 / -1; justify-self: start; padding: 1px 5px;
+  color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 8px; letter-spacing: .04em;
+}
 .snapshot-type-badge {
   font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em;
   padding: 1.5px 6px; border-radius: var(--radius-full); line-height: 1.3;
@@ -773,8 +948,25 @@ onBeforeUnmount(() => {
 .badge-monthly { color: var(--violet); background: var(--violet-bg); }
 .snapshot-node.current .badge-manual { color: #FFFFFF; background: var(--accent); }
 .snapshot-node.current .badge-monthly { color: #FFFFFF; background: var(--violet); }
-.snapshot-viewing-tag { font-family: var(--font); font-size: 10px; color: var(--accent); }
-.snapshot-latest-tag { font-family: var(--font); font-size: 10px; color: var(--text-low); }
+.snapshot-context-tag { font-size: 9px; padding: 1px 5px; border-left: 2px solid currentColor; }
+.context-usable { color: var(--success); }
+.context-archive { color: var(--text-low); }
+.snapshot-viewing-tag, .snapshot-latest-tag { grid-column: 1 / -1; font-family: var(--font); font-size: 10px; }
+.snapshot-viewing-tag { color: var(--accent); }
+.snapshot-latest-tag { color: var(--text-low); }
+.timeline-more {
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+  padding: 2px 3px 8px;
+}
+.timeline-more-error { margin-right: auto; font-size: 11px; color: var(--danger); }
+.timeline-more-btn {
+  min-height: 30px; padding: 5px 13px; color: var(--accent); font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--accent); background: transparent; clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+  transition: color .16s ease, background .16s ease, transform .16s ease;
+}
+.timeline-more-btn:hover:not(:disabled) { color: #fff; background: var(--accent); transform: translateY(-1px); }
+.timeline-more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.timeline-more-btn:disabled { opacity: .55; cursor: wait; }
 
 /* ===== 对比开关（已并入时间线头行） ===== */
 .compare-toggle {
@@ -823,6 +1015,7 @@ onBeforeUnmount(() => {
   flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px;
   color: var(--text-low); animation: blink 1.2s ease infinite;
 }
+.ghost-card { border-left: 3px solid var(--accent); }
 @media (max-width: 420px) {
   .ghost-card { padding: 10px 12px; gap: 8px; }
   .ghost-actions { margin-left: 0; width: 100%; }
@@ -912,6 +1105,14 @@ onBeforeUnmount(() => {
   margin-top: 8px; font-size: 11.5px; color: var(--text-low);
   font-variant-numeric: tabular-nums;
 }
+.mirror-archive-note {
+  display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; align-items: baseline;
+  max-width: 620px; margin-top: 12px; padding: 10px 13px;
+  color: var(--text-mid); font-size: 11.5px; line-height: 1.55;
+  background: var(--ink-2); border-left: 3px solid var(--text-low);
+}
+.mirror-archive-note strong { grid-row: span 3; align-self: start; color: var(--text-low); font-family: var(--font-display); font-size: 13px; }
+.deleted-source-note { color: var(--warn); font-weight: 600; }
 .back-latest-btn {
   font-size: 11.5px; color: var(--accent); font-weight: 600;
   padding: 2px 9px; border-radius: var(--radius-full);
@@ -967,6 +1168,46 @@ onBeforeUnmount(() => {
 .mirror-generate:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .mirror-generate:disabled { opacity: .55; cursor: not-allowed; }
 .mirror-generate svg { width: 15px; height: 15px; stroke: currentColor; fill: none; }
+.mirror-regenerate-month {
+  display: block; margin-top: 8px; padding: 5px 10px; color: var(--violet); font-size: 11.5px; font-weight: 600;
+  border: 1px dashed var(--violet); background: var(--violet-bg); transition: transform .16s ease, background .16s ease;
+}
+.mirror-regenerate-month:hover:not(:disabled) { transform: translateX(3px); background: var(--card); }
+.mirror-regenerate-month:disabled { opacity: .55; cursor: not-allowed; }
+
+/* 重新生成前说明版本行为，采用带切角的镜面票据而非浏览器原生确认框。 */
+.month-confirm-scrim {
+  position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px;
+  background: rgba(3, 13, 44, .72); backdrop-filter: blur(5px);
+}
+.month-confirm-panel {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 8px 13px;
+  width: min(100%, 470px); padding: 23px 24px 19px; color: var(--text-mid);
+  background: var(--card); border-top: 3px solid var(--accent);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .32);
+}
+.month-confirm-mark {
+  display: grid; place-items: center; width: 36px; height: 36px; color: #fff; font-size: 22px;
+  background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 74%, 72% 100%, 0 100%);
+}
+.month-confirm-copy h2 { margin: 1px 0 8px; color: var(--text); font-family: var(--font-display); font-size: 18px; }
+.month-confirm-copy p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.7; color: var(--text-low); }
+.month-confirm-actions { grid-column: 2; display: flex; justify-content: flex-end; gap: 9px; margin-top: 9px; }
+.month-confirm-actions button { min-height: 34px; padding: 6px 14px; font-size: 12px; font-weight: 600; transition: transform .16s ease, background .16s ease; }
+.month-confirm-cancel { color: var(--text-mid); border: 1px solid var(--line-strong); background: transparent; }
+.month-confirm-accept { color: #fff; border: 1px solid var(--accent); background: var(--accent); }
+.month-confirm-actions button:hover { transform: translateY(-1px); }
+.month-confirm-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 480px) {
+  .month-confirm-panel { grid-template-columns: 32px minmax(0, 1fr); gap: 8px 10px; padding: 18px 17px 15px; }
+  .month-confirm-mark { width: 30px; height: 30px; }
+  .month-confirm-actions { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snapshot-node, .timeline-more-btn, .mirror-regenerate-month, .month-confirm-actions button { transition: none; }
+  .snapshot-node:nth-child(n), .snapshot-node.current, .snapshot-node:hover { transform: none; }
+}
 
 /* ===== 统计图区布局 ===== */
 /* 图表卡统一 flex 列：图例贴底、图表主体吃掉剩余高度（等高栅格下不再"内容堆顶、底部一片白"） */
