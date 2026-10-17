@@ -1375,7 +1375,8 @@ onBeforeUnmount(() => {
 .mirror-greeting { font-size: 11px; letter-spacing: .05em; }
 .mirror-name { font-family: var(--font); font-size: 25px; font-weight: 900; }
 .mirror-overall { max-width: 80ch; line-height: 1.9; }
-.mirror-generate { background: var(--accent); border-radius: 2px; font-size: 12px; }
+.mirror-generate { background: var(--accent); border-color: var(--accent); color: #fff; border-radius: 2px; font-size: 12px; }
+.mirror-generate:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
 .timeline-card { background: #ecf5ff; border-radius: 2px; padding: 19px 22px; }
 .snapshot-node { border-radius: 2px; padding: 9px 13px; border: 1px solid #bacce8; }
 .snapshot-node.current { background: var(--night); color: white; border-color: var(--night); box-shadow: 3px 3px 0 var(--cyan); }
