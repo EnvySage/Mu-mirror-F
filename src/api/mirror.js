@@ -39,7 +39,7 @@ export function getStats(days) {
  *
  * month 可空 = 上个月（与月度定时任务同语义）。指定月份需早于当前月：
  * 当前月用 POST /generate（manual 语义），未来月份无数据，二者后端均返回 400。
- * 同 (user, month) 重复调用为重生成（替换该月旧 monthly 快照），无 409 幂等冲突。
+ * 同 (user, month) 重复调用会新增版本并保留旧归档。
  * 阻塞数秒到数十秒（该月五维统计 + LLM + Embedding），调用方需 loading 态并放宽超时。
  *
  * @param {string} [month] - 目标月份 "2026-08"；缺省 = 上个月
@@ -54,18 +54,27 @@ export function generateMonthly(month) {
 }
 
 /**
- * 快照历史列表（GET /mirror/snapshots）
+ * 快照历史归档分页（GET /mirror/snapshots）
  *
- * 当前用户全量快照（manual 保 2 + monthly 保 12，上限 14），按时间倒序。
- * 轻量结构：{ id, snapshotType, createdAt, driftDistance, overallSummary(前 50 字截断) }。
- * driftDistance 仅 monthly 快照有值，manual 无对比基线为 null（响应里字段可能缺省）。
- *
- * 注意：camelCase 经响应拦截器统一转 snake_case（snapshot_type / created_at / drift_distance）。
- *
- * @returns {Promise<{ code: number, data: Array<{ id: number, snapshot_type: string, created_at: string, drift_distance: number|null, overall_summary: string }> }>}
+ * 游标由后端提供，按 created_at + id 稳定倒序。camelCase 响应会被拦截器转换为 snake_case。
+ * @param {{ beforeCreatedAt?: string|null, beforeId?: number|null, limit?: number }} [page]
+ * @returns {Promise<{ code: number, data: { items: Array<Object>, next_created_at: string|null, next_id: number|null, has_more: boolean } }>}
  */
-export function getSnapshots() {
-  return request.get('/mirror/snapshots')
+export function getSnapshots(page = {}) {
+  const params = { limit: page.limit ?? 20 }
+  if (page.beforeCreatedAt && page.beforeId !== null && page.beforeId !== undefined) {
+    params.beforeCreatedAt = page.beforeCreatedAt
+    params.beforeId = page.beforeId
+  }
+  return request.get('/mirror/snapshots', { params })
+}
+
+/**
+ * 可重建历史月份（GET /mirror/snapshot-months），月份以 Asia/Shanghai 归属为准。
+ * @returns {Promise<{ code: number, data: string[] }>}
+ */
+export function getSnapshotMonths() {
+  return request.get('/mirror/snapshot-months')
 }
 
 /**
