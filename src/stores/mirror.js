@@ -64,6 +64,8 @@ export const useMirrorStore = defineStore('mirror', () => {
   const snapshotCache = new Map()
   let requestEpoch = 0
   let snapshotsLoadedEpoch = -1
+  let ownerId = null
+  let ownerInitialized = false
 
   /** 丢弃旧账号的镜子视图与在途请求结果。 */
   function resetForRefresh() {
@@ -85,6 +87,20 @@ export const useMirrorStore = defineStore('mirror', () => {
     generatingMonthly.value = false
     snapshotCache.clear()
     snapshotsLoadedEpoch = -1
+  }
+
+  /** Keep in-flight work when the same account returns to this view; reset only across accounts. */
+  function ensureOwner(userId) {
+    const nextOwnerId = userId === null || userId === undefined ? null : String(userId)
+    if (!ownerInitialized) {
+      ownerInitialized = true
+      ownerId = nextOwnerId
+      return false
+    }
+    if (nextOwnerId === ownerId) return false
+    ownerId = nextOwnerId
+    resetForRefresh()
+    return true
   }
 
   /**
@@ -403,6 +419,7 @@ export const useMirrorStore = defineStore('mirror', () => {
     generatableMonths,
     fetchMirror,
     resetForRefresh,
+    ensureOwner,
     fetchSnapshots,
     fetchMoreSnapshots,
     fetchSnapshotMonths,

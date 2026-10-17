@@ -26,15 +26,10 @@ const ui = useUIStore()
 const toast = useToastStore()
 const auth = useAuthStore()
 let mirrorViewMounted = false
-let mirrorOwnerId = null
-let mirrorOwnerInitialized = false
 
 function reloadMirrorForAccount(userId) {
   const nextOwnerId = userId === null || userId === undefined ? null : String(userId)
-  if (mirrorOwnerInitialized && nextOwnerId === mirrorOwnerId) return
-  mirrorOwnerInitialized = true
-  mirrorOwnerId = nextOwnerId
-  mirror.resetForRefresh()
+  mirror.ensureOwner(nextOwnerId)
   if (nextOwnerId === null) return
   mirror.fetchMirror().catch(() => {})
   // 归档首屏与可重建月份分开加载，任一失败都不阻断镜子正文。
@@ -851,7 +846,6 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </div>
-  </div>
   <Teleport to="body">
     <div
       v-if="confirmingMonth"
@@ -875,6 +869,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
   </Teleport>
+  </div>
 </template>
 
 <style scoped>

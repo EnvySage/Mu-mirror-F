@@ -84,8 +84,12 @@ export const useChatStore = defineStore('chat', () => {
   const historyLoading = ref(false)
   const historyError = ref(false)
 
-  /** 中断当前流（切页/新会话时防串流） */
+  /** 中断当前流（仅显式切换会话或新建会话时） */
   let abortController = null
+  /** 用户当前应用会话内操作过对话后，不再用自动恢复覆盖本地消息 */
+  let hasLocalChatActivity = false
+  /** 合并同一时刻的自动恢复调用（路由重复挂载时只发一次历史请求） */
+  let restoreInProgress = null
 
   function pushUser(content) {
     messages.value.push({ id: String(++msgId), role: 'user', content })
@@ -163,6 +167,7 @@ export const useChatStore = defineStore('chat', () => {
     const text = content.trim()
     if (!text || sending.value) return
 
+    hasLocalChatActivity = true
     pushUser(text)
     sending.value = true
     // 续聊中路由未知：不发眉标，等 meta 事件补上
@@ -354,12 +359,19 @@ export const useChatStore = defineStore('chat', () => {
    * 加载会话历史（GET /api/mirror/sessions/{id}），失败置 historyError（空态兜底不白屏）
    * @param {string} id
    */
-  async function loadSession(id) {
-    if (sending.value) abort()
+  async function loadSession(id, { preserveLocalState = false } = {}) {
+    if (!preserveLocalState) {
+      hasLocalChatActivity = true
+      if (sending.value) abort()
+    }
     historyLoading.value = true
     historyError.value = false
     try {
       const res = await apiGetSession(id)
+      // 自动恢复可能与用户发送、点选其他会话或新建会话并发；本地操作优先。
+      if (preserveLocalState && (hasLocalChatActivity || sending.value || messages.value.length > 0)) {
+        return false
+      }
       const data = res.data
       const list = (data?.messages || []).map(m => ({
         id: String(m.id ?? ++msgId),
@@ -418,6 +430,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 开新会话：清空当前消息与归属（会话在后端首次发送时才真正创建） */
   function newConversation() {
+    hasLocalChatActivity = true
     if (sending.value) abort()
     clearMessages()
   }
@@ -445,36 +458,46 @@ export const useChatStore = defineStore('chat', () => {
    * @returns {Promise<boolean>} 是否成功恢复了某个会话
    */
   async function restoreLastSession() {
-    // 流进行中不碰消息流
-    if (sending.value) return false
+    // 自动恢复只负责首次填充；已有内存消息/本地操作时不能覆盖当前状态。
+    if (hasLocalChatActivity || sending.value || messages.value.length > 0) return false
+    if (restoreInProgress) return restoreInProgress
 
-    // 1. localStorage 存档
-    const savedId = getSavedSessionId()
-    if (savedId) {
-      const ok = await loadSession(savedId)
-      if (ok) return true
-      // 网络层失败（后端未起/超时）：保留存档下次再试，空态有兜底文案
-      if (lastLoadFailureKind === 'network') return false
-      // 后端明确报错（会话已删/404/无权限）→ 清存档，继续尝试今天的会话
-      clearSavedSessionId()
-    }
+    restoreInProgress = (async () => {
+      // 1. localStorage 存档
+      const savedId = getSavedSessionId()
+      if (savedId) {
+        const ok = await loadSession(savedId, { preserveLocalState: true })
+        if (ok) return true
+        // 自动恢复等待期间用户已开始操作，保留当前对话与存档。
+        if (hasLocalChatActivity || sending.value || messages.value.length > 0) return false
+        // 网络层失败（后端未起/超时）：保留存档下次再试，空态有兜底文案
+        if (lastLoadFailureKind === 'network') return false
+        // 后端明确报错（会话已删/404/无权限）→ 清存档，继续尝试今天的会话
+        clearSavedSessionId()
+      }
 
-    // 2. 今天最近一个会话（created_at 为北京时间字符串 yyyy-MM-dd HH:mm:ss，取日期段与本地今天比对）
-    if (!sessionsLoaded.value) {
-      await fetchSessions()
-      // 会话列表也拉不到（后端未起）：不继续，空态兜底
-      if (!sessionsLoaded.value) return false
-    }
-    const todayKey = localDateKey(new Date())
-    const todaySession = sessions.value
-      .filter(s => localDateKey(s.created_at) === todayKey)
-      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0]
-    if (todaySession) {
-      return loadSession(todaySession.id)
-    }
+      // 2. 今天最近一个会话（created_at 为北京时间字符串 yyyy-MM-dd HH:mm:ss，取日期段与本地今天比对）
+      if (!sessionsLoaded.value) {
+        await fetchSessions()
+        // 会话列表也拉不到（后端未起）：不继续，空态兜底
+        if (!sessionsLoaded.value) return false
+      }
+      const todayKey = localDateKey(new Date())
+      const todaySession = sessions.value
+        .filter(s => localDateKey(s.created_at) === todayKey)
+        .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0]
+      if (todaySession) {
+        return loadSession(todaySession.id, { preserveLocalState: true })
+      }
 
-    // 3. 今天还没有会话：不预建，等首条消息时后端自动建
-    return false
+      // 3. 今天还没有会话：不预建，等首条消息时后端自动建
+      return false
+    })()
+    try {
+      return await restoreInProgress
+    } finally {
+      restoreInProgress = null
+    }
   }
 
   /** 本地日期 key（yyyy-MM-dd），兼容 "yyyy-MM-dd HH:mm:ss" 与 ISO 字符串 */
@@ -490,6 +513,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearMessages() {
+    hasLocalChatActivity = true
     messages.value = []
     sessionId.value = null
     activeSessionId.value = null

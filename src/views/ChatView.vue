@@ -1,6 +1,6 @@
 <script setup>
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
 import { useVaultStore } from '@/stores/vault'
@@ -112,11 +112,6 @@ watch(() => ui.chatSessionsRequested, (v) => {
     chat.fetchSessions()
     showSessions.value = true
   }
-})
-
-onBeforeUnmount(() => {
-  // 离开页面时若流未结束则中断，防止消息串到下次进入
-  if (chat.sending) chat.abort()
 })
 
 async function scrollToBottom() {
