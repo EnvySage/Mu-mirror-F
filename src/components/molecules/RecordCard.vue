@@ -7,6 +7,9 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 const props = defineProps({
   record: { type: Object, required: true },
   active: { type: Boolean, default: false },
+  featured: { type: Boolean, default: false },
+  arrival: { type: Boolean, default: false },
+  layoutVariant: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['open', 'retry', 'delete'])
@@ -42,7 +45,7 @@ const processingPreview = computed(() => {
 
 <template>
   <!-- processing：转圈 + "AI 整理中" -->
-  <div v-if="status === 'processing'" class="record-card card processing" @click="emit('open')">
+  <div v-if="status === 'processing'" :class="['record-card', 'card', 'processing', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag tag-processing"><span class="spinner" />AI 整理中</span>
@@ -51,7 +54,7 @@ const processingPreview = computed(() => {
   </div>
 
   <!-- failed：红字原因 + 重试 + 删除 -->
-  <div v-else-if="status === 'failed'" class="record-card card failed" @click="emit('open')">
+  <div v-else-if="status === 'failed'" :class="['record-card', 'card', 'failed', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" @keydown.enter.self="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag" style="color:var(--danger);background:var(--danger-bg)">失败</span>
@@ -67,11 +70,30 @@ const processingPreview = computed(() => {
     </div>
   </div>
 
+  <div v-else-if="status === 'record_only'"
+    :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
+    data-object-source="record"
+    :data-object-id="record.id"
+    role="button" tabindex="0" :aria-label="record.content || '仅记录'"
+    @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)"
+    @click="emit('open', $event)"
+  >
+    <div class="record-meta">
+      <span class="record-time">{{ timeText }}</span>
+      <span class="tag tag-record-only">仅记录 · 尚未交给 AI</span>
+    </div>
+    <div class="record-summary record-raw-preview">{{ record.content || '（空记录）' }}</div>
+  </div>
+
   <!-- reviewing / done -->
   <div
     v-else
-    :class="['record-card', 'card', status, { active }]"
-    @click="emit('open')"
+    :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
+    data-object-source="record"
+    :data-object-id="record.id"
+    role="button" tabindex="0" :aria-label="title"
+    @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)"
+    @click="emit('open', $event)"
   >
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
@@ -116,6 +138,9 @@ const processingPreview = computed(() => {
 .record-card.processing::before, .record-card.failed::before { background: none; }
 .record-card.processing { border-color: var(--processing); }
 .record-card.failed { border-color: var(--danger); }
+.record-card.record_only::before { opacity: 1; background: var(--cyan); }
+.tag-record-only { color: var(--cyan); background: #00d9ff16; }
+.record-raw-preview { white-space: pre-line; }
 
 .record-meta {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;
@@ -139,4 +164,15 @@ const processingPreview = computed(() => {
 .failed-ops .chip { cursor: pointer; }
 .chip-accent { color: var(--accent); }
 .chip-danger { color: var(--danger); }
+
+.record-card { padding:20px 22px; border-radius:2px; border:1px solid #d9e6ff; box-shadow:4px 5px 0 #020c3425; animation:none; }
+.record-card.arrival { animation:record-arrival 1.4s ease both; }
+@keyframes record-arrival { 0%,100%{box-shadow:4px 5px 0 #020c3425} 25%,65%{box-shadow:0 0 0 3px var(--cyan),0 0 30px #50edfa70;transform:translateX(5px)} }
+.record-card::before { top:0; bottom:0; width:4px; border-radius:0; }
+.record-card:hover, .record-card:focus-visible { border-color:var(--cyan); box-shadow:5px 6px 0 #020c3445; }
+.record-title { font-family:var(--font); font-size:16px; font-weight:800; line-height:1.6; }
+.record-summary { line-height:1.9; font-size:12px; }
+.record-time { font-family:var(--font); font-size:10px; }
+.record-card :deep(.tag) { border-radius:2px; font-size:10px; padding:2px 6px; }
+@media(max-width:599px){.record-card{padding:17px 18px}.record-meta{flex-wrap:wrap;gap:7px}.record-title{font-size:15px}}
 </style>

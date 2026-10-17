@@ -14,6 +14,7 @@ const recordsStore = useRecordsStore()
 
 const calendarDate = ref(new Date())
 const selectedDate = ref(null)
+const monthDirection = ref(1)
 
 const effectiveSelected = computed(() => props.modelValue || selectedDate.value)
 
@@ -66,7 +67,9 @@ watch([year, month], loadCalendarMarks)
 onMounted(loadCalendarMarks)
 
 function changeMonth(delta) {
+  monthDirection.value = delta
   const d = new Date(calendarDate.value)
+  d.setDate(1)
   d.setMonth(d.getMonth() + delta)
   calendarDate.value = d
   selectedDate.value = null
@@ -90,28 +93,30 @@ function selectDay(dayObj) {
 </script>
 
 <template>
-  <div :class="['calendar-widget', mode]">
+  <div :class="['calendar-widget', mode]" :style="{ '--month-direction': monthDirection }">
     <div class="calendar-header">
-      <button class="calendar-nav-btn" @click="changeMonth(-1)">
+      <button class="calendar-nav-btn" aria-label="上一个月" @click="changeMonth(-1)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
-      <span class="calendar-month">{{ monthText }}</span>
-      <button class="calendar-nav-btn" @click="changeMonth(1)">
+      <span class="calendar-month"><template v-if="mode === 'full'"><small>{{ year }}</small><b>{{ String(month + 1).padStart(2,'0') }}</b><i>{{ ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'][month] }}</i></template><template v-else>{{ monthText }}</template></span>
+      <button class="calendar-nav-btn" aria-label="下一个月" @click="changeMonth(1)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <Transition name="fade" mode="out-in">
+    <Transition name="month-cut" mode="out-in">
       <div :key="monthText" class="calendar-grid">
         <div class="calendar-weekdays">
           <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
         </div>
         <div class="calendar-days">
-          <div
+          <button
             v-for="(d, i) in calendarDays"
             :key="i"
             :class="['calendar-day', { 'other-month': d.otherMonth, today: d.isToday, 'has-record': d.hasRecord, selected: d.isSelected }]"
+            type="button" :disabled="d.otherMonth" :aria-pressed="!!d.isSelected"
+            :aria-label="`${year}年${month + 1}月${d.day}日${d.hasRecord ? '，有记录' : ''}`"
             @click="selectDay(d)"
-          >{{ d.day }}</div>
+          >{{ d.day }}</button>
         </div>
       </div>
     </Transition>
@@ -184,4 +189,33 @@ function selectDay(dayObj) {
 .calendar-dot.has-record { background: var(--accent); }
 .calendar-dot.today { box-shadow: inset 0 0 0 1.5px var(--accent); background: transparent; }
 .calendar-dot.selected { background: var(--accent); }
+
+.full .calendar-header { min-height:150px; margin-bottom:15px; }
+.full .calendar-month { position:relative; font-family:var(--font-display); display:flex; align-items:center; gap:10px; line-height:1; color:white; }
+.full .calendar-month b { font:italic 800 136px/.85 var(--font-display); letter-spacing:-.06em; }
+.full .calendar-month small { position:absolute; top:-12px; right:1px; font:700 15px var(--font-display); letter-spacing:.15em; color:var(--cyan); }
+.full .calendar-month i { align-self:flex-end; font:italic 800 16px var(--font-display); color:var(--cyan); margin-bottom:8px; }
+.full .calendar-nav-btn { width:36px; height:44px; background:#071d5c; border:1px solid #84baff60; color:white; }
+.full .calendar-nav-btn svg { stroke:var(--cyan); }
+.full .calendar-weekdays span { color:#c2deff; font-size:14px; font-weight:700; }
+.full .calendar-weekdays span:first-child { color:#ff88b2; }
+.full .calendar-weekdays span:last-child { color:var(--cyan); }
+.full .calendar-day { color:white; font:600 25px var(--font-display); min-height:44px; border-radius:0; }
+.full .calendar-day.other-month { opacity:.22; }
+.full .calendar-day.today { box-shadow:inset 0 0 0 1.5px var(--cyan); color:var(--cyan); }
+.full .calendar-day:hover:not(:disabled) { background:#45d9f430; }
+.full .calendar-day.selected { background:var(--pink); color:white; clip-path:polygon(16% 0,100% 0,85% 100%,0 100%); }
+.full .calendar-day.has-record::after { background:var(--cyan); }
+.full .calendar-day.selected::after { background:white; }
+.full .calendar-legend { border-color:#a5c6ff40; gap:20px; }
+.full .calendar-legend-item { color:#c2d7fa; font-size:10px; }
+.full .calendar-dot.has-record, .full .calendar-dot.selected { background:var(--cyan); }
+.full .calendar-dot.today { box-shadow:inset 0 0 0 1.5px var(--cyan); }
+@media(max-width:599px){.full .calendar-month b{font-size:112px}.full .calendar-month i{display:none}.full .calendar-header{min-height:125px}.full .calendar-day{font-size:22px}}
+.month-cut-leave-active { transition:opacity .12s,transform .12s; }
+.month-cut-enter-active { transition:opacity .24s,transform .3s cubic-bezier(.16,1,.3,1),clip-path .3s; }
+.month-cut-leave-to { opacity:0; transform:translateX(calc(var(--month-direction) * -20px)); }
+.month-cut-enter-from { opacity:0; transform:translateX(calc(var(--month-direction) * 35px)); clip-path:inset(0 100% 0 0); }
+.month-cut-enter-to { clip-path:inset(0); }
+@media(prefers-reduced-motion:reduce){.month-cut-enter-from,.month-cut-leave-to{transform:none;clip-path:none}}
 </style>

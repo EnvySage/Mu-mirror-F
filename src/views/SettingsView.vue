@@ -1,4 +1,5 @@
 <script setup>
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
@@ -192,22 +193,6 @@ async function selectProtocol(protocol) {
   else toast.error(settingsStore.error || '保存失败')
 }
 
-/** 切换审核模式（5.5：auto 无审核窗口，权衡警告） */
-async function toggleReviewMode() {
-  const toAuto = settingsStore.settings.review_mode !== 'auto'
-  if (toAuto && !window.confirm('开启自动审核后，AI 处理完成将直接确认入库，你没有手动调整片段和标签的机会。确定开启？')) {
-    return
-  }
-  const newVal = toAuto ? 'auto' : 'manual'
-  const ok = await settingsStore.updateSettings({ review_mode: newVal })
-  if (ok) {
-    if (toAuto) toast.info('已开启 auto：新记录将跳过审核直接入库')
-    else toast.success('已切换为手动审核')
-  } else {
-    toast.error(settingsStore.error || '保存失败')
-  }
-}
-
 /** 切换 Embedding 来源（1024 维硬约束说明见下方 note） */
 async function toggleEmbeddingSource() {
   const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
@@ -228,7 +213,7 @@ async function saveHalfLife() {
 
 /** 衰减权重预览 final_score = 相似度 × 1/(1 + 天数差/half_life) */
 const halfLifePreview = computed(() =>
-  `final_score = 相似度 × 1/(1 + 天数差/${effectiveHalfLife.value})`
+  `记录经过 ${effectiveHalfLife.value} 天后，时间权重降为当天的一半。数值越大，越重视较早的经历。`
 )
 
 /** 导出（GET /api/export/json | /api/export/markdown，blob 下载） */
@@ -251,15 +236,15 @@ function handleLogout() {
 
 <template>
   <div class="page settings-page">
-    <div class="page-header">
-      <div class="page-title">设置</div>
-      <div class="page-subtitle">模型 · 审核 · RAG · 数据</div>
-    </div>
     <div class="page-content">
+      <PageMasthead title="设置" english="SYSTEM" description="让镜子按你的方式，理解你的生活" />
+      <div class="settings-identity"><span class="settings-emblem" aria-hidden="true">M/</span><div><h2>你的镜子，由你设定。</h2><p>{{ auth.user?.username || 'Mirror' }} 的个人空间</p></div></div>
+      <nav class="settings-index" aria-label="设置分区"><a href="#settings-model">模型连接</a><a href="#settings-glossary">个人词典</a><a href="#settings-memory">镜子的记忆</a><a href="#settings-data">数据与账号</a></nav>
+      <div v-if="settingsStore.error" class="settings-load-error" role="alert">{{ settingsStore.error }}<button class="p3-link" @click="settingsStore.fetchSettings()">重试</button></div>
       <div class="settings-wrap">
       <!-- AI 模型 -->
-      <div class="settings-group">
-        <div class="settings-group-title">AI 模型（加密存储 · 脱敏返回）</div>
+      <div class="settings-group" id="settings-model">
+        <div class="settings-group-title">AI 模型连接</div>
         <div class="settings-card card">
           <SettingsItem
             icon="chat"
@@ -304,8 +289,8 @@ function handleLogout() {
       </div>
 
       <!-- Embedding -->
-      <div class="settings-group">
-        <div class="settings-group-title">Embedding（维度硬约束 1024）</div>
+      <div class="settings-group" id="settings-embedding">
+        <div class="settings-group-title">记忆检索模型</div>
         <div class="settings-card card">
           <SettingsItem
             icon="sparkle"
@@ -342,33 +327,26 @@ function handleLogout() {
           />
         </div>
         <div class="settings-note">
-          切换 API 模式后，保存/测试连接时将调用 GetModelInfo 校验维度，非 1024 维模型会被拒绝。
+          API 模式需要支持 1024 维的检索模型；保存和测试连接时会自动检查。
         </div>
       </div>
 
-      <!-- 审核（软禁用：仅后端 autoReviewAvailable=true 时渲染整组；字段缺失/undefined 按 false 隐藏，
-           连同下方提示文案一并隐藏。契约字段 autoReviewAvailable 经拦截器转 snake_case 为 auto_review_available） -->
-      <div v-if="settingsStore.settings.auto_review_available === true" class="settings-group">
-        <div class="settings-group-title">审核</div>
+      <div class="settings-group">
+        <div class="settings-group-title">AI 使用与授权</div>
         <div class="settings-card card">
           <SettingsItem
             icon="eye"
             icon-bg="var(--processing)"
-            label="自动审核（auto）"
-            :description="settingsStore.settings.review_mode === 'auto' ? '已开启：跳过审核窗口，AI 直接入库' : '关闭：AI 处理后需手动确认'"
-            action="toggle"
-            :toggle-value="settingsStore.settings.review_mode === 'auto'"
-            @toggle="toggleReviewMode"
+            label="逐片段确认后进入长期记忆"
+            description="仅记录不会调用 AI；主动整理后，记忆与待办仍需分别确认。"
+            action="none"
           />
-        </div>
-        <div class="settings-note warn">
-          开启后将没有手动调整片段的机会——AI 拆错了也无法纠正。默认建议保持手动。
         </div>
       </div>
 
       <!-- 个人词典（lexicon-design.md 5b：全量管理入口） -->
-      <div class="settings-group">
-        <div class="settings-group-title">个人词典 · 镜子这样理解你的话</div>
+      <div class="settings-group" id="settings-glossary">
+        <div class="settings-group-title">个人词典</div>
         <div class="settings-card card glossary-card">
           <!-- 顶部操作行：教镜子一个词 + 手动抽取 -->
           <div class="glossary-toolbar">
@@ -483,8 +461,8 @@ function handleLogout() {
       </div>
 
       <!-- 镜子引擎（rolling-mirror-design.md §2：回看深度 + 时间衰减同组） -->
-      <div class="settings-group">
-        <div class="settings-group-title">镜子引擎（RAG · 回看深度）</div>
+      <div class="settings-group" id="settings-memory">
+        <div class="settings-group-title">镜子的记忆</div>
         <div class="settings-card card">
           <div class="lookback-row">
             <div class="lookback-head">
@@ -523,8 +501,8 @@ function handleLogout() {
       </div>
 
       <!-- 数据 -->
-      <div class="settings-group">
-        <div class="settings-group-title">数据</div>
+      <div class="settings-group" id="settings-data">
+        <div class="settings-group-title">数据与账号</div>
         <div class="settings-card card">
           <SettingsItem
             icon="download"
@@ -561,7 +539,7 @@ function handleLogout() {
       <!-- 编辑弹窗 -->
       <Teleport to="body">
         <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-          <div class="modal-content">
+          <div class="modal-content" role="dialog" aria-modal="true" :aria-label="editLabel">
             <div class="modal-header">
               <h3>{{ editLabel }}</h3>
               <button class="modal-close" title="关闭" @click="showEditModal = false">
@@ -588,6 +566,7 @@ function handleLogout() {
                 v-model="editValue"
                 :type="editField.includes('api_key') ? 'password' : 'text'"
                 class="modal-input"
+                :aria-label="editLabel"
                 :placeholder="editPlaceholder"
                 @keyup.enter="saveEdit"
               >
@@ -831,4 +810,15 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent)
   display: flex; align-items: center; gap: 8px;
 }
 .glossary-card .glossary-empty { margin-bottom: 2px; }
+
+.settings-page .page-content { padding-top:0; }
+.settings-identity { display:flex; gap:18px; align-items:center; padding:23px 26px; margin-bottom:20px; color:white; background:#0a3baca6; border-left:4px solid var(--cyan); }
+.settings-emblem { font:italic 800 56px/.8 var(--font-display); color:var(--cyan); letter-spacing:-.1em; }
+.settings-identity h2 { font-size:20px; font-weight:800; }.settings-identity p{font-size:11px;color:#b9d5ff;margin-top:6px}
+.settings-index{display:flex;gap:10px 24px;flex-wrap:wrap;padding:0 0 20px;margin-bottom:22px;border-bottom:1px solid #75aaff40}.settings-index a{font-size:12px;color:#c0d8fb;min-height:32px;display:flex;align-items:center}.settings-index a:hover{color:var(--cyan);text-decoration:underline;text-underline-offset:5px}
+.settings-wrap { max-width:920px; margin:0; }
+.settings-group { scroll-margin-top:20px; }.settings-group-title{font-family:var(--font);font-size:14px;color:white;font-weight:800;letter-spacing:0;margin:0 0 12px;display:flex;align-items:center;gap:10px}.settings-group-title::before{content:'';display:block;width:4px;height:16px;background:var(--cyan);transform:skew(-12deg)}
+.settings-group > .settings-note{color:#b0c9ed;padding-top:12px}.settings-group > .settings-note.warn{color:#f1c176}.settings-card{border-radius:2px;border-color:#ddeaff}.test-btn{border-radius:2px;padding:6px 13px}.protocol-chips .chip{border-radius:2px}.modal-content{border-radius:3px;border-top:4px solid var(--electric)}
+.settings-load-error{display:flex;gap:20px;justify-content:space-between;color:#ffadc6;margin-bottom:20px;font-size:12px}
+@media(max-width:599px){.settings-identity{padding:20px}.settings-identity h2{font-size:18px}.settings-index{gap:8px 20px}.settings-index a{font-size:11px}.settings-emblem{font-size:48px}}
 </style>

@@ -78,16 +78,17 @@ server: { proxy: { '/api': { target: 'http://localhost:9050', changeOrigin: true
 
 **没有 `.env` 文件**，改后端地址直接改这里。开发时需先启动 Mu-mirror-B（9050）。
 
-## 设计语言：「晨纸」
+## 设计语言：Blue hour
 
-亮色主题，设计令牌集中在 `src/assets/styles/variables.css`。
+2026-10-16 按项目所有者要求，采用 Persona 3 Reload 美术方向重新设计。
 
-- 底色为暖纸色（`--ink: #F1F0EA`），纯白卡片，单一强调色墨蓝（`--accent: #2C5FE8`）
-- 情绪 13 色板为白底专门降饱和（`src/constants/moodColor.js`）
-- 字体：正文系统栈 + 苹方/思源黑体；标题用衬线（Noto Serif SC）
-- 图标全部内联 SVG，**不用 emoji**
-- 明确不用：暗色模式、渐变、玻璃拟态、极光背景、`backdrop-filter`
-- 对比度按 WCAG AA 调校
+- 深蓝水面舞台、青色选中态、锐利白色阅读面，搭配少量玫红。
+- 本地 Barlow Condensed 用于倾斜标题和数字；中文正文保留系统无衬线字体。
+- 镜子页围绕近 30 天记录、成长、情绪和待办组织内容；历史快照与实时统计分别标明口径。
+- P3R 官方角色图与生成的水面背景均在 `public/art/`，本地加载。
+- 桌面侧栏、手机底部导航，保留原有业务接口和交互；支持键盘焦点与减少动画偏好。
+- 设计令牌：`src/assets/styles/variables.css`；共享主题：`src/assets/styles/p3r.css`。
+- 素材出处、生成提示词和阶段说明见 [UI 改版说明](docs/ui-redesign.md)。
 
 ## 几个实现要点
 

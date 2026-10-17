@@ -10,21 +10,102 @@ import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
  * 上：review-original「光源」面板（只读原文）
  * 中：chunk-card「镜面反射」卡片列表 + add-chunk-btn 虚线按钮
  * 下：关联待办区块（todoStore.recordSuggestions）+ review-hint 引导
- * chips 编辑即保存（PUT /chunks/{id}），编排逻辑在 ChunkCard/store 内。
+ * 正文由 chunk-card 显式提交；metadata chips 独立自动保存（PUT /chunks/{id}）。
  */
 const props = defineProps({
   record: { type: Object, required: true },
+  authorizationBusy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['open-record'])
+const emit = defineEmits(['open-record', 'authorization-change'])
 
 const recordsStore = useRecordsStore()
 const todoStore = useTodoStore()
 
 const editable = computed(() => props.record.status === 'reviewing')
-/** done 记录只读：控件禁用而非点击报错 */
-const readonly = computed(() => props.record.status === 'done')
+const chunksEditable = computed(() => ['reviewing', 'done'].includes(props.record.status))
+const readonly = computed(() => !chunksEditable.value)
 const chunks = computed(() => props.record.chunks || [])
+const memorySelection = ref(new Set())
+const todoSelection = ref(new Set())
+const initialMemorySelection = ref(new Set())
+const initialTodoSelection = ref(new Set())
+const dirtyChunks = ref(new Set())
+const originalOpen = ref(true)
+const chunkNodes = ref([])
+const sameSet = (a, b) => a.size === b.size && [...a].every((id) => b.has(id))
+
+function emitAuthorizationChange() {
+  emit('authorization-change', {
+    aiMemoryChunkIds: [...memorySelection.value],
+    todoChunkIds: [...todoSelection.value],
+    dirty: dirtyChunks.value.size > 0 || !sameSet(memorySelection.value, initialMemorySelection.value) || !sameSet(todoSelection.value, initialTodoSelection.value),
+  })
+}
+
+function setChunkDirty({ id, dirty }) {
+  const next = new Set(dirtyChunks.value)
+  dirty ? next.add(id) : next.delete(id)
+  dirtyChunks.value = next
+  emitAuthorizationChange()
+}
+
+function scrollToChunk(index) {
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  chunkNodes.value[index]?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+}
+
+function syncAuthorizationSelection() {
+  dirtyChunks.value = new Set()
+  memorySelection.value = new Set(chunks.value
+    .filter(c => c.ai_memory_approved ?? c.aiMemoryApproved)
+    .map(c => c.id))
+  todoSelection.value = new Set(chunks.value
+    .filter(c => c.todo_approved ?? c.todoApproved)
+    .map(c => c.id))
+  initialMemorySelection.value = new Set(memorySelection.value)
+  initialTodoSelection.value = new Set(todoSelection.value)
+  emitAuthorizationChange()
+}
+
+function acceptAuthorizationBaseline(sourceChunks = chunks.value, fallback = null) {
+  const hasServerMemory = sourceChunks.some(c => c.ai_memory_approved != null || c.aiMemoryApproved != null)
+  const hasServerTodo = sourceChunks.some(c => c.todo_approved != null || c.todoApproved != null)
+  memorySelection.value = new Set(hasServerMemory
+    ? sourceChunks.filter(c => c.ai_memory_approved ?? c.aiMemoryApproved).map(c => c.id)
+    : (fallback?.aiMemoryChunkIds || []))
+  todoSelection.value = new Set(hasServerTodo
+    ? sourceChunks.filter(c => c.todo_approved ?? c.todoApproved).map(c => c.id)
+    : (fallback?.todoChunkIds || []))
+  initialMemorySelection.value = new Set(memorySelection.value)
+  initialTodoSelection.value = new Set(todoSelection.value)
+  emitAuthorizationChange()
+}
+
+function toggleMemory(chunkId, checked) {
+  const next = new Set(memorySelection.value)
+  checked ? next.add(chunkId) : next.delete(chunkId)
+  memorySelection.value = next
+  emitAuthorizationChange()
+}
+
+function toggleTodo(chunkId, checked) {
+  const next = new Set(todoSelection.value)
+  checked ? next.add(chunkId) : next.delete(chunkId)
+  todoSelection.value = next
+  emitAuthorizationChange()
+}
+
+watch(() => props.record.id, () => acceptAuthorizationBaseline(), { immediate: true })
+// Same-record refreshes are authoritative for consent only. Never resync metadata here:
+// ChunkCard owns those drafts and may be in the middle of an edit/save.
+watch(() => chunks.value.map(c => `${c.id}:${c.ai_memory_approved ?? c.aiMemoryApproved ?? '-'}:${c.todo_approved ?? c.todoApproved ?? '-'}`).join('|'), () => {
+  const locallyDirty = dirtyChunks.value.size > 0
+    || !sameSet(memorySelection.value, initialMemorySelection.value)
+    || !sameSet(todoSelection.value, initialTodoSelection.value)
+  if (!locallyDirty) acceptAuthorizationBaseline()
+}, { flush: 'sync' })
+defineExpose({ acceptAuthorizationBaseline })
 
 /**
  * 审核态「关联待办」区块（本轮交互重构：状态变更唯一入口）
@@ -142,7 +223,7 @@ function removeManual(m) {
 /** 切换记录关闭选择面板（关联行由 DetailPanel 侧 clearResolutions 清理） */
 watch(() => props.record.id, closePicker)
 
-/** 新增片段：本地空占位，用户输入文本失焦时 POST /records/{id}/chunks */
+/** 新增片段：本地空占位，由 chunk-card 的显式保存按钮 POST /records/{id}/chunks */
 function onAddChunk() {
   const placeholder = {
     id: `local_${Date.now()}`,
@@ -159,11 +240,11 @@ function onAddChunk() {
   <div class="review-panel">
     <!-- 原文面板 —— "光源" -->
     <div class="review-original">
-      <div class="review-label">
+      <button class="review-label review-original-toggle" :aria-expanded="originalOpen" @click="originalOpen = !originalOpen">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-        原始内容 · 不可修改
-      </div>
-      <div class="review-original-text">{{ record.content }}</div>
+        原始内容 · 不可修改 <span>{{ originalOpen ? '收起' : '展开原文' }}</span>
+      </button>
+      <div v-if="originalOpen" class="review-original-text">{{ record.content }}</div>
     </div>
 
     <!-- 片段卡片列表 -->
@@ -172,14 +253,23 @@ function onAddChunk() {
       <span>{{ chunks.length }}</span>
     </div>
 
-    <ChunkCard
-      v-for="(chunk, i) in chunks"
-      :key="chunk.id"
-      :chunk="chunk"
-      :index="i"
-      :editable="editable"
-      :readonly="readonly"
-    />
+    <nav v-if="chunks.length > 1" class="chunk-nav" aria-label="记录片段导航">
+      <button v-for="(chunk, index) in chunks" :key="`nav-${chunk.id}`" type="button" @click="scrollToChunk(index)">#{{ index + 1 }} · {{ chunk.metadata?.title || '片段' }}</button>
+    </nav>
+
+    <div v-for="(chunk, i) in chunks" :key="chunk.id" ref="chunkNodes" class="chunk-review-item">
+      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" @dirty-change="setChunkDirty" />
+      <div v-if="!String(chunk.id).startsWith('local_')" class="chunk-consent">
+        <label class="chunk-consent-option">
+          <input type="checkbox" :checked="memorySelection.has(chunk.id)" :disabled="authorizationBusy" @change="toggleMemory(chunk.id, $event.target.checked)">
+          <span><b>加入 Mirror 记忆</b><small>允许后续检索、日报和画像引用这个片段</small></span>
+        </label>
+        <label v-if="['todo', 'plan'].includes(chunk.metadata?.contentType)" class="chunk-consent-option todo-consent">
+          <input type="checkbox" :checked="todoSelection.has(chunk.id)" :disabled="authorizationBusy || (chunk.todo_approved ?? chunk.todoApproved)" @change="toggleTodo(chunk.id, $event.target.checked)">
+          <span><b>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '已登记为待办' : '单独登记为待办' }}</b><small>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '后续状态请在待办页面管理' : '任务状态和片段记忆分别授权' }}</small></span>
+        </label>
+      </div>
+    </div>
 
     <div v-if="chunks.length === 0" class="chunks-empty">
       已无片段。新增至少 1 个片段后才能确认入库。
@@ -294,6 +384,7 @@ function onAddChunk() {
 </template>
 
 <style scoped>
+.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}
 .review-panel { animation: fadeIn .3s ease; }
 
 .review-original {
@@ -432,4 +523,10 @@ function onAddChunk() {
   box-shadow: inset 0 0 0 1px rgba(201,138,27,.2);
 }
 .review-hint svg { width: 14px; height: 14px; stroke: var(--warn); fill: none; flex-shrink: 0; margin-top: 2px; }
+.review-original-toggle { width:100%; padding:0; justify-content:space-between; text-align:left; }
+.review-original-toggle span { margin-left:auto; color:var(--accent); letter-spacing:0; font-family:var(--font); font-size:12px; }
+.chunk-nav { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 14px; }
+.chunk-nav button { padding:6px 10px; border:1px solid #a9c1eb; color:var(--text-mid); font-size:12px; background:#f8fbff; transition:background .16s,color .16s; }
+.chunk-nav button:hover,.chunk-nav button:focus-visible { color:var(--night); background:var(--cyan); }
+.chunk-review-item { scroll-margin-top:18px; }
 </style>

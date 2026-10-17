@@ -2,6 +2,22 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useUIStore = defineStore('ui', () => {
+  const navigationGuards = new Map()
+  let approvedNavigationPath = null
+  function registerNavigationGuard(key, guard) {
+    navigationGuards.set(key, guard)
+    return () => { if (navigationGuards.get(key) === guard) navigationGuards.delete(key) }
+  }
+  function confirmNavigationDrafts() {
+    for (const guard of navigationGuards.values()) if (guard() === false) return false
+    return true
+  }
+  function approveNavigation(path) { approvedNavigationPath = path }
+  function consumeNavigationApproval(path) {
+    const approved = approvedNavigationPath === path
+    approvedNavigationPath = null
+    return approved
+  }
   /** @type {import('vue').Ref<'records' | 'calendar' | 'mirror' | 'settings'>} */
   const currentPage = ref('records')
 
@@ -22,6 +38,17 @@ export const useUIStore = defineStore('ui', () => {
   const detailMode = ref('view')
 
   const showDetail = ref(false)
+  /** 当前详情的视觉来源，仅保存可恢复来源所需的几何信息。 */
+  const detailOrigin = ref(null)
+  const highlightRecordId = ref(null)
+  const detailDraftDirty = ref(false)
+
+  function captureDetailOrigin(element, recordId) {
+    const rect = element?.getBoundingClientRect?.()
+    detailOrigin.value = rect && rect.width && rect.height
+      ? { type: 'record', id: String(recordId), rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } }
+      : null
+  }
 
   /** 请求对话页打开历史会话抽屉（MobileHeader → ChatView 的跨层通知，ChatView 消费后复位） */
   const chatSessionsRequested = ref(false)
@@ -36,10 +63,13 @@ export const useUIStore = defineStore('ui', () => {
     chatSessionsRequested.value = false
   }
 
-  function switchPage(page) {
+  function switchPage(page, alreadyGuarded = false) {
+    if (!alreadyGuarded && !confirmNavigationDrafts()) return false
     currentPage.value = page
     showDetail.value = false
     selectedRecordId.value = null
+    detailOrigin.value = null
+    return true
   }
 
   function openWriteModal() {
@@ -67,6 +97,10 @@ export const useUIStore = defineStore('ui', () => {
 
   return {
     currentPage,
+    registerNavigationGuard,
+    confirmNavigationDrafts,
+    approveNavigation,
+    consumeNavigationApproval,
     isMobile,
     showWriteModal,
     showSummarySheet,
@@ -74,6 +108,10 @@ export const useUIStore = defineStore('ui', () => {
     selectedRecordId,
     detailMode,
     showDetail,
+    detailOrigin,
+    highlightRecordId,
+    detailDraftDirty,
+    captureDetailOrigin,
     chatSessionsRequested,
     switchPage,
     openWriteModal,

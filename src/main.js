@@ -9,6 +9,7 @@ import './assets/styles/variables.css'
 import './assets/styles/base.css'
 import './assets/styles/components.css'
 import './assets/styles/transitions.css'
+import './assets/styles/p3r.css'
 
 const app = createApp(App)
 

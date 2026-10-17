@@ -29,8 +29,10 @@ const isChat = computed(() => route.name === 'chat')
  * DetailPanel 是 fixed 全屏层，只 push 路由不复位的话记录详情会盖住新页面。
  */
 function handleNav(item) {
+  if (!ui.confirmNavigationDrafts()) return
+  ui.approveNavigation(router.resolve({ name: item.page }).fullPath)
   if (item.page === 'records') ui.sidebarSelectedDate = null
-  ui.switchPage(item.page)
+  ui.switchPage(item.page, true)
   router.push({ name: item.page })
 }
 </script>

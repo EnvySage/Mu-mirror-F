@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
 import { useSummariesStore } from '@/stores/summaries'
@@ -11,6 +11,8 @@ import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
 import { dateLabel, formatFullDate } from '@/utils/time'
 import RecordCard from '@/components/molecules/RecordCard.vue'
 import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
+import PageMasthead from '@/components/molecules/PageMasthead.vue'
+import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
 
 const props = defineProps({
   date: { type: String, default: null },
@@ -23,10 +25,18 @@ const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const toast = useToastStore()
 
+const recordFilter = ref('all')
+const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
+const firstLoadCascade = ref(false)
+let cascadeTimer = null
+const dayNumber = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',day:'2-digit' }).format(new Date())
+const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:'short' }).format(new Date())
+
 /** 按日期分组（倒序） */
 const grouped = computed(() => {
   const groups = {}
   recordsStore.records.forEach(r => {
+    if (recordFilter.value !== 'all' && r.status !== recordFilter.value) return
     const key = dateKey(r.created_at)
     if (!groups[key]) groups[key] = []
     groups[key].push(r)
@@ -60,12 +70,34 @@ function formatDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+const visibleRecordIds = computed(() => new Set(grouped.value.flatMap(group => group.items.map(r => String(r.id)))))
+const highlightedRecordHidden = computed(() => !!ui.highlightRecordId
+  && recordsStore.records.some(r => String(r.id) === String(ui.highlightRecordId))
+  && !visibleRecordIds.value.has(String(ui.highlightRecordId)))
+async function revealHighlightedRecord() {
+  recordFilter.value = 'all'
+  ui.sidebarSelectedDate = null
+  await nextTick()
+  document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(ui.highlightRecordId))}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const id = ui.highlightRecordId
+  setTimeout(() => { if (String(ui.highlightRecordId) === String(id)) ui.highlightRecordId = null }, 1800)
+}
+
+watch(() => ui.highlightRecordId, async (id) => {
+  if (!id) return
+  await nextTick()
+  if (visibleRecordIds.value.has(String(id))) {
+    document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(id))}"]`)?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
+    setTimeout(() => { if (String(ui.highlightRecordId) === String(id)) ui.highlightRecordId = null }, 1800)
+  }
+}, { flush: 'post' })
+
 function loadByDate(dateStr) {
-  recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr })
+  return recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr })
 }
 
 function loadAll() {
-  recordsStore.fetchRecords()
+  return recordsStore.fetchRecords()
 }
 
 // ---- 侧栏形态：≥1440px 常驻右栏；窄屏（手机/平板）FAB + 抽屉 ----
@@ -75,18 +107,26 @@ const wideMql = window.matchMedia(WIDE_QUERY)
 const isWide = ref(wideMql.matches)
 /** 抽屉开合（仅窄屏有意义；转宽屏时强制收起，避免与常驻栏重复） */
 const showSidebarDrawer = ref(false)
+const drawerEl = ref(null)
+const drawerFocusOpen = ref(false)
+useDialogFocus(() => drawerFocusOpen.value, drawerEl, '.sidebar-drawer-close', () => { showSidebarDrawer.value = false })
+watch(showSidebarDrawer, open => { if (open) drawerFocusOpen.value = true })
+function afterDrawerLeave() { if (!showSidebarDrawer.value) drawerFocusOpen.value = false }
 
 function onWideChange(e) {
   isWide.value = e.matches
   if (e.matches) showSidebarDrawer.value = false
 }
 
-onMounted(() => {
-  filterDate.value ? loadByDate(filterDate.value) : loadAll()
+onMounted(async () => {
+  const request = filterDate.value ? loadByDate(filterDate.value) : loadAll()
   // 侧栏数据源：每日总结（只取最近 7 篇，全量浏览由「全部」弹窗游标分页）+ stats（30s 缓存，两页共用）
   summariesStore.fetchList({ limit: 7 })
   statsStore.fetchStats()
   wideMql.addEventListener('change', onWideChange)
+  await request
+  firstLoadCascade.value = true
+  cascadeTimer = setTimeout(() => { firstLoadCascade.value = false }, 1760)
 })
 
 watch(() => props.date, (d) => {
@@ -110,6 +150,7 @@ function stopListPolling() {
 
 function scheduleListPolling() {
   stopListPolling()
+  if (cascadeTimer) clearTimeout(cascadeTimer)
   if (!recordsStore.processingRecords.length) return
   pollTimer = setTimeout(async () => {
     await recordsStore.fetchRecords(filterDate.value
@@ -139,11 +180,10 @@ watch(() => recordsStore.processingRecords.length, (n, prev) => {
 onBeforeUnmount(() => {
   stopListPolling()
   wideMql.removeEventListener('change', onWideChange)
-  // 卸载时抽屉可能仍开着：body 滚动锁必须复位，否则切页后整页滚不动
-  document.body.style.overflow = ''
 })
 
-function openRecord(id) {
+function openRecord(id, event) {
+  ui.captureDetailOrigin(event?.currentTarget, id)
   ui.selectedRecordId = id
   ui.showDetail = true
 }
@@ -162,19 +202,16 @@ function openSummarySheet() {
 
 /** 抽屉内交互：先收起抽屉再执行（详情页/sheet 都是全屏层，叠在抽屉上会打架） */
 function onDrawerOpenRecord(recordId) {
+  prepareDialogFocusHandoff()
   showSidebarDrawer.value = false
   openTodoRecord(recordId)
 }
 
 function onDrawerOpenSummaries() {
+  prepareDialogFocusHandoff()
   showSidebarDrawer.value = false
   openSummarySheet()
 }
-
-/** 抽屉打开时锁 body 滚动（抽屉内自滚，背景不跟着动） */
-watch(showSidebarDrawer, (open) => {
-  document.body.style.overflow = open ? 'hidden' : ''
-})
 
 /** 瀑布入场：分组的全局序号（前序组卡片数累计），供 40ms 递增 delay */
 function groupIndex(group) {
@@ -204,11 +241,14 @@ async function onRetryRecord(record) {
 
 <template>
   <div class="page records-page">
-    <div class="page-header">
-      <div class="page-title">记录</div>
-      <div class="page-subtitle">{{ subtitle }}</div>
-    </div>
     <div class="page-content">
+      <PageMasthead title="日常记录" english="DAILY RECORDS" :description="subtitle"><button class="p3-button secondary" @click="openSummarySheet">每日总结</button></PageMasthead>
+      <section :class="['record-intro', { 'records-first-load': firstLoadCascade }]" aria-label="记录此刻">
+        <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
+        <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
+      </section>
+      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><span class="record-count">{{ subtitle }}</span></div>
+      <div v-if="highlightedRecordHidden" class="record-arrival-notice" role="status">新记录已保存，但当前筛选中看不到。<button @click="revealHighlightedRecord">查看新记录</button></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
       <div class="records-layout">
         <div class="records-main">
@@ -217,36 +257,42 @@ async function onRetryRecord(record) {
             <span class="spinner" style="width:22px;height:22px" />
           </div>
 
+          <div v-else-if="recordsStore.error" class="records-error" role="alert"><p>{{ recordsStore.error }}</p><button class="p3-button secondary" @click="filterDate ? loadByDate(filterDate) : loadAll()">重新加载</button></div>
           <!-- 空状态 -->
           <div v-else-if="grouped.length === 0" class="empty-state">
             <div class="empty-icon">
               <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
             </div>
-            <div class="empty-title">还没有记录</div>
-            <div class="empty-desc">点下方写日记按钮，随手记点什么</div>
+            <div class="empty-title">{{ recordsStore.records.length ? '这个分类下暂时没有记录' : '还没有记录' }}</div>
+            <div class="empty-desc">写下此刻的一件小事，让生活开始留下痕迹</div>
           </div>
 
           <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
-          <div v-else class="records-grid">
-            <template v-for="group in grouped" :key="group.dateKey">
-              <div class="date-separator">{{ group.label }}</div>
-              <RecordCard
-                v-for="(record, i) in group.items"
-                :key="record.id"
-                :record="record"
-                :active="ui.selectedRecordId === record.id"
-                :style="{ animationDelay: `${(groupIndex(group) + i) * 40}ms` }"
-                @open="openRecord(record.id)"
-                @delete="onDeleteRecord"
-                @retry="onRetryRecord"
-              />
-            </template>
-          </div>
+          <TransitionGroup v-else name="record-list" tag="div" :class="['records-grid', { 'records-first-load': firstLoadCascade }]">
+              <section v-for="group in grouped" :key="group.dateKey" :class="['records-day', groupIndex(group) % 2 ? 'rail-offset-b' : 'rail-offset-a']" :aria-label="group.label">
+                <aside class="date-rail"><span class="date-rail-dot" /><time>{{ group.label }}</time><small>{{ group.items.length }} 条</small></aside>
+                <TransitionGroup name="record-list" tag="div" class="records-day-flow">
+                  <RecordCard
+                    v-for="(record, i) in group.items"
+                    :key="record.id"
+                    :record="record"
+                    :active="ui.selectedRecordId === record.id"
+                    :featured="groupIndex(group) + i === 0"
+                    :layout-variant="(groupIndex(group) + i) % 3"
+                    :arrival="String(ui.highlightRecordId) === String(record.id)"
+                    :style="{ '--stagger-index': Math.min(groupIndex(group) + i, 4) }"
+                    @open="openRecord(record.id, $event)"
+                    @delete="onDeleteRecord"
+                    @retry="onRetryRecord"
+                  />
+                </TransitionGroup>
+              </section>
+          </TransitionGroup>
         </div>
 
         <!-- 宽屏（≥1440px）：侧栏常驻右栏；窄屏由下方 FAB + 抽屉承载，此处不渲染 -->
         <div v-if="isWide" class="records-aside">
-          <RecordsSidebar
+          <RecordsSidebar class="records-aside-shell"
             @open-record="openTodoRecord"
             @open-summaries="openSummarySheet"
           />
@@ -273,14 +319,14 @@ async function onRetryRecord(record) {
       <Transition name="fade">
         <div v-if="showSidebarDrawer" class="sidebar-overlay" @click="showSidebarDrawer = false" />
       </Transition>
-      <Transition name="slide-right">
-        <div v-if="showSidebarDrawer" class="sidebar-drawer" role="dialog" aria-label="概览侧栏">
+      <Transition name="slide-right" @after-leave="afterDrawerLeave">
+        <div v-if="showSidebarDrawer" ref="drawerEl" class="sidebar-drawer" role="dialog" aria-label="概览侧栏" aria-modal="true" tabindex="-1">
           <div class="sidebar-drawer-head">
             <span class="sidebar-drawer-title">概览</span>
             <button type="button" class="sidebar-drawer-close" @click="showSidebarDrawer = false">关闭</button>
           </div>
           <div class="sidebar-drawer-body">
-            <RecordsSidebar
+            <RecordsSidebar class="records-aside-shell"
               @open-record="onDrawerOpenRecord"
               @open-summaries="onDrawerOpenSummaries"
             />
@@ -351,13 +397,96 @@ async function onRetryRecord(record) {
 }
 
 /* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */
-.records-grid { display: grid; grid-template-columns: 1fr; align-items: start; }
-@media (min-width: 1200px) {
-  /* 卡片自带 margin-bottom 改由 row-gap 提供（间距 12px），避免双倍间距 */
-  .records-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .records-grid .record-card { margin-bottom: 0; }
-  .records-grid .date-separator { grid-column: 1 / -1; margin-bottom: -4px; }
-}
+.records-grid { position:relative; display:flex; flex-direction:column; gap:30px; }
+.records-day { display:grid; grid-template-columns:86px minmax(0,1fr); gap:20px; align-items:stretch; }
+.records-day.rail-offset-b { grid-template-columns:112px minmax(0,1fr); gap:16px; }
+.date-rail { position:relative; display:flex; flex-direction:column; align-items:flex-end; padding:20px 12px 0 0; color:#d6e7ff; text-align:right; }
+.date-rail::after { content:''; position:absolute; top:31px; bottom:-30px; right:0; width:2px; background:linear-gradient(#50edfa,#80b9ff20); transform:skewY(-13deg); transform-origin:top right; }
+.rail-offset-b .date-rail { padding-top:56px; padding-right:17px; }
+.rail-offset-b .date-rail::after { transform:skewY(12deg); }
+.records-day:last-child .date-rail::after { display:none; }
+.date-rail-dot { position:absolute; right:-4px; top:23px; width:9px; height:9px; border:2px solid var(--cyan); border-radius:50%; background:var(--night); z-index:1; }
+.rail-offset-b .date-rail-dot { top:60px; right:-4px; border-radius:0; transform:rotate(45deg); border-color:var(--pink); }
+.date-rail time { font:700 13px/1.3 var(--font-display); color:white; }
+.date-rail small { margin-top:5px; color:#9ebde9; font-size:10px; }
+.records-day-flow { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:15px; }
+.records-day-flow :deep(.record-card) { margin:0; isolation:isolate; position:relative; background:#0b255c; border:1px solid #7ba5e94a; box-shadow:none; color:#eaf1ff; animation:none; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 20px,100% 100%,13px 100%,0 calc(100% - 14px)); transition:width .38s var(--motion-enter),transform .38s var(--motion-shift),filter .3s,border-color .3s,clip-path .32s; }
+.records-first-load .records-day-flow :deep(.record-card) { animation-name:recordEnterLeft; animation-duration:.78s; animation-timing-function:var(--motion-enter); animation-fill-mode:backwards; animation-delay:calc(var(--stagger-index,0) * 170ms + 80ms); }
+.records-day-flow :deep(.record-card.featured) { width:96%; min-height:190px; padding:25px 30px; align-self:flex-start; background:linear-gradient(112deg,#f8fbff 0 83%,#d8faff 83% 100%); color:var(--text-hi); border-color:#d9e6ff; filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); }
+.records-day-flow :deep(.record-card.layout-1:not(.featured)) { width:84%; align-self:flex-end; margin-right:1.5%; padding:20px 24px; clip-path:polygon(24px 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 100%,0 24px); }
+.records-day-flow :deep(.record-card.layout-2:not(.featured)) { width:91%; align-self:flex-start; margin-left:5%; padding:18px 22px; background:#10306d; clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 34px),calc(100% - 34px) 100%,0 100%); }
+.records-day-flow :deep(.record-card.layout-0:not(.featured)) { width:78%; align-self:flex-end; margin-right:8%; padding:18px 22px; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); }
+.records-first-load .records-day-flow :deep(.record-card.layout-1:not(.featured)) { animation-name:recordEnterRight; }
+.records-first-load .records-day-flow :deep(.record-card.layout-2:not(.featured)) { animation-name:recordEnterRise; }
+.records-first-load .records-day-flow :deep(.record-card.featured) { animation-name:recordEnterLead; animation-delay:110ms; }
+.records-first-load .records-day .date-rail { animation:recordRailMark .68s var(--motion-enter) backwards; }
+.records-first-load .records-day .date-rail::after { transform:scaleY(0) skewY(-13deg); transform-origin:top; animation:recordRailDraw .7s .16s var(--motion-enter) both; }
+.records-first-load .records-day.rail-offset-b .date-rail::after { animation-name:recordRailDrawB; }
+.record-intro.records-first-load::after { animation:recordSlashSweep .82s cubic-bezier(.7,0,.2,1) both; }
+.record-intro::after { content:''; position:absolute; z-index:0; top:-40%; bottom:-40%; left:-35%; width:34%; pointer-events:none; background:linear-gradient(90deg,transparent,#50edfa30 25%,#fff8 50%,#ee246a50 72%,transparent); transform:translateX(-150%) skewX(-18deg); }
+.records-day-flow :deep(.record-card::after) { content:''; position:absolute; right:0; top:0; width:8px; height:100%; background:linear-gradient(var(--cyan),var(--pink)); opacity:.8; clip-path:polygon(0 0,100% 0,100% 72%,0 100%); pointer-events:none; }
+.records-first-load .records-day-flow :deep(.record-card.featured::after) { animation:recordCardSlash .62s .3s var(--motion-shift) both; }
+.records-first-load .records-day-flow :deep(.record-card:not(.featured)::after) { animation:recordCardSlash .58s calc(var(--stagger-index,0) * 170ms + 360ms) var(--motion-shift) both; }
+.records-first-load .records-day { animation:recordGroupSettle .65s both; }
+.records-first-load .records-day:nth-child(even) { animation-delay:180ms; }
+@keyframes recordRailMark { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
+@keyframes recordRailDraw { to { transform:scaleY(1) skewY(-13deg); } }
+@keyframes recordRailDrawB { to { transform:scaleY(1) skewY(12deg); } }
+@keyframes recordSlashSweep { 0% { transform:translateX(-150%) skewX(-18deg); } 45%,68% { transform:translateX(80vw) skewX(-18deg); } 100% { transform:translateX(130vw) skewX(-18deg); } }
+@keyframes recordCardSlash { 0% { width:36%; opacity:.95; } 100% { width:8px; opacity:.82; } }
+@keyframes recordGroupSettle { from { opacity:.45; } to { opacity:1; } }
+@keyframes recordEnterLead { 0% { opacity:0; transform:translateX(-68px) translateY(16px) scale(.94); clip-path:polygon(0 0,0 0,0 0,0 100%,20px 100%,0 90%); } 68% { opacity:1; transform:translateX(8px) translateY(0) scale(1.01); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 90%); } 100% { opacity:1; transform:none; clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); } }
+@keyframes recordEnterLeft { 0% { opacity:0; transform:translateX(-52px) rotate(-1.2deg) scale(.96); clip-path:polygon(0 0,12% 0,12% 100%,0 100%); } 72% { opacity:1; transform:translateX(6px) rotate(0) scale(1.01); } 100% { opacity:1; transform:none; } }
+@keyframes recordEnterRight { 0% { opacity:0; transform:translateX(72px) rotate(1.3deg) scale(.94); clip-path:polygon(88% 0,100% 0,100% 100%,88% 100%); } 72% { opacity:1; transform:translateX(-6px) rotate(0) scale(1.01); } 100% { opacity:1; transform:none; } }
+@keyframes recordEnterRise { 0% { opacity:0; transform:translateY(42px) translateX(22px) scale(.94); clip-path:polygon(0 0,100% 0,100% 10%,0 10%); } 72% { opacity:1; transform:translateY(-5px) translateX(0) scale(1.01); } 100% { opacity:1; transform:none; } }
+.records-day-flow :deep(.record-card.featured) { filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); }
+.records-day-flow :deep(.record-card:not(.featured)) { filter:drop-shadow(6px 7px 0 #50edfa50) drop-shadow(-5px 3px 0 #f03c8a55); }
+.records-day-flow :deep(.record-card:not(.featured) .record-time), .records-day-flow :deep(.record-card:not(.featured) .record-summary) { color:#b7ccef; }
+.records-day-flow :deep(.record-card:not(.featured) .record-title) { color:white; }
+.records-day-flow :deep(.record-card:not(.featured) .chunk-count) { color:var(--cyan); }
+.records-day-flow :deep(.record-card:hover), .records-day-flow :deep(.record-card:focus-visible), .records-day-flow :deep(.record-card.active) { border-color:var(--cyan); transform:translateX(5px) translateY(-2px); filter:drop-shadow(8px 10px 0 #50edfa88) drop-shadow(-5px 4px 0 #f03c8a75); }
+.record-list-enter-active,.record-list-leave-active,.record-list-move{transition:opacity .38s var(--motion-shift),transform .38s var(--motion-shift),clip-path .38s var(--motion-shift),width .38s var(--motion-enter)}
+.record-list-enter-from{opacity:0;transform:translateX(42px) scale(.92);clip-path:polygon(0 0,0 0,0 100%,0 100%)}
+.record-list-leave-to{opacity:0;transform:translateX(-54px) skewX(-3deg) scale(.9);clip-path:polygon(0 0,100% 0,100% 22%,0 0)}
+.records-day-flow :deep(.record-card.layout-1.record-list-leave-to){transform:translateX(62px) skewX(3deg) scale(.92);clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)}
+.records-day-flow :deep(.record-card.layout-2.record-list-leave-to){transform:translateY(35px) scale(.92);clip-path:polygon(0 100%,100% 100%,100% 100%,0 100%)}
+.record-list-move{transition-delay:30ms}
+.record-list-leave-active{position:absolute;pointer-events:none}
+.records-day-flow :deep(.record-card.arrival){animation:recordArrivalPulse 1.4s ease both!important; border-color:var(--cyan);}
+.record-arrival-notice{display:flex;align-items:center;gap:12px;margin:8px 0;padding:9px 12px;color:#d7eaff;background:#0b255c;border-left:3px solid var(--cyan);font-size:12px}
+.record-arrival-notice button{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
+.records-aside-shell :deep(.side-card) { color:#dce9ff; background:#0a245f; border:1px solid #7ba5e94a; border-bottom:1px solid #7ba5e94a; box-shadow:none; }
+.records-aside-shell :deep(.side-head-note), .records-aside-shell :deep(.side-empty), .records-aside-shell :deep(.sum-line), .records-aside-shell :deep(.sum-date), .records-aside-shell :deep(.today-unit) { color:#b7ccef; }
+.records-aside-shell :deep(.today-num), .records-aside-shell :deep(.side-more) { color:var(--cyan); }
+@media(max-width:599px){.records-day,.records-day.rail-offset-b{grid-template-columns:42px minmax(0,1fr);gap:8px}.date-rail,.rail-offset-b .date-rail{padding:16px 7px 0 0}.date-rail time{font-size:10px}.date-rail small{font-size:8px}.date-rail-dot,.rail-offset-b .date-rail-dot{top:19px;right:-4px}.records-grid{gap:20px}.records-day-flow{gap:11px}.records-day-flow :deep(.record-card.featured){width:100%;min-height:164px;padding:19px 17px;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,14px 100%,0 calc(100% - 14px))}.records-day-flow :deep(.record-card.layout-1:not(.featured)){width:96%;margin-right:0;padding:16px}.records-day-flow :deep(.record-card.layout-2:not(.featured)){width:96%;margin-left:4%;padding:16px}.records-day-flow :deep(.record-card.layout-0:not(.featured)){width:90%;margin-right:5%;padding:16px}.record-intro::after{width:46%}}
+@media(prefers-reduced-motion:reduce){.records-first-load .records-day-flow :deep(.record-card),.records-first-load .records-day .date-rail,.records-first-load .records-day,.record-intro.records-first-load::after,.records-first-load .records-day-flow :deep(.record-card::after){animation:none!important}.record-list-enter-active,.record-list-leave-active,.record-list-move{transition-duration:.01ms!important}}
 
 .loading-state { display: flex; justify-content: center; padding: 60px 0; }
+
+.records-page .page-content { padding-top:0; }
+.record-intro { position:relative; display:flex; align-items:center; gap:25px; overflow:hidden; min-height:170px; padding:26px 34px; background:#0d43c0; border-left:5px solid var(--cyan); color:white; }
+.record-intro::before { content:''; position:absolute; inset:0; background:url('/art/water-surface.webp') center 20% / cover; opacity:.3; pointer-events:none; }
+.record-date { position:relative; display:flex; gap:12px; align-items:center; padding-right:25px; border-right:1px solid #84bbff70; }
+.record-date strong { font:italic 800 94px/.8 var(--font-display); letter-spacing:-.05em; }
+.record-date span { color:var(--cyan); font:italic 800 27px/1 var(--font-display); text-transform:uppercase; }
+.record-date small { display:block; font:10px var(--font); color:#bed9ff; margin-top:10px; }
+.record-intro-copy { position:relative; flex:1; max-width:90%; z-index:1; }
+.record-intro-copy h2 { font-size:21px; font-weight:900; letter-spacing:-.035em; margin-bottom:15px; }
+.record-capture { display:flex; align-items:center; justify-content:space-between; min-height:45px; width:min(100%,430px); padding:10px 16px; border:1px solid #afdcff80; background:#071c6550; color:#d3eaff; text-align:left; font-size:12px; }
+.record-capture:hover { background:#052562; border-color:var(--cyan); }
+.record-capture b { font-size:24px; line-height:1; color:var(--cyan); }
+
+.record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 6px; padding-bottom:13px; border-bottom:1px solid #7bafff45; }
+.record-filters { display:flex; gap:6px; }
+.record-filters button { min-height:36px; padding:6px 16px; font-size:12px; color:#adc8f4; }
+.record-filters button.selected { color:var(--night); background:var(--cyan); font-weight:800; transform:skew(-7deg); box-shadow:3px 3px 0 var(--electric); }
+.record-filters span { margin-left:7px; background:var(--pink); color:white; font-size:10px; padding:0 5px; }
+.record-count { font-size:11px; color:#b7ccef; }
+.records-error { color:white; background:#09215c; padding:24px; border:1px solid #ffabc4; }
+.records-error button { margin-top:16px; }
+.records-main > .empty-state .empty-title { color:white; }
+.records-main > .empty-state .empty-desc { color:var(--on-dark); }
+@media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:90%}}
+@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
+
 </style>

@@ -5,16 +5,19 @@ import {
   getRecords as apiGetRecords,
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
+  organizeRecord as apiOrganizeRecord,
+  updateRawRecord as apiUpdateRawRecord,
   updateChunk as apiUpdateChunk,
   deleteChunk as apiDeleteChunk,
   createChunk as apiCreateChunk,
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
+  retryChunkEmbedding as apiRetryChunkEmbedding,
   retryRecord as apiRetryRecord,
   getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
 
-/** @typedef {'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
+/** @typedef {'record_only' | 'processing' | 'reviewing' | 'done' | 'failed'} RecordStatus */
 
 /**
  * @typedef {Object} ChunkMetadata
@@ -148,11 +151,12 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {string|number} id
    * @returns {Promise<Record|null>}
    */
-  async function fetchRecord(id) {
+  async function fetchRecord(id, { isCurrent = () => true } = {}) {
     try {
       const res = await apiGetRecord(id)
+      if (!isCurrent()) return null
       // 更新本地缓存
-      const index = records.value.findIndex(r => r.id === id)
+      const index = records.value.findIndex(r => String(r.id) === String(id))
       if (index !== -1) {
         records.value[index] = res.data
       } else {
@@ -170,14 +174,38 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {string} content
    * @returns {Promise<Record>}
    */
-  async function createRecord(content) {
-    const res = await apiCreateRecord({ content })
+  async function createRecord(content, requestAiProcessing = false) {
+    const res = await apiCreateRecord({ content, requestAiProcessing })
     const newRecord = res.data
     // 添加到本地列表开头
     if (!records.value.some(r => r.id === newRecord.id)) {
       records.value.unshift(newRecord)
     }
     return newRecord
+  }
+
+  async function organizeRecord(id) {
+    try {
+      const res = await apiOrganizeRecord(id)
+      const index = records.value.findIndex(r => String(r.id) === String(id))
+      if (index !== -1 && res.data) records.value[index] = res.data
+      return res.data || null
+    } catch (err) {
+      error.value = err.message || '请求整理失败'
+      return null
+    }
+  }
+
+  async function updateRawRecord(id, content) {
+    try {
+      const res = await apiUpdateRawRecord(id, content)
+      const index = records.value.findIndex(r => r.id === id)
+      if (index !== -1 && res.data) records.value[index] = res.data
+      return res.data || null
+    } catch (err) {
+      error.value = err.message || '更新原文失败'
+      return null
+    }
   }
 
   /**
@@ -188,9 +216,12 @@ export const useRecordsStore = defineStore('records', () => {
    */
   async function updateChunk(chunkId, data) {
     try {
-      await apiUpdateChunk(chunkId, data)
-      // 后端返回的 ChunkVO 不含完整状态，直接按参数更新本地缓存
-      applyChunkEdit(chunkId, data)
+      const res = await apiUpdateChunk(chunkId, data)
+      const updated = res.data
+      for (const record of records.value) {
+        const chunk = (record.chunks || []).find(c => c.id === chunkId)
+        if (chunk && updated) Object.assign(chunk, updated)
+      }
       return true
     } catch (err) {
       console.error('Failed to update chunk:', err)
@@ -199,27 +230,16 @@ export const useRecordsStore = defineStore('records', () => {
     }
   }
 
-  /**
-   * 将扁平字段合并进本地缓存的 chunk.metadata
-   * taskStatus 传空串 ""（清空语义，null 会被 Jackson 忽略）→ 从 metadata 删除该字段；
-   * mood 传空数组 → 覆盖为空数组（后端空数组契约已验证）。
-   * @param {string|number} chunkId
-   * @param {Object} data
-   */
-  function applyChunkEdit(chunkId, data) {
-    for (const record of records.value) {
-      if (!record.chunks) continue
-      const chunk = record.chunks.find(c => c.id === chunkId)
-      if (!chunk) continue
-      if (data.segment !== undefined) chunk.segment = data.segment
-      const meta = { ...(chunk.metadata || {}) }
-      for (const key of ['title', 'summary', 'contentType', 'mood', 'keywords', 'taskStatus']) {
-        if (data[key] !== undefined && data[key] !== '') meta[key] = data[key]
-      }
-      // taskStatus="" 表示"取消选择"（清空语义）：本地删除该字段让 UI 即时反映
-      if (data.taskStatus === '') delete meta.taskStatus
-      chunk.metadata = meta
-      return
+  async function retryChunkEmbedding(chunkId) {
+    try {
+      await apiRetryChunkEmbedding(chunkId)
+      const record = records.value.find(r => (r.chunks || []).some(c => String(c.id) === String(chunkId)))
+      if (record) await fetchRecord(record.id)
+      return true
+    } catch (err) {
+      console.error('Failed to retry chunk embedding:', err)
+      error.value = err.message || '重试向量重建失败'
+      return false
     }
   }
 
@@ -358,9 +378,10 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {Object} [payload] - 可选扩展 body（todoResolutions 关联待办裁决）
    * @returns {Promise<Object|null>} 更新后的记录（失败返回 null）
    */
-  async function confirmReview(id, payload) {
+  async function confirmReview(id, payload, { isCurrent = () => true } = {}) {
     try {
       const res = await apiConfirmReview(id, payload)
+      if (!isCurrent()) return null
       const index = records.value.findIndex(r => r.id === id)
       if (index !== -1 && res.data) {
         records.value[index] = res.data
@@ -544,7 +565,10 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecords,
     fetchRecord,
     createRecord,
+    organizeRecord,
+    updateRawRecord,
     updateChunk,
+    retryChunkEmbedding,
     deleteChunk,
     addChunk,
     createChunkForRecord,

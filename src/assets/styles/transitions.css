@@ -8,6 +8,12 @@
 /* 记录列表瀑布入场（stagger 由调用处设 animation-delay） */
 @keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+/* Global by design: RecordCard lives in a separate Vue scoped style, while its list owner adds .arrival. */
+@keyframes recordArrivalPulse {
+  0%,100% { box-shadow:4px 5px 0 #020c3425; }
+  25%,65% { box-shadow:0 0 0 3px var(--cyan),0 0 30px #50edfa70,5px 6px 0 #f03c8a65; }
+}
+
 /* 生成完成：一次轻脉冲（box-shadow 呼吸） */
 @keyframes breatheOnce {
   0% { box-shadow: var(--shadow); }
@@ -21,11 +27,28 @@
 /* 日历选中弹性（scale 0.92 → 1） */
 @keyframes dayPop { 0% { transform: scale(.92); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 
-/* Page transitions */
-.page-enter-active { transition: opacity .2s ease, transform .2s ease; }
-.page-leave-active { transition: opacity .15s ease; }
-.page-enter-from { opacity: 0; transform: translateY(6px); }
-.page-leave-to { opacity: 0; }
+/* A short exit clears the stage before the diagonal cut reveals the next view. */
+.page-leave-active { transition:opacity .16s ease, transform .16s ease; pointer-events:none; }
+.page-leave-to { opacity:0; transform:translateX(-24px); }
+.page-enter-active { transition:clip-path .4s var(--motion-enter),transform .4s var(--motion-enter),opacity .25s; }
+.page-enter-from { opacity:0; transform:translateX(38px); clip-path:polygon(0 0,0 0,-25% 100%,0 100%); }
+.page-enter-to { opacity:1; transform:none; clip-path:polygon(0 0,125% 0,100% 100%,0 100%); }
+.route-wipe { position:absolute; inset:0; z-index:25; overflow:hidden; pointer-events:none; contain:paint; }
+.wipe-band { position:absolute; inset:0 -40%; transform:translateX(-120%) skewX(-18deg); animation:route-slash .6s cubic-bezier(.65,0,.25,1) both; }
+.wipe-band-back { background:var(--cyan); }
+.wipe-band-front { background:#1557ed; animation-delay:.045s; }
+.route-wipe > span { position:absolute; top:40%; left:9%; color:white; font:italic 900 clamp(60px,12vw,170px)/.8 var(--font-display); letter-spacing:-.035em; animation:route-label .6s both; }
+@keyframes route-slash { 0% { transform:translateX(-120%) skewX(-18deg); } 36%,48% { transform:translateX(0) skewX(-18deg); } 100% { transform:translateX(120%) skewX(-18deg); } }
+@keyframes route-label { 0%,18% { opacity:0; transform:translateX(-70px); clip-path:inset(0 100% 0 0); } 35%,48% { opacity:1; transform:none; clip-path:inset(0); } 85%,100% { opacity:0; transform:translateX(100px); clip-path:inset(0 0 0 100%); } }
+.page-enter-active .masthead-en { animation:title-cut .38s cubic-bezier(.16,1,.3,1) both; }
+.page-enter-active .stage-copy, .page-enter-active .record-intro-copy { animation:copy-cut .38s .02s both; }
+@keyframes title-cut { from { transform:translateX(-35px) skewX(-8deg); clip-path:inset(0 100% 0 0); } to { transform:none; clip-path:inset(0); } }
+@keyframes copy-cut { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:none; } }
+@media(prefers-reduced-motion:reduce) {
+ *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
+ .route-wipe { display:none; }
+ .page-enter-from,.page-leave-to { transform:none; clip-path:none; }
+}
 
 /* Overlay / sheet transitions */
 .fade-enter-active, .fade-leave-active { transition: opacity .25s ease; }
@@ -34,3 +57,8 @@
 .sheet-enter-from, .sheet-leave-to { transform: translate(-50%, 110%); }
 .slide-right-enter-active, .slide-right-leave-active { transition: transform .3s cubic-bezier(.32,.72,.28,1); }
 .slide-right-enter-from, .slide-right-leave-to { transform: translateX(102%); }
+
+/* Panels arrive with the same cut as the navigation, on a smaller scale. */
+.slide-right-enter-active { transition:transform .34s var(--motion-enter),clip-path .34s; }
+.slide-right-enter-from { clip-path:polygon(100% 0,100% 0,100% 100%,75% 100%); transform:translateX(60px); }
+.slide-right-enter-to { clip-path:polygon(0 0,100% 0,100% 100%,0 100%); }

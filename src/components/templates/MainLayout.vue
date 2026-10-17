@@ -15,6 +15,7 @@ import WriteModal from '@/components/organisms/WriteModal.vue'
 import SummarySheet from '@/components/organisms/SummarySheet.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
+import { cancelObjectTransitions } from '@/composables/useObjectTransition'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,6 +25,11 @@ const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
+
+router.beforeEach((to, from) => {
+  if (to.fullPath !== from.fullPath && !ui.consumeNavigationApproval(to.fullPath) && !ui.confirmNavigationDrafts()) return false
+  return true
+})
 
 /**
  * 待办建议轮询（15s，全局）
@@ -57,6 +63,7 @@ onMounted(() => {
  * 详情层会继续压在新页面上。这里兜底：只要路由变了就收。
  */
 watch(() => route.name, () => {
+  cancelObjectTransitions()
   if (ui.showDetail) {
     ui.showDetail = false
     ui.selectedRecordId = null
@@ -70,6 +77,7 @@ function openWrite() {
 
 <template>
   <div class="app">
+    <div class="app-water" aria-hidden="true" />
     <AppSidebar />
     <main class="main">
       <MobileHeader
@@ -83,16 +91,21 @@ function openWrite() {
           <component :is="Component" :key="route.name" />
         </Transition>
       </RouterView>
+      <div :key="route.name" class="route-wipe" aria-hidden="true">
+        <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[route.name] }}</span>
+      </div>
       <DetailPanel />
     </main>
     <BottomNav />
-    <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" />
+    <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <ToastContainer />
   </div>
 </template>
 
 <style scoped>
-.app { position: relative; z-index: 1; display: flex; height: 100dvh; }
+.app { position: relative; isolation: isolate; z-index: 1; display: flex; height: 100dvh; background: #06123f; }
+.app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #03133d99, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 </style>

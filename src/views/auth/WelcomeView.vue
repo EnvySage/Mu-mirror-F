@@ -103,11 +103,9 @@ function switchMode(newMode) {
 <template>
   <div class="auth-page">
     <div class="auth-header">
-      <div class="auth-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#fff"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
-      </div>
-      <h1 class="auth-title">Mirror</h1>
-      <p class="auth-subtitle">你的 AI 日记伙伴</p>
+      <span class="auth-eyebrow">{{ mode === 'login' ? 'CONTINUE YOUR STORY' : 'YOUR STORY STARTS HERE' }}</span>
+      <h1 class="auth-title">{{ mode === 'login' ? '欢迎回来。' : '从这一刻，开始记录。' }}</h1>
+      <p class="auth-subtitle">{{ mode === 'login' ? '那些属于你的生活，正在这里等你。' : '给未来的自己，留下一面镜子。' }}</p>
     </div>
 
     <div class="auth-body">
@@ -116,12 +114,13 @@ function switchMode(newMode) {
         <button :class="['auth-tab', { active: mode === 'register' }]" @click="switchMode('register')">注册</button>
       </div>
 
-      <div v-if="errorMsg" class="auth-error">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="auth-error" role="alert">{{ errorMsg }}</div>
 
       <form class="auth-form" @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label class="form-label">用户名</label>
+          <label class="form-label" for="auth-username">用户名</label>
           <input
+            id="auth-username" autocomplete="username"
             v-model="username"
             type="text"
             class="form-input"
@@ -133,8 +132,9 @@ function switchMode(newMode) {
         </div>
 
         <div class="form-group">
-          <label class="form-label">密码</label>
+          <label class="form-label" for="auth-password">密码</label>
           <input
+            id="auth-password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
             v-model="password"
             type="password"
             class="form-input"
@@ -146,8 +146,9 @@ function switchMode(newMode) {
         </div>
 
         <div v-if="mode === 'register'" class="form-group">
-          <label class="form-label">确认密码</label>
+          <label class="form-label" for="auth-confirm">确认密码</label>
           <input
+            id="auth-confirm" autocomplete="new-password"
             v-model="confirmPassword"
             type="password"
             class="form-input"
@@ -285,4 +286,18 @@ function switchMode(newMode) {
   .auth-header { padding: 80px 40px 0; }
   .auth-body { padding: 40px; }
 }
+
+.auth-page { min-height:0; background:transparent; color:white; width:100%; max-width:380px; }
+.auth-header { text-align:left; padding:0 0 26px; }
+.auth-eyebrow { display:block; color:var(--cyan); font:italic 800 25px/1 var(--font-display); margin-bottom:18px; }
+.auth-title { font-family:var(--font); font-size:29px; font-weight:900; margin:0 0 10px; letter-spacing:-.04em; }
+.auth-subtitle { font-size:12px; color:#a9c3eb; }
+.auth-body { padding:0; max-width:none; }
+.auth-tabs { padding:0; background:transparent; border-radius:0; border-bottom:1px solid #5278bc70; gap:12px; margin:4px 0 26px; }
+.auth-tab { border-radius:0; padding:12px; color:#9bb8e6; border-bottom:3px solid transparent; }
+.auth-tab.active { color:var(--cyan); background:transparent; border-bottom-color:var(--cyan); box-shadow:none; }
+.form-label { color:#c1d6f6; font-size:12px; }.form-input { border:1px solid #526da0; border-radius:2px; background:#0a1d50; color:white; padding:13px 14px; font-size:14px; }.form-input::placeholder{color:#89a2ce;font-size:12px}.form-input:focus{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan)}
+.auth-form { gap:20px; }.btn { border-radius:2px; background:var(--cyan); color:var(--night); font-size:14px; font-weight:900; box-shadow:4px 4px 0 var(--electric); margin-top:8px; }.btn:hover:not(:disabled){background:white;box-shadow:4px 4px 0 var(--electric)}.btn:disabled{opacity:.4}
+.auth-footer { padding:26px 0 0; margin-top:28px; border-top:1px solid #47639750; }.auth-footer-text{color:#aac4ed;font-size:11px}.auth-link{color:var(--cyan);font-size:11px}.auth-error{border-radius:2px;text-align:left;background:#f5236b20;border:1px solid #f879a0;color:#ffb9cf;font-size:12px}
+@media(max-width:899px){.auth-header{padding-bottom:20px}.auth-eyebrow{font-size:21px;margin-bottom:12px}.auth-title{font-size:25px}.auth-form{gap:16px}.auth-footer{margin-top:25px;padding-top:20px}}
 </style>
