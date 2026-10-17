@@ -60,6 +60,10 @@ export function updateChunk(chunkId, data) {
   return request.put(`/chunks/${chunkId}`, data)
 }
 
+export function retryChunkEmbedding(chunkId) {
+  return request.post(`/chunks/${chunkId}/embedding/retry`)
+}
+
 /**
  * 删除 Chunk（v2.0 扩展，片段卡片模型）
  * @param {number|string} chunkId - Chunk ID
@@ -103,7 +107,7 @@ export function getRecordSuggestions(id) {
 }
 
 /**
- * 确认审查完成（阻塞数秒——含补分类 + Embedding，调用方需 loading 态）
+ * 确认审查和 AI 记忆授权；补分类仍可能同步调用 AI，embedding 改为后台持久任务。
  * @param {number|string} id - 记录ID
  * @param {Object} [payload] - 可选扩展 body
  * @param {Array} [payload.todoResolutions] - 关联待办决议，随入库一起提交（每条恰好其一）：
@@ -114,7 +118,7 @@ export function getRecordSuggestions(id) {
  * @returns {Promise<{ code: number, data: RecordVO }>}
  */
 export function confirmReview(id, payload) {
-  // confirm 阻塞数秒~数十秒（补分类+Embedding 逐个 chunk），绕开全局 15s 超时
+  // 补分类仍可能同步调用 AI；向量重建已改为后台任务。
   return request.put(`/records/${id}/confirm`, payload ?? null, { timeout: 120000 })
 }
 

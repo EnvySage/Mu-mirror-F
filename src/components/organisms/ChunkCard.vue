@@ -5,10 +5,11 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 import { useRecordsStore } from '@/stores/records'
 import { useToastStore } from '@/stores/toast'
 import { renderMarkdown } from '@/utils/mdPreview'
+import { createChunkDraft, discardChunkDraft, hasChunkDraftChanges, updateChunkDraft } from '@/utils/chunkDraft'
 /**
  * 片段卡片（v2 原型版 —— "镜面反射"）
- * 左缘 3px accent-grad 光条；segment 可编辑；chips 编辑即保存（PUT /chunks/{id}）。
- * 新增的空片段保存时走 POST /records/{id}/chunks。
+ * 左缘 3px accent-grad 光条；segment 作为本地草稿，显式保存后才 PUT /chunks/{id}。
+ * 元数据 chips 独立自动保存；新增的空片段用显式保存按钮走 POST /records/{id}/chunks。
  * 只读态 segment 用 renderMarkdown 渲染（vault key chunk / 用户日记 md 源文本
  * 带 # ** ` 标记时正常排版；纯文本日记输出 <p> 包裹视觉差异小；审核态 textarea 不动）。
  */
@@ -30,7 +31,8 @@ const canEdit = computed(() => props.editable && !props.readonly)
 /** 仅本地占位片段（ReviewPanel 新增）走 POST /records/{id}/chunks */
 const isNew = computed(() => String(props.chunk.id).startsWith('local_'))
 const showTaskStatus = computed(() => ['todo', 'plan'].includes(edit.contentType))
-const textEdited = ref(false)
+const textDraft = ref(createChunkDraft(''))
+const textEdited = computed(() => hasChunkDraftChanges(textDraft.value))
 const saving = ref(false)
 const saveError = ref('')
 const failedFields = ref(null)
@@ -53,14 +55,31 @@ const edit = reactive({
 const segmentHtml = computed(() => renderMarkdown(props.chunk.segment || ''))
 
 function resetFrom(chunk) {
-  edit.segment = chunk.segment || ''
+  const segment = chunk.segment || ''
+  textDraft.value = createChunkDraft(segment)
+  edit.segment = segment
   edit.contentType = chunk.metadata?.contentType || ''
   edit.mood = [...(chunk.metadata?.mood || [])]
   edit.taskStatus = chunk.metadata?.taskStatus || ''
   edit.keywords = (chunk.metadata?.keywords || []).join('，')
 }
 
-watch(() => props.chunk, resetFrom, { immediate: true })
+watch(() => props.chunk.id, () => resetFrom(props.chunk), { immediate: true })
+watch(() => props.chunk.segment, (segment) => {
+  const committed = segment || ''
+  if (committed === edit.segment) {
+    textDraft.value = createChunkDraft(committed)
+  } else if (!textEdited.value) {
+    textDraft.value = createChunkDraft(committed)
+    edit.segment = committed
+  }
+})
+watch(() => props.chunk.metadata, (metadata) => {
+  edit.contentType = metadata?.contentType || ''
+  edit.mood = [...(metadata?.mood || [])]
+  edit.taskStatus = metadata?.taskStatus || ''
+  edit.keywords = (metadata?.keywords || []).join('，')
+})
 
 /** 新增空片段自动聚焦 */
 watch(textareaEl, async (el) => {
@@ -77,15 +96,28 @@ function autoGrow(el) {
 }
 
 function onSegmentInput(e) {
-  textEdited.value = true
-  emit('dirty-change', { id: props.chunk.id, dirty: true })
+  textDraft.value = updateChunkDraft(textDraft.value, edit.segment)
+  saveError.value = ''
+  failedFields.value = null
+  notifyDirty()
   autoGrow(e.target)
 }
 
-async function onSegmentBlur() {
-  if (!edit.segment.trim()) return
-  if (!textEdited.value) return
-  if (await save({ segment: edit.segment })) textEdited.value = false
+function notifyDirty() {
+  emit('dirty-change', { id: props.chunk.id, dirty: textEdited.value || saving.value || !!saveError.value })
+}
+
+async function saveSegment() {
+  if (!textEdited.value || !edit.segment.trim()) return
+  await save({ segment: edit.segment })
+}
+
+function cancelSegmentEdit() {
+  textDraft.value = discardChunkDraft(textDraft.value)
+  edit.segment = textDraft.value.value
+  saveError.value = ''
+  failedFields.value = null
+  notifyDirty()
 }
 
 function toggleMood(m) {
@@ -112,24 +144,26 @@ function selectTask(t) {
 
 async function onKeywordsBlur() {
   const keywords = edit.keywords.split(/[，,]/).map(s => s.trim()).filter(Boolean)
-  if (await save({ keywords })) emit('dirty-change', { id: props.chunk.id, dirty: false })
+  await save({ keywords })
 }
 
 /** 组装扁平 payload（ChunkDTO 契约） */
 async function save(fields) {
   if (saving.value) return
   saving.value = true
-  emit('dirty-change', { id: props.chunk.id, dirty: true })
+  notifyDirty()
   saveError.value = ''
   failedFields.value = null
-  const payload = {
+  // Existing chunks persist only the field the user changed. This keeps metadata
+  // autosave from accidentally committing an unsubmitted segment draft.
+  const payload = isNew.value ? {
     segment: edit.segment,
     contentType: edit.contentType || undefined,
     mood: edit.mood,
     taskStatus: (showTaskStatus.value && edit.taskStatus) || undefined,
     keywords: edit.keywords.split(/[，,]/).map(s => s.trim()).filter(Boolean),
     ...fields,
-  }
+  } : { ...fields }
   let ok
   if (isNew.value && edit.segment.trim()) {
     // 新片段：POST /records/{id}/chunks；成功后以返回 chunk 替换本地占位
@@ -140,17 +174,23 @@ async function save(fields) {
     ok = true
   } else {
     ok = await recordsStore.updateChunk(props.chunk.id, payload)
-    if (ok) toast.success('片段已保存')
+    if (ok) {
+      if (Object.hasOwn(fields, 'segment')) {
+        textDraft.value = createChunkDraft(fields.segment)
+        toast.success('文本已保存；如需加入 Mirror 记忆，请重新授权')
+      } else toast.success('片段属性已保存')
+    }
   }
   if (!ok) {
     saveError.value = recordsStore.error || '保存失败，请重试'
     failedFields.value = fields
     toast.error(saveError.value)
-    emit('dirty-change', { id: props.chunk.id, dirty: true })
+    notifyDirty()
   } else {
-    emit('dirty-change', { id: props.chunk.id, dirty: false })
+    notifyDirty()
   }
   saving.value = false
+  notifyDirty()
   return !!ok
 }
 
@@ -158,8 +198,14 @@ async function retryFailedSave() {
   if (!failedFields.value || saving.value) return
   const fields = failedFields.value
   if (await save(fields)) {
-    if (Object.hasOwn(fields, 'segment')) textEdited.value = false
+    if (Object.hasOwn(fields, 'segment')) textDraft.value = createChunkDraft(edit.segment)
   }
+}
+
+async function retryEmbedding() {
+  const ok = await recordsStore.retryChunkEmbedding(props.chunk.id)
+  if (ok) toast.info('已重新加入向量重建队列')
+  else toast.error(recordsStore.error || '重试失败，请稍后再试')
 }
 
 async function removeChunk() {
@@ -173,7 +219,7 @@ async function removeChunk() {
   <div :class="['chunk-card', 'card', { 'chunk-readonly': readonly }]">
     <div class="chunk-top">
       <span class="chunk-top-left">
-        <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ saving ? ' · 保存中' : saveError ? ' · 未保存' : textEdited ? ' · 已改文本' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
+      <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ saving ? ' · 保存中' : saveError ? ' · 未保存' : textEdited ? ' · 草稿未保存' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
         <!-- 待办终态徽标：待办已删除优先于待办已完成（todoRemoved 由后端软删待办时回写 metadata；记录内容完整保留） -->
         <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed" title="关联待办已被删除，记录内容保留">待办已删除</span>
         <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done" title="关联待办已完成，记录内容保留">待办已完成</span>
@@ -195,9 +241,20 @@ async function removeChunk() {
       rows="1"
       :disabled="saving"
       @input="onSegmentInput"
-      @blur="onSegmentBlur"
     />
     <div v-else class="chunk-segment chunk-segment-md" v-html="segmentHtml" />
+    <div v-if="canEdit && textEdited" class="chunk-draft-actions">
+      <span>草稿尚未保存；当前记忆向量保持不变</span>
+      <button type="button" class="chunk-draft-cancel" :disabled="saving" @click="cancelSegmentEdit">取消</button>
+      <button type="button" class="chunk-draft-save" :disabled="saving || !edit.segment.trim()" @click="saveSegment">{{ saving ? '保存中…' : '保存修改' }}</button>
+    </div>
+    <div v-if="chunk.ai_memory_approved ?? chunk.aiMemoryApproved" class="chunk-embedding-status" :data-status="chunk.embedding_status ?? chunk.embeddingStatus ?? (chunk.has_embedding ?? chunk.hasEmbedding ? 'ready' : 'pending')">
+      <span v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'pending' || (!(chunk.embedding_status ?? chunk.embeddingStatus) && !(chunk.has_embedding ?? chunk.hasEmbedding))">◌ 向量重建中，完成后即可用于记忆检索</span>
+      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed'">向量重建失败：{{ chunk.embedding_error ?? chunk.embeddingError ?? '暂时无法生成' }}</span>
+      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 已可用于记忆检索</span>
+      <span v-else>尚未生成向量</span>
+      <button v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed' || (!(chunk.has_embedding ?? chunk.hasEmbedding) && (chunk.embedding_status ?? chunk.embeddingStatus) === 'not_requested')" type="button" :disabled="saving" @click="retryEmbedding">重试生成</button>
+    </div>
 
     <!-- 标题/摘要（AI 生成展示） -->
     <div class="chunk-field">
@@ -269,7 +326,7 @@ async function removeChunk() {
         class="keywords-input"
         placeholder="用逗号分隔"
         :disabled="saving"
-        @input="emit('dirty-change', { id: chunk.id, dirty: true })"
+        @input="notifyDirty"
         @blur="onKeywordsBlur"
       >
       <div v-else class="record-keywords" style="margin-top:0">
@@ -291,6 +348,14 @@ async function removeChunk() {
   width: 3px; border-radius: 2px; background: var(--accent); opacity: .9;
 }
 .chunk-card.adding { animation: chunkIn .3s ease; }
+.chunk-draft-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin:-4px 0 14px; padding:10px 12px; border-left:3px solid var(--cyan); background:#eaf7ff; color:var(--text-mid); font-size:12px; }
+.chunk-draft-actions span { margin-right:auto; }
+.chunk-draft-actions button,.chunk-embedding-status button { border:1px solid var(--line); background:white; color:var(--text-hi); padding:6px 12px; cursor:pointer; font:inherit; font-weight:700; }
+.chunk-draft-actions .chunk-draft-save { background:var(--cyan); border-color:var(--cyan); color:var(--night); }
+.chunk-draft-actions button:disabled,.chunk-embedding-status button:disabled { opacity:.55; cursor:not-allowed; }
+.chunk-embedding-status { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0 14px; padding:9px 12px; border-left:3px solid var(--cyan); background:#eaf7ff; color:var(--text-mid); font-size:12px; }
+.chunk-embedding-status[data-status="failed"] { border-color:#ff477e; background:#fff0f4; color:#8b173c; }
+.chunk-embedding-status[data-status="ready"] { border-color:#3eb27d; background:#effaf4; color:#246648; }
 
 .chunk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .chunk-top-left { display: flex; align-items: center; gap: 8px; min-width: 0; }

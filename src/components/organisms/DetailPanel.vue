@@ -49,6 +49,7 @@ watch([authorizationDirty, () => rawEditing.value && rawDraft.value !== (record.
 
 // ---- 轮询（8.2：processing → 2.5s 轮询详情，直到终态） ----
 let pollTimer = null
+let embeddingPollInFlight = false
 
 function stopPolling() {
   if (pollTimer) {
@@ -74,6 +75,35 @@ function startPolling(recordId) {
     }
   }
   pollTimer = setTimeout(tick, 2500)
+}
+
+function startEmbeddingPolling(recordId) {
+  if (pollTimer || embeddingPollInFlight) return
+  stopPolling()
+  const tick = async () => {
+    pollTimer = null
+    if (String(ui.selectedRecordId) !== String(recordId)) return
+    const generation = requestGeneration
+    embeddingPollInFlight = true
+    const r = await recordsStore.fetchRecord(recordId, {
+      isCurrent: () => generation === requestGeneration && String(ui.selectedRecordId) === String(recordId),
+    })
+    embeddingPollInFlight = false
+    if (generation !== requestGeneration || String(ui.selectedRecordId) !== String(recordId)) {
+      const current = record.value
+      if (!pollTimer && current?.status === 'done'
+        && (current.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')) {
+        startEmbeddingPolling(current.id)
+      }
+      return
+    }
+    if (!r) return
+    const pending = (r.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')
+    if (pending) {
+      if (!pollTimer) pollTimer = setTimeout(tick, 1800)
+    } else stopPolling()
+  }
+  pollTimer = setTimeout(tick, 900)
 }
 
 onBeforeUnmount(stopPolling)
@@ -115,11 +145,15 @@ function updateDetailMode(r) {
     ui.detailMode = 'view'
   } else {
     ui.detailMode = 'view'
+    if (r.status === 'done' && (r.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')) {
+      startEmbeddingPolling(r.id)
+    }
   }
 }
 
 watch(() => ui.selectedRecordId, async (id) => {
   const generation = ++requestGeneration
+  stopPolling()
   if (!id) {
     cancelObjectTransitions()
     ui.detailDraftDirty = false
@@ -165,6 +199,13 @@ watch(record, (newRecord, oldRecord) => {
   if (!oldRecord || newRecord.status !== oldRecord.status) {
     updateDetailMode(newRecord)
   }
+})
+
+watch(() => (record.value?.chunks || []).map(chunk => `${chunk.id}:${chunk.embedding_status ?? chunk.embeddingStatus ?? ''}`).join('|'), () => {
+  if (!record.value || record.value.status !== 'done') return
+  const pending = (record.value.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')
+  if (pending && !pollTimer && !embeddingPollInFlight) startEmbeddingPolling(record.value.id)
+  else if (!pending && pollTimer) stopPolling()
 })
 
 const headerTitle = computed(() => {
@@ -249,7 +290,8 @@ async function onConfirm() {
   if (operation !== authorizationRequestId || String(ui.selectedRecordId) !== String(id)) return
   confirming.value = false
   if (updated) {
-    toast.success('片段授权已更新')
+    const rebuilding = (updated.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')
+    toast.success(rebuilding ? '授权已保存，向量正在后台重建' : '片段授权已更新')
     ui.detailMode = 'view'
     authorizationDirty.value = false
     reviewPanelRef.value?.acceptAuthorizationBaseline(updated.chunks || record.value?.chunks || [], payload)
@@ -260,6 +302,7 @@ async function onConfirm() {
     todoStore.fetch()
     todoStore.fetchChains()
     statsStore.fetchStats(30, true)
+    if (rebuilding) startEmbeddingPolling(id)
   } else {
     actionError.value = recordsStore.error || '确认失败，请重试'
   }

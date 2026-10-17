@@ -12,6 +12,7 @@ import {
   createChunk as apiCreateChunk,
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
+  retryChunkEmbedding as apiRetryChunkEmbedding,
   retryRecord as apiRetryRecord,
   getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
@@ -216,8 +217,6 @@ export const useRecordsStore = defineStore('records', () => {
   async function updateChunk(chunkId, data) {
     try {
       const res = await apiUpdateChunk(chunkId, data)
-      // 后端返回的 ChunkVO 不含完整状态，直接按参数更新本地缓存
-      applyChunkEdit(chunkId, data)
       const updated = res.data
       for (const record of records.value) {
         const chunk = (record.chunks || []).find(c => c.id === chunkId)
@@ -231,29 +230,16 @@ export const useRecordsStore = defineStore('records', () => {
     }
   }
 
-  /**
-   * 将扁平字段合并进本地缓存的 chunk.metadata
-   * taskStatus 传空串 ""（清空语义，null 会被 Jackson 忽略）→ 从 metadata 删除该字段；
-   * mood 传空数组 → 覆盖为空数组（后端空数组契约已验证）。
-   * @param {string|number} chunkId
-   * @param {Object} data
-   */
-  function applyChunkEdit(chunkId, data) {
-    for (const record of records.value) {
-      if (!record.chunks) continue
-      const chunk = record.chunks.find(c => c.id === chunkId)
-      if (!chunk) continue
-      if (data.segment !== undefined) chunk.segment = data.segment
-      const meta = { ...(chunk.metadata || {}) }
-      for (const key of ['title', 'summary', 'contentType', 'mood', 'keywords', 'taskStatus']) {
-        if (data[key] !== undefined && data[key] !== '') meta[key] = data[key]
-      }
-      // taskStatus="" 表示"取消选择"（清空语义）：本地删除该字段让 UI 即时反映
-      if (data.taskStatus === '') delete meta.taskStatus
-      chunk.metadata = meta
-      chunk.ai_memory_approved = false
-      chunk.has_embedding = false
-      return
+  async function retryChunkEmbedding(chunkId) {
+    try {
+      await apiRetryChunkEmbedding(chunkId)
+      const record = records.value.find(r => (r.chunks || []).some(c => String(c.id) === String(chunkId)))
+      if (record) await fetchRecord(record.id)
+      return true
+    } catch (err) {
+      console.error('Failed to retry chunk embedding:', err)
+      error.value = err.message || '重试向量重建失败'
+      return false
     }
   }
 
@@ -582,6 +568,7 @@ export const useRecordsStore = defineStore('records', () => {
     organizeRecord,
     updateRawRecord,
     updateChunk,
+    retryChunkEmbedding,
     deleteChunk,
     addChunk,
     createChunkForRecord,

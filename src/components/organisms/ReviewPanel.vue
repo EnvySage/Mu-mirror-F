@@ -10,7 +10,7 @@ import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
  * 上：review-original「光源」面板（只读原文）
  * 中：chunk-card「镜面反射」卡片列表 + add-chunk-btn 虚线按钮
  * 下：关联待办区块（todoStore.recordSuggestions）+ review-hint 引导
- * chips 编辑即保存（PUT /chunks/{id}），编排逻辑在 ChunkCard/store 内。
+ * 正文由 chunk-card 显式提交；metadata chips 独立自动保存（PUT /chunks/{id}）。
  */
 const props = defineProps({
   record: { type: Object, required: true },
@@ -223,7 +223,7 @@ function removeManual(m) {
 /** 切换记录关闭选择面板（关联行由 DetailPanel 侧 clearResolutions 清理） */
 watch(() => props.record.id, closePicker)
 
-/** 新增片段：本地空占位，用户输入文本失焦时 POST /records/{id}/chunks */
+/** 新增片段：本地空占位，由 chunk-card 的显式保存按钮 POST /records/{id}/chunks */
 function onAddChunk() {
   const placeholder = {
     id: `local_${Date.now()}`,
