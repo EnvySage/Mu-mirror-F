@@ -30,14 +30,12 @@ let mirrorViewMounted = false
 function reloadMirrorForAccount(userId) {
   const nextOwnerId = userId === null || userId === undefined ? null : String(userId)
   mirror.ensureOwner(nextOwnerId)
-
   if (nextOwnerId === null) return
   mirror.fetchMirror().catch(() => {})
   // 归档首屏与可重建月份分开加载，任一失败都不阻断镜子正文。
   mirror.fetchSnapshots().catch(() => {})
   mirror.fetchSnapshotMonths().catch(() => {})
 }
-
 
 function reloadMirror() {
   return Promise.all([mirror.fetchMirror(), mirror.fetchSnapshots()])
@@ -442,20 +440,6 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else-if="mirror.isEmpty && (mirror.loading || mirror.snapshots === null || mirror.snapshotsLoading)" class="processing-view" role="status">
-        <div class="processing-ring" />
-        <div class="processing-title">正在读取镜子归档</div>
-        <div class="processing-desc">检查是否有可查阅的历史快照</div>
-      </div>
-
-      <div v-else-if="mirror.isEmpty && mirror.error" class="empty-state" style="padding:70px 20px">
-        <div class="empty-title">暂时无法打开镜子归档</div>
-        <div class="empty-desc">{{ mirror.error }}</div>
-        <button class="mirror-generate" style="max-width:260px;margin:20px auto 0" @click="mirror.fetchSnapshots">
-          重试读取归档
-        </button>
-      </div>
-
       <!-- 首次使用：引导生成 -->
       <div v-else-if="mirror.isEmpty" class="empty-state" style="padding:70px 20px">
         <div class="empty-icon">
@@ -719,15 +703,6 @@ onBeforeUnmount(() => {
               >
                 为 {{ monthLabel(mirror.profile.period_month) }} 新建版本
               </button>
-              <button
-                v-if="mirror.profile.snapshot_type === 'monthly' && mirror.profile.period_month && mirror.profile.context_status === 'usable' && mirror.profile.is_current"
-                type="button"
-                class="mirror-regenerate-month"
-                :disabled="mirror.generatingMonthly"
-                @click="requestMonthGeneration(mirror.profile.period_month, $event)"
-              >
-                为 {{ monthLabel(mirror.profile.period_month) }} 新建版本
-              </button>
             </div>
 
           </div>
@@ -895,29 +870,6 @@ onBeforeUnmount(() => {
     </div>
   </Teleport>
   </div>
-  <Teleport to="body">
-    <div
-      v-if="confirmingMonth"
-      class="month-confirm-scrim"
-      @click.self="closeMonthConfirmation"
-      @keydown.esc.stop.prevent="closeMonthConfirmation"
-    >
-      <section class="month-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="month-confirm-title">
-        <div class="month-confirm-mark" aria-hidden="true">↻</div>
-        <div class="month-confirm-copy">
-          <h2 id="month-confirm-title">为 {{ monthLabel(confirmingMonth) }} 新建镜子？</h2>
-          <p>若这个月已有版本，旧版会完整保留在归档中；新结果将成为该月当前镜子。</p>
-          <p>已删除或取消授权的原始内容不会重新进入这次生成。</p>
-        </div>
-        <div class="month-confirm-actions">
-          <button ref="cancelMonthConfirmButton" type="button" class="month-confirm-cancel" @click="closeMonthConfirmation">
-            再看看
-          </button>
-          <button type="button" class="month-confirm-accept" @click="confirmMonthGeneration">确认生成</button>
-        </div>
-      </section>
-    </div>
-  </Teleport>
 </template>
 
 <style scoped>
