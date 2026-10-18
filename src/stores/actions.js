@@ -87,7 +87,10 @@ export const useActionsStore = defineStore('assistantActions', () => {
     return run(id, card => cancelAction(id, { expectedVersion: card.version }))
   }
 
-  function canEdit(card) { return card?.state === 'PENDING' && card?.preparation_status !== 'RUNNING' && card?.payload?.recordDraft?.preparationStatus !== 'RUNNING' }
+  function canEdit(card) {
+    const preparationStatus = String(card?.preparation_status || card?.preparationStatus || card?.payload?.recordDraft?.preparationStatus || 'READY').toUpperCase()
+    return card?.state === 'PENDING' && preparationStatus === 'READY'
+  }
   function canConfirm(card) { return canEdit(card) }
   function canCancel(card) { return card?.state === 'PENDING' }
 

@@ -20,6 +20,10 @@ const canEditAction = computed(() => canEdit.value && props.proposal.kind !== 't
 const actionLabel = computed(() => ({ 'todo.create':'创建待办', 'todo.update':'修改待办', 'todo.complete':'完成待办', 'todo.delete':'删除待办', 'record.create':'新建记录', 'record.organize':'整理记录' }[props.proposal.kind] || '操作'))
 const recordDraft = computed(() => props.proposal.payload?.recordDraft || props.proposal.preview?.recordDraft)
 const recordFallback = computed(() => props.proposal.kind?.startsWith('record.') && recordDraft.value?.preparationStatus === 'SAVE_ONLY')
+const preparationFailureMessage = computed(() => {
+  if (!props.proposal.kind?.startsWith('record.') || preparationStatus.value !== 'FAILED') return ''
+  return props.proposal.preview?.preparationError || recordDraft.value?.preparationError || '候选准备失败，尚未创建或修改记录。请取消后重新准备。'
+})
 const description = computed(() => recordFallback.value
   ? `${recordDraft.value.preparationError || props.proposal.preview?.description || 'AI 整理未能完成'}。建议仅保存，仍待你确认；确认后不会加入记忆。`
   : props.proposal.preview?.description)
@@ -92,6 +96,7 @@ async function refreshStatus() {
     <strong class="action-title">{{ title }}</strong>
     <p v-if="description" class="action-description">{{ description }}</p>
     <p v-if="isPreparingRecord" class="action-description" role="status">正在准备可编辑候选；确认前不会创建或修改记录。</p>
+    <p v-if="preparationFailureMessage" class="action-error" role="alert">{{ preparationFailureMessage }}</p>
     <details v-if="proposal.preview"><summary>查看影响与预览</summary><pre>{{ previewText(proposal.preview) }}</pre></details>
     <p v-if="resultMessage" class="action-result" role="status">{{ resultMessage }}</p>
     <p v-if="proposal.error_code" class="action-error-code">状态编号：{{ proposal.error_code }}</p>
