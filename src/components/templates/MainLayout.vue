@@ -98,7 +98,7 @@ function openWrite() {
       <DetailPanel />
     </main>
     <BottomNav />
-    <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
+    <WriteModal :show="ui.showWriteModal" :correction-of-record-id="ui.correctionOfRecordId" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <ToastContainer />
   </div>

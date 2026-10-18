@@ -31,8 +31,10 @@ const authorizationDirty = ref(false)
 const rawEditing = ref(false)
 const rawDraft = ref('')
 const preparedRecordAction = ref(null)
+const memoryLifecycleAction = ref(null)
 let pendingRecordPrepareKey = null
 let pendingRecordPrepareFingerprint = ''
+let pendingMemoryDisableKey = null
 let requestGeneration = 0
 let authorizationRequestId = 0
 useDialogFocus(() => !!ui.selectedRecordId, panelEl, '.detail-back', close)
@@ -49,6 +51,10 @@ const record = computed(() => {
   if (!ui.selectedRecordId) return null
   return recordsStore.getById(ui.selectedRecordId)
 })
+const memoryState = computed(() => String(record.value?.memory_state ?? record.value?.memoryState ?? (['reviewing', 'record_only'].includes(record.value?.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
+const memoryFailureReason = computed(() => record.value?.memory_failure_reason ?? record.value?.memoryFailureReason ?? record.value?.memory_error ?? record.value?.memoryError ?? '')
+const canEditMemorySource = computed(() => memoryState.value === 'NONE')
+const canOfferCorrection = computed(() => ['READY', 'DISABLED'].includes(memoryState.value))
 
 watch([authorizationDirty, () => rawEditing.value && rawDraft.value !== (record.value?.content || '')], ([authDirty, rawDirty]) => {
   ui.detailDraftDirty = !!(authDirty || rawDirty)
@@ -56,6 +62,8 @@ watch([authorizationDirty, () => rawEditing.value && rawDraft.value !== (record.
 
 // ---- 轮询（8.2：processing → 2.5s 轮询详情，直到终态） ----
 let pollTimer = null
+let todoOverlayTimer = null
+let recordActionPollTimer = null
 let embeddingPollInFlight = false
 
 function stopPolling() {
@@ -65,8 +73,51 @@ function stopPolling() {
   }
 }
 
+function stopTodoOverlayPolling() {
+  if (todoOverlayTimer) clearTimeout(todoOverlayTimer)
+  todoOverlayTimer = null
+}
+
+function stopRecordActionPolling() {
+  if (recordActionPollTimer) clearTimeout(recordActionPollTimer)
+  recordActionPollTimer = null
+}
+
+function pollRecordAction(actionId, generation = requestGeneration) {
+  stopRecordActionPolling()
+  const tick = async () => {
+    if (generation !== requestGeneration || String(ui.selectedRecordId) === '') return
+    try {
+      const latest = await actionsStore.refresh(actionId)
+      if (generation !== requestGeneration || preparedRecordAction.value?.id !== actionId) return
+      preparedRecordAction.value = latest
+      if (latest?.state === 'SUCCEEDED') {
+        await onRecordActionUpdated(latest)
+      } else if (['PENDING', 'EXECUTING'].includes(latest?.state)) {
+        recordActionPollTimer = setTimeout(tick, 1800)
+      }
+    } catch {
+      if (generation === requestGeneration && preparedRecordAction.value?.id === actionId) {
+        recordActionPollTimer = setTimeout(tick, 5000)
+      }
+    }
+  }
+  recordActionPollTimer = setTimeout(tick, 1500)
+}
+
+function startTodoOverlayPolling(recordId) {
+  stopTodoOverlayPolling()
+  const tick = async () => {
+    if (String(ui.selectedRecordId) !== String(recordId)) return
+    if (document.visibilityState === 'visible') await todoStore.fetchRegistry(true)
+    if (String(ui.selectedRecordId) === String(recordId)) todoOverlayTimer = setTimeout(tick, 15000)
+  }
+  todoOverlayTimer = setTimeout(tick, 15000)
+}
+
 function startPolling(recordId) {
   stopPolling()
+  stopTodoOverlayPolling()
   const tick = async () => {
     if (ui.selectedRecordId !== recordId) return
     const generation = requestGeneration
@@ -98,14 +149,13 @@ function startEmbeddingPolling(recordId) {
     embeddingPollInFlight = false
     if (generation !== requestGeneration || String(ui.selectedRecordId) !== String(recordId)) {
       const current = record.value
-      if (!pollTimer && current?.status === 'done'
-        && (current.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')) {
+      if (!pollTimer && String(current?.memory_state ?? current?.memoryState ?? '').toUpperCase() === 'PENDING') {
         startEmbeddingPolling(current.id)
       }
       return
     }
     if (!r) return
-    const pending = (r.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')
+    const pending = String(r.memory_state ?? r.memoryState ?? '').toUpperCase() === 'PENDING'
     if (pending) {
       if (!pollTimer) pollTimer = setTimeout(tick, 1800)
     } else stopPolling()
@@ -114,6 +164,8 @@ function startEmbeddingPolling(recordId) {
 }
 
 onBeforeUnmount(stopPolling)
+onBeforeUnmount(stopTodoOverlayPolling)
+onBeforeUnmount(stopRecordActionPolling)
 
 /** 处理中三步动画（正在整理原文、识别主题并生成片段。） */
 const processingStep = ref(0)
@@ -152,8 +204,12 @@ function updateDetailMode(r) {
     ui.detailMode = 'view'
   } else {
     ui.detailMode = 'view'
-    if (r.status === 'done' && (r.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')) {
+    if (String(r.memory_state ?? r.memoryState ?? '').toUpperCase() === 'PENDING') {
       startEmbeddingPolling(r.id)
+    }
+    if ((r.chunks || []).length > 0) {
+      todoStore.fetchRegistry(true)
+      startTodoOverlayPolling(r.id)
     }
   }
 }
@@ -161,7 +217,10 @@ function updateDetailMode(r) {
 watch(() => ui.selectedRecordId, async (id) => {
   const generation = ++requestGeneration
   stopPolling()
+  stopTodoOverlayPolling()
   if (!id) {
+    stopTodoOverlayPolling()
+    stopRecordActionPolling()
     cancelObjectTransitions()
     ui.detailDraftDirty = false
     return
@@ -170,6 +229,9 @@ watch(() => ui.selectedRecordId, async (id) => {
   confirming.value = false
   authorizationRequestId += 1
   preparedRecordAction.value = null
+  stopRecordActionPolling()
+  memoryLifecycleAction.value = null
+  pendingMemoryDisableKey = null
   pendingRecordPrepareKey = null
   pendingRecordPrepareFingerprint = ''
   authorizationDirty.value = false
@@ -211,9 +273,9 @@ watch(record, (newRecord, oldRecord) => {
   }
 })
 
-watch(() => (record.value?.chunks || []).map(chunk => `${chunk.id}:${chunk.embedding_status ?? chunk.embeddingStatus ?? ''}`).join('|'), () => {
-  if (!record.value || record.value.status !== 'done') return
-  const pending = (record.value.chunks || []).some(chunk => (chunk.embedding_status ?? chunk.embeddingStatus) === 'pending')
+watch(() => `${record.value?.memory_state ?? record.value?.memoryState ?? ''}:${(record.value?.chunks || []).map(chunk => `${chunk.id}:${chunk.embedding_status ?? chunk.embeddingStatus ?? ''}`).join('|')}`, () => {
+  if (!record.value) return
+  const pending = String(record.value.memory_state ?? record.value.memoryState ?? '').toUpperCase() === 'PENDING'
   if (pending && !pollTimer && !embeddingPollInFlight) startEmbeddingPolling(record.value.id)
   else if (!pending && pollTimer) stopPolling()
 })
@@ -228,7 +290,7 @@ const headerTitle = computed(() => {
   }
 })
 
-const showConfirm = computed(() => ['reviewing', 'done'].includes(record.value?.status))
+const showConfirm = computed(() => canEditMemorySource.value && ['reviewing', 'done'].includes(record.value?.status))
 
 async function close() {
   if (closing.value) return
@@ -248,6 +310,7 @@ async function close() {
   await Promise.all([exit, flight])
   if (String(ui.selectedRecordId) !== String(id)) return
   stopPolling()
+  stopTodoOverlayPolling()
   clearStepTimers()
   // 未入库 → 关联待办裁决一并作废
   todoStore.clearResolutions()
@@ -365,6 +428,9 @@ async function organizeSavedRecord() {
 }
 
 async function onRecordActionUpdated(card) {
+  if (card) preparedRecordAction.value = card
+  if (['PENDING', 'EXECUTING'].includes(card?.state)) pollRecordAction(card.id)
+  else if (card?.state !== 'PENDING') stopRecordActionPolling()
   if (card?.state !== 'SUCCEEDED' || !record.value) return
   await recordsStore.fetchRecord(record.value.id, { isCurrent: () => String(ui.selectedRecordId) === String(record.value?.id) })
 }
@@ -375,6 +441,34 @@ async function saveRecordActionDraft(payload) {
     preparedRecordAction.value = await actionsStore.edit(preparedRecordAction.value.id, payload)
   } catch (err) {
     actionError.value = err.message || '候选修改失败，请重试'
+  }
+}
+
+async function prepareDisableMemory() {
+  if (!record.value || memoryState.value !== 'READY' || confirming.value) return
+  confirming.value = true
+  actionError.value = null
+  try {
+    pendingMemoryDisableKey ||= createPrepareKey()
+    memoryLifecycleAction.value = await actionsStore.prepare('record.memory.disable', {
+      recordId: record.value.id,
+      expectedRecordVersion: record.value.processing_version ?? record.value.processingVersion,
+    }, pendingMemoryDisableKey)
+    pendingMemoryDisableKey = null
+  } catch (err) {
+    actionError.value = err.message || '停止未来记忆使用的确认卡准备失败'
+  } finally {
+    confirming.value = false
+  }
+}
+
+async function onMemoryLifecycleUpdated(card) {
+  if (card) memoryLifecycleAction.value = card
+  if (card?.state !== 'SUCCEEDED' || !record.value) return
+  await recordsStore.fetchRecord(record.value.id, { isCurrent: () => String(ui.selectedRecordId) === String(record.value?.id) })
+  if (card.result?.memoryState === 'DISABLED' || card.result?.memory_state === 'DISABLED') {
+    toast.success('未来记忆使用已停止；来源保持只读，成长账本记录保留')
+    todoStore.fetchRegistry(true)
   }
 }
 
@@ -416,8 +510,10 @@ async function deleteRecord() {
             :disabled="confirming"
             @click="onConfirm"
           >{{ confirming ? '保存授权…' : record.status === 'reviewing' ? '确认所选片段' : '更新记忆授权' }}</button>
-          <button v-else-if="record?.status === 'record_only'" class="detail-confirm" :disabled="confirming" @click="organizeSavedRecord">{{ confirming ? '准备候选…' : '让 Mirror 整理' }}</button>
-          <span v-else class="detail-title" />
+          <button v-if="canOfferCorrection" class="detail-confirm" type="button" @click="ui.openWriteModal(record.id)">补充 / 更正</button>
+          <button v-if="memoryState === 'READY'" class="detail-confirm" type="button" :disabled="confirming" @click="prepareDisableMemory">{{ confirming ? '准备确认卡…' : '停止未来记忆使用' }}</button>
+          <button v-if="canEditMemorySource && ['record_only', 'done'].includes(record?.status)" class="detail-confirm" :disabled="confirming" @click="organizeSavedRecord">{{ confirming ? '准备候选…' : record.status === 'record_only' ? '让 Mirror 整理' : '重新提交 AI 整理' }}</button>
+          <span class="detail-title" />
         </div>
 
         <div ref="readerEl" class="detail-content detail-reader">
@@ -426,6 +522,7 @@ async function deleteRecord() {
           <template v-else-if="record">
           <div v-if="actionError" class="detail-error">{{ actionError }}</div>
           <ActionCard v-if="preparedRecordAction" :proposal="preparedRecordAction" hide-edit @updated="onRecordActionUpdated" />
+          <ActionCard v-if="memoryLifecycleAction" :proposal="memoryLifecycleAction" hide-edit @updated="onMemoryLifecycleUpdated" />
 
           <!-- 处理中：三步动画 -->
           <div v-if="ui.detailMode === 'processing'" class="processing-view">
@@ -467,7 +564,8 @@ async function deleteRecord() {
           </div>
 
           <div v-else-if="record.status === 'record_only'" class="record-only-view">
-            <p class="record-only-note">这条内容当前仅保存在记录中，尚未加入 Mirror 记忆。</p>
+            <p class="record-only-note">记忆状态：{{ memoryState }} · 这条内容当前仅保存在记录中，尚未加入 Mirror 记忆。</p>
+            <p v-if="memoryFailureReason" class="record-only-note" role="status">记忆建立未完成，已降级为仅保存。原因：{{ memoryFailureReason }}</p>
             <ReviewPanel v-if="preparedRecordAction" :record="record" :proposal="preparedRecordAction" @proposal-save="saveRecordActionDraft" />
             <textarea v-if="rawEditing" v-model="rawDraft" class="record-only-editor" aria-label="编辑仅记录原文" />
             <div v-else class="review-original-text">{{ record.content }}</div>
@@ -477,6 +575,10 @@ async function deleteRecord() {
               <button v-if="rawEditing" class="chip" @click="rawEditing = false; rawDraft = record.content">取消</button>
               <button class="chip chip-danger" @click="deleteRecord">删除记录</button>
             </div>
+          </div>
+
+          <div v-else-if="canOfferCorrection" class="record-correction-entry">
+            <p>此来源保持只读。补充或更正会另建一条与当前来源关联的记录，不覆盖原内容。</p>
           </div>
 
           <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
@@ -494,6 +596,7 @@ async function deleteRecord() {
   display: flex; flex-direction: column;
   animation: detail-enter .58s var(--motion-enter) both;
 }
+.record-correction-entry{margin:12px 0;padding:14px;border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--card);color:var(--text-mid);font-size:13px;line-height:1.6}.record-correction-entry p{margin:0 0 10px}
 @keyframes detail-enter{0%{opacity:.65;clip-path:polygon(0 0,0 0,0 0,0 100%,0 100%)}58%{opacity:1;clip-path:polygon(0 0,calc(100% - 54px) 0,100% 54px,100% 100%,22px 100%,0 calc(100% - 22px))}100%{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
 @media (min-width: 900px) {
   .detail-page {

@@ -172,8 +172,8 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {string} content
    * @returns {Promise<Record>}
    */
-  async function createRecord(content, requestAiProcessing = false) {
-    const res = await apiCreateRecord({ content, requestAiProcessing })
+  async function createRecord(content, requestAiProcessing = false, correctionOfRecordId = null) {
+    const res = await apiCreateRecord({ content, requestAiProcessing, ...(correctionOfRecordId ? { correctionOfRecordId } : {}) })
     const newRecord = res.data
     // 添加到本地列表开头
     if (!records.value.some(r => r.id === newRecord.id)) {

@@ -24,6 +24,7 @@ export const useUIStore = defineStore('ui', () => {
   const isMobile = ref(window.innerWidth < 900)
 
   const showWriteModal = ref(false)
+  const correctionOfRecordId = ref(null)
 
   /** 每日总结 sheet（数据源 GET /api/summaries） */
   const showSummarySheet = ref(false)
@@ -72,12 +73,14 @@ export const useUIStore = defineStore('ui', () => {
     return true
   }
 
-  function openWriteModal() {
+  function openWriteModal(sourceRecordId = null) {
+    correctionOfRecordId.value = sourceRecordId
     showWriteModal.value = true
   }
 
   function closeWriteModal() {
     showWriteModal.value = false
+    correctionOfRecordId.value = null
   }
 
   function openSummarySheet() {
@@ -103,6 +106,7 @@ export const useUIStore = defineStore('ui', () => {
     consumeNavigationApproval,
     isMobile,
     showWriteModal,
+    correctionOfRecordId,
     showSummarySheet,
     sidebarSelectedDate,
     selectedRecordId,

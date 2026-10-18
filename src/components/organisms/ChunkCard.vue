@@ -19,6 +19,8 @@ const props = defineProps({
   editable: { type: Boolean, default: false },
   /** 只读态（done 记录）：所有编辑控件禁用/隐藏，一眼可见"不可修改" */
   readonly: { type: Boolean, default: false },
+  todoOverlay: { type: Object, default: null },
+  memoryState: { type: String, default: 'NONE' },
 })
 const emit = defineEmits(['dirty-change'])
 
@@ -221,8 +223,8 @@ async function removeChunk() {
       <span class="chunk-top-left">
       <span class="chunk-index">#{{ String(index + 1).padStart(2, '0') }}{{ saving ? ' · 保存中' : saveError ? ' · 未保存' : textEdited ? ' · 草稿未保存' : '' }}{{ readonly ? ' · 只读' : '' }}</span>
         <!-- 待办终态徽标：待办已删除优先于待办已完成（todoRemoved 由后端软删待办时回写 metadata；记录内容完整保留） -->
-        <span v-if="chunk.metadata?.todoRemoved === true" class="chunk-badge chunk-badge-removed" title="关联待办已被删除，记录内容保留">待办已删除</span>
-        <span v-else-if="chunk.metadata?.taskStatus === 'completed'" class="chunk-badge chunk-badge-done" title="关联待办已完成，记录内容保留">待办已完成</span>
+        <span v-if="todoOverlay?.deleted || (!todoOverlay && chunk.metadata?.todoRemoved === true)" class="chunk-badge chunk-badge-removed" title="待办登记已删除，冻结的记录内容保留">待办已删除</span>
+        <span v-else-if="todoOverlay?.status || chunk.metadata?.taskStatus" class="chunk-badge" :class="(todoOverlay?.status || chunk.metadata?.taskStatus) === 'completed' ? 'chunk-badge-done' : ''" title="当前状态来自待办登记；记录片段保持不变">待办 · {{ taskStatusMap[todoOverlay?.status || chunk.metadata?.taskStatus] || '未开始' }}</span>
       </span>
       <div class="chunk-actions">
         <button v-if="canEdit" class="chunk-icon-btn danger" title="删除片段" @click="removeChunk">
@@ -251,7 +253,7 @@ async function removeChunk() {
     <div v-if="chunk.ai_memory_approved ?? chunk.aiMemoryApproved" class="chunk-embedding-status" :data-status="chunk.embedding_status ?? chunk.embeddingStatus ?? (chunk.has_embedding ?? chunk.hasEmbedding ? 'ready' : 'pending')">
       <span v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'pending' || (!(chunk.embedding_status ?? chunk.embeddingStatus) && !(chunk.has_embedding ?? chunk.hasEmbedding))">◌ 向量重建中，完成后即可用于记忆检索</span>
       <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed'">向量重建失败：{{ chunk.embedding_error ?? chunk.embeddingError ?? '暂时无法生成' }}</span>
-      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 已可用于记忆检索</span>
+      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 片段向量已就绪<span v-if="props.memoryState === 'PENDING'">；整条记录全部就绪后才可检索</span><span v-else-if="props.memoryState === 'DISABLED'">；未来检索已关闭</span></span>
       <span v-else>尚未生成向量</span>
       <button v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed' || (!(chunk.has_embedding ?? chunk.hasEmbedding) && (chunk.embedding_status ?? chunk.embeddingStatus) === 'not_requested')" type="button" :disabled="saving" @click="retryEmbedding">重试生成</button>
     </div>
@@ -304,7 +306,12 @@ async function removeChunk() {
     </div>
 
     <!-- 任务状态（仅 todo/plan；点已选项清空该字段） -->
-    <div v-if="showTaskStatus" class="chunk-field">
+    <div v-if="showTaskStatus && todoOverlay" class="chunk-field registry-task-overlay" role="status">
+      <div class="chunk-field-label">待办登记 · 实时状态</div>
+      <div>{{ todoOverlay.title || '关联待办' }} · {{ taskStatusMap[todoOverlay.status] || '未开始' }}</div>
+      <small>状态来自待办登记；冻结的记录片段不会随状态变化而改写。</small>
+    </div>
+    <div v-else-if="showTaskStatus" class="chunk-field">
       <div class="chunk-field-label">任务状态 TASK</div>
       <div class="chip-row">
         <button
@@ -342,6 +349,7 @@ async function removeChunk() {
   position: relative;
   padding: 16px 16px 14px 20px; margin-bottom: 12px;
 }
+.registry-task-overlay small{display:block;margin-top:4px;color:var(--text-low);font-size:11px}
 /* 左缘墨蓝实线条 */
 .chunk-card::before {
   content: ""; position: absolute; left: 0; top: 14px; bottom: 14px;

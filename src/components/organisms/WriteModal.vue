@@ -11,6 +11,7 @@ import { createPrepareKey } from '@/api/actions'
 
 const props = defineProps({
   show: Boolean,
+  correctionOfRecordId: { type: [String, Number], default: null },
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -82,7 +83,7 @@ async function handleSubmit() {
   preparingAction.value = requestAiProcessing
   try {
     if (requestAiProcessing) {
-      const fingerprint = `record.create:${content.value.trim()}`
+      const fingerprint = `record.create:${props.correctionOfRecordId || ''}:${content.value.trim()}`
       if (!pendingPrepareKey || pendingPrepareFingerprint !== fingerprint) {
         pendingPrepareFingerprint = fingerprint
         pendingPrepareKey = createPrepareKey()
@@ -91,6 +92,7 @@ async function handleSubmit() {
         rawContent: content.value.trim(),
         mode: 'AI_ASSISTED',
         privateInput: false,
+        ...(props.correctionOfRecordId ? { correctionOfRecordId: props.correctionOfRecordId } : {}),
       }, pendingPrepareKey)
       if (generation !== prepareGeneration || !props.show) {
         if (action?.id) await actionsStore.cancel(action.id).catch(() => {})
@@ -99,16 +101,16 @@ async function handleSubmit() {
       preparedAction.value = action
       pendingPrepareKey = null
       pendingPrepareFingerprint = ''
-      toast.info('整理候选已准备，确认后才会创建记录')
+      toast.info(props.correctionOfRecordId ? '补充 / 更正候选已准备，确认后会新建关联记录' : '整理候选已准备，确认后才会创建记录')
       return action
     }
-    const record = await recordsStore.createRecord(content.value.trim(), false)
+    const record = await recordsStore.createRecord(content.value.trim(), false, props.correctionOfRecordId)
     pendingPrepareKey = null
     pendingPrepareFingerprint = ''
     if (generation !== prepareGeneration || !props.show) return
     emit('saved', record)
     emit('close')
-    toast.success(privateInput.value ? '私密记录已保存，未交给 AI 处理' : '已保存为仅记录')
+    toast.success(privateInput.value ? '私密记录已保存，未交给 AI 处理' : props.correctionOfRecordId ? '补充 / 更正记录已保存并关联来源' : '已保存为仅记录')
     return record
   } catch (err) {
     error.value = err.message || '创建失败，请重试'
@@ -190,7 +192,7 @@ onBeforeUnmount(() => {
             </div>
             <label class="private-input"><input v-model="privateInput" type="checkbox" :disabled="loading || !!preparedAction" @change="privateInput && (saveMode = 'ONLY_SAVE')"><span><b>这是私密内容</b><small>从这个原记录入口保存，不会发送给 AI。</small></span></label>
             <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ privateInput ? '私密输入会直接保存，绕过 AI。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' || privateInput ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ correctionOfRecordId ? '这是关联来源的新补充 / 更正记录，原记录不会被改写；更正默认不重复增加成长贡献。' : privateInput ? '私密输入会直接保存，绕过 AI。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' || privateInput ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
           </footer>
         </div>
       </section>

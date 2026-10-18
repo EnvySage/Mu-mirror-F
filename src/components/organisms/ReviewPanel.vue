@@ -24,11 +24,27 @@ const emit = defineEmits(['open-record', 'authorization-change', 'proposal-save'
 const recordsStore = useRecordsStore()
 const todoStore = useTodoStore()
 
-const editable = computed(() => props.record.status === 'reviewing')
+const memoryState = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? (['reviewing', 'record_only'].includes(props.record.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
+const editable = computed(() => memoryState.value === 'NONE')
 const candidateMode = computed(() => !!props.proposal)
+const correctionCandidate = computed(() => !!(props.proposal?.payload?.correctionOfRecordId ?? props.proposal?.payload?.correction_of_record_id ?? props.proposal?.preview?.correctionOfRecordId))
 const candidateEditing = ref(true)
-const chunksEditable = computed(() => ['reviewing', 'done'].includes(props.record.status))
+const chunksEditable = computed(() => memoryState.value === 'NONE')
 const readonly = computed(() => !chunksEditable.value)
+const memoryStateText = computed(() => ({
+  NONE: '仅保存 · 尚未加入 Mirror 记忆，可编辑并重新提交 AI 整理。',
+  PENDING: '记忆建立中 · 本条内容已冻结；部分片段尚未就绪，当前不会用于检索或画像。',
+  READY: '记忆已就绪 · 来源和片段只读，后续检索可用。',
+  DISABLED: '已停止未来记忆使用 · 来源保持只读，已确认的成长账本记录保留。',
+  UNKNOWN: '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。',
+}[memoryState.value] || '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。'))
+const embeddingProgress = computed(() => {
+  const approved = chunks.value.filter(c => c.ai_memory_approved ?? c.aiMemoryApproved)
+  const ready = approved.filter(c => String(c.embedding_status ?? c.embeddingStatus ?? (c.has_embedding ?? c.hasEmbedding ? 'ready' : '')).toLowerCase() === 'ready').length
+  const failed = approved.filter(c => String(c.embedding_status ?? c.embeddingStatus).toLowerCase() === 'failed').length
+  return { total: approved.length, ready, failed }
+})
+const memoryFailureReason = computed(() => props.record.memory_failure_reason ?? props.record.memoryFailureReason ?? props.record.memory_error ?? props.record.memoryError ?? '')
 const chunks = computed(() => props.record.chunks || [])
 const memorySelection = ref(new Set())
 const todoSelection = ref(new Set())
@@ -85,6 +101,16 @@ function acceptAuthorizationBaseline(sourceChunks = chunks.value, fallback = nul
   initialMemorySelection.value = new Set(memorySelection.value)
   initialTodoSelection.value = new Set(todoSelection.value)
   emitAuthorizationChange()
+}
+
+function taskOverlayFor(chunk) {
+  const id = String(chunk.id)
+  const todo = (todoStore.registry || []).find(item => String(item.source_chunk_id ?? item.sourceChunkId ?? '') === id)
+  return todo ? {
+    title: todo.title ?? todo.todo_title ?? todo.todoTitle,
+    status: todo.current_status ?? todo.currentStatus ?? todo.status,
+    deleted: todo.deleted_at != null || todo.deletedAt != null,
+  } : null
 }
 
 function toggleMemory(chunkId, checked) {
@@ -244,11 +270,18 @@ function onAddChunk() {
 <template>
   <div class="review-panel">
     <div v-if="candidateMode" class="review-candidate-editor">
-      <div class="review-list-label"><span>{{ proposal.kind === 'record.organize' ? '整理候选 · 确认前可编辑' : '新记录候选 · 确认前可编辑' }}</span><span>待你确认</span></div>
+      <div class="review-list-label"><span>{{ correctionCandidate ? '补充 / 更正候选 · 与原来源关联' : proposal.kind === 'record.organize' ? '整理候选 · 确认前可编辑' : '新记录候选 · 确认前可编辑' }}</span><span>待你确认</span></div>
       <RecordActionForm v-if="candidateEditing" :proposal="proposal" @save="emit('proposal-save', $event)" @cancel="candidateEditing = false; emit('proposal-cancel')" />
       <button v-else type="button" class="add-chunk-btn" @click="candidateEditing = true">展开修改候选</button>
     </div>
     <template v-else>
+    <div class="memory-state-banner" :data-state="memoryState" role="status">
+      <b>{{ memoryState }}</b><span>{{ memoryStateText }}</span>
+      <small v-if="memoryState === 'PENDING' && embeddingProgress.total">
+        实际入库状态：{{ embeddingProgress.ready }}/{{ embeddingProgress.total }} 个片段就绪<span v-if="embeddingProgress.failed">，{{ embeddingProgress.failed }} 个失败</span>。全部就绪前不会暴露部分记忆。
+      </small>
+      <small v-if="memoryState === 'NONE' && memoryFailureReason" class="memory-failure-reason">记忆建立未完成，已降级为仅保存；原内容仍可编辑并重新提交。原因：{{ memoryFailureReason }}</small>
+    </div>
     <!-- 原文面板 —— "光源" -->
     <div class="review-original">
       <button class="review-label review-original-toggle" :aria-expanded="originalOpen" @click="originalOpen = !originalOpen">
@@ -269,14 +302,14 @@ function onAddChunk() {
     </nav>
 
     <div v-for="(chunk, i) in chunks" :key="chunk.id" ref="chunkNodes" class="chunk-review-item">
-      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" @dirty-change="setChunkDirty" />
-      <div v-if="!String(chunk.id).startsWith('local_')" class="chunk-consent">
+      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" :todo-overlay="taskOverlayFor(chunk)" :memory-state="memoryState" @dirty-change="setChunkDirty" />
+      <div v-if="editable && !String(chunk.id).startsWith('local_')" class="chunk-consent">
         <label class="chunk-consent-option">
-          <input type="checkbox" :checked="memorySelection.has(chunk.id)" :disabled="authorizationBusy" @change="toggleMemory(chunk.id, $event.target.checked)">
+          <input type="checkbox" :checked="memorySelection.has(chunk.id)" :disabled="authorizationBusy || !editable" @change="toggleMemory(chunk.id, $event.target.checked)">
           <span><b>加入 Mirror 记忆</b><small>允许后续检索、日报和画像引用这个片段</small></span>
         </label>
         <label v-if="['todo', 'plan'].includes(chunk.metadata?.contentType)" class="chunk-consent-option todo-consent">
-          <input type="checkbox" :checked="todoSelection.has(chunk.id)" :disabled="authorizationBusy || (chunk.todo_approved ?? chunk.todoApproved)" @change="toggleTodo(chunk.id, $event.target.checked)">
+          <input type="checkbox" :checked="todoSelection.has(chunk.id)" :disabled="authorizationBusy || !editable || (chunk.todo_approved ?? chunk.todoApproved)" @change="toggleTodo(chunk.id, $event.target.checked)">
           <span><b>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '已登记为待办' : '单独登记为待办' }}</b><small>{{ (chunk.todo_approved ?? chunk.todoApproved) ? '后续状态请在待办页面管理' : '任务状态和片段记忆分别授权' }}</small></span>
         </label>
       </div>
@@ -397,6 +430,7 @@ function onAddChunk() {
 
 <style scoped>
 .chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}
+.memory-state-banner{display:grid;gap:4px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--text-low);background:var(--card);color:var(--text-mid);font-size:12px;line-height:1.5}.memory-state-banner b{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-hi)}.memory-state-banner small{font-size:11px;color:var(--text-mid)}.memory-state-banner[data-state="PENDING"]{border-left-color:var(--cyan);background:#eaf7ff}.memory-state-banner[data-state="READY"]{border-left-color:#3eb27d;background:#effaf4}.memory-state-banner[data-state="DISABLED"],.memory-state-banner[data-state="UNKNOWN"]{border-left-color:var(--warn);background:var(--warn-bg)}
 .review-panel { animation: fadeIn .3s ease; }
 
 .review-original {
