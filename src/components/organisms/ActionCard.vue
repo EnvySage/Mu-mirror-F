@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useActionsStore } from '@/stores/actions'
 import TodoActionForm from './action-forms/TodoActionForm.vue'
 import RecordActionForm from './action-forms/RecordActionForm.vue'
@@ -14,6 +14,8 @@ const title = computed(() => props.proposal.payload?.title || props.proposal.pay
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
 const canCancel = computed(() => actions.canCancel(props.proposal))
+const preparationStatus = computed(() => String(props.proposal.preparation_status || props.proposal.preparationStatus || props.proposal.payload?.recordDraft?.preparationStatus || '').toUpperCase())
+const isPreparingRecord = computed(() => props.proposal.state === 'PENDING' && props.proposal.kind?.startsWith('record.') && preparationStatus.value === 'RUNNING')
 const canEditAction = computed(() => canEdit.value && props.proposal.kind !== 'todo.delete' && props.proposal.payload?.recordDraft?.preparationStatus !== 'RUNNING' && props.proposal.preview?.recordDraft?.preparationStatus !== 'RUNNING')
 const actionLabel = computed(() => ({ 'todo.create':'创建待办', 'todo.update':'修改待办', 'todo.complete':'完成待办', 'todo.delete':'删除待办', 'record.create':'新建记录', 'record.organize':'整理记录' }[props.proposal.kind] || '操作'))
 const recordDraft = computed(() => props.proposal.payload?.recordDraft || props.proposal.preview?.recordDraft)
@@ -30,6 +32,19 @@ const resultMessage = computed(() => {
   return result.message || ''
 })
 const isTodoAction = card => ['todo.create','todo.update','todo.complete','todo.delete'].includes(card?.kind)
+let preparationPoll = null
+function stopPreparationPoll() {
+  if (preparationPoll) clearInterval(preparationPoll)
+  preparationPoll = null
+}
+watch(isPreparingRecord, running => {
+  stopPreparationPoll()
+  if (!running) return
+  preparationPoll = setInterval(() => {
+    if (!actions.busy[props.proposal.id]) actions.refresh(props.proposal.id).catch(() => {})
+  }, 1500)
+}, { immediate: true })
+onBeforeUnmount(stopPreparationPoll)
 async function refreshTodosIfSucceeded(card) {
   if (card?.state !== 'SUCCEEDED' || !isTodoAction(card)) return
   const { useTodoStore } = await import('@/stores/todo')
@@ -73,16 +88,17 @@ async function refreshStatus() {
 
 <template>
   <section class="action-card" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡">
-    <header><span class="action-kind">{{ actionLabel }}</span><span class="action-state" :class="`state-${String(proposal.state || '').toLowerCase()}`">{{ stateLabel }}</span></header>
+    <header><span class="action-kind">{{ actionLabel }}</span><span class="action-state" :class="`state-${String(proposal.state || '').toLowerCase()}`">{{ isPreparingRecord ? '正在准备候选' : stateLabel }}</span></header>
     <strong class="action-title">{{ title }}</strong>
     <p v-if="description" class="action-description">{{ description }}</p>
+    <p v-if="isPreparingRecord" class="action-description" role="status">正在准备可编辑候选；确认前不会创建或修改记录。</p>
     <details v-if="proposal.preview"><summary>查看影响与预览</summary><pre>{{ previewText(proposal.preview) }}</pre></details>
     <p v-if="resultMessage" class="action-result" role="status">{{ resultMessage }}</p>
     <p v-if="proposal.error_code" class="action-error-code">状态编号：{{ proposal.error_code }}</p>
     <p v-if="error" class="action-error" role="alert">{{ error }}</p>
     <TodoActionForm v-if="editing && canEditAction && proposal.kind?.startsWith('todo.')" :proposal="proposal" @save="save" @cancel="editing=false" />
     <RecordActionForm v-else-if="editing && canEditAction && proposal.kind?.startsWith('record.')" :proposal="proposal" @save="save" @cancel="editing=false" />
-    <footer v-else-if="canCancel"><button v-if="canEditAction && canEdit && !hideEdit" type="button" :disabled="busy" @click="editing=true">展开修改</button><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canEdit" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '正在处理…' : '确认执行' }}</button></footer>
+    <footer v-else-if="canCancel"><button v-if="isPreparingRecord" type="button" :disabled="busy" @click="refreshStatus">刷新状态</button><button v-if="canEditAction && canEdit && !hideEdit" type="button" :disabled="busy" @click="editing=true">展开修改</button><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canEdit" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '正在处理…' : '确认执行' }}</button></footer>
     <footer v-else-if="proposal.state === 'EXECUTING'"><button type="button" :disabled="busy" @click="refreshStatus">刷新状态</button></footer>
   </section>
 </template>
