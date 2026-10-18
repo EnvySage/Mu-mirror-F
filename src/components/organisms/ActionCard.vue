@@ -21,6 +21,12 @@ const resultMessage = computed(() => {
   if (props.proposal.state === 'STALE') return '目标数据已变化，请重新发起操作。'
   return result.message || ''
 })
+const isTodoAction = card => ['todo.create','todo.update','todo.complete','todo.delete'].includes(card?.kind)
+async function refreshTodosIfSucceeded(card) {
+  if (card?.state !== 'SUCCEEDED' || !isTodoAction(card)) return
+  const { useTodoStore } = await import('@/stores/todo')
+  await useTodoStore().refreshAfterAction()
+}
 function previewText(value) {
   if (!value) return ''
   try { return JSON.stringify(value, null, 2) } catch { return String(value) }
@@ -29,11 +35,14 @@ async function confirm() {
   error.value = ''
   try {
     const card = await actions.confirm(props.proposal.id)
-    if (card?.state === 'SUCCEEDED' && ['todo.create','todo.update','todo.complete','todo.delete'].includes(card.kind)) {
-      const { useTodoStore } = await import('@/stores/todo')
-      await useTodoStore().refreshAfterAction()
-    }
-  } catch (e) { error.value = e?.message || '确认结果未知，已尝试查询最新状态。' }
+    await refreshTodosIfSucceeded(card)
+  } catch (e) {
+    error.value = e?.message || '确认结果未知，已尝试查询最新状态。'
+    // The confirm response may be lost after the server committed the action.
+    // actions.confirm attempts a GET recovery before rethrowing; refresh the
+    // todo lists from that recovered state while keeping the original error.
+    try { await refreshTodosIfSucceeded(actions.byId[props.proposal.id]) } catch { /* preserve confirm status and error */ }
+  }
 }
 async function cancel() {
   error.value = ''

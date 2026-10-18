@@ -45,6 +45,11 @@ const showSessions = ref(false)
 
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
 function actionCardsFor(message) {
+  // A proposal belongs to the assistant reply for its source turn. User and
+  // assistant messages share that source id, so rendering on both duplicates
+  // the confirmation controls. History recovery sets actionSourceMessage on
+  // the assistant message, preserving the same single-card placement.
+  if (message?.role !== 'ai') return []
   const sessionId = chat.activeSessionId || chat.sessionId
   return actions.inSession(sessionId).filter(card => String(card.source_message_id || card.sourceMessageId || '') === String(message.actionSourceMessage || message.serverMessageId || ''))
 }
