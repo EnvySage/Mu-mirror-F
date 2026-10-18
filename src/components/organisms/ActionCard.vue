@@ -3,6 +3,7 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useActionsStore } from '@/stores/actions'
 import TodoActionForm from './action-forms/TodoActionForm.vue'
 import RecordActionForm from './action-forms/RecordActionForm.vue'
+import { getActionLabel } from '@/utils/actionLabel'
 
 const props = defineProps({ proposal: { type: Object, required: true }, hideEdit: { type: Boolean, default: false } })
 const emit = defineEmits(['updated'])
@@ -17,7 +18,7 @@ const canCancel = computed(() => actions.canCancel(props.proposal))
 const preparationStatus = computed(() => String(props.proposal.preparation_status || props.proposal.preparationStatus || props.proposal.payload?.recordDraft?.preparationStatus || '').toUpperCase())
 const isPreparingRecord = computed(() => props.proposal.state === 'PENDING' && props.proposal.kind?.startsWith('record.') && preparationStatus.value === 'RUNNING')
 const canEditAction = computed(() => canEdit.value && props.proposal.kind !== 'todo.delete' && props.proposal.payload?.recordDraft?.preparationStatus !== 'RUNNING' && props.proposal.preview?.recordDraft?.preparationStatus !== 'RUNNING')
-const actionLabel = computed(() => ({ 'todo.create':'创建待办', 'todo.update':'修改待办', 'todo.complete':'完成待办', 'todo.delete':'删除待办', 'record.create':'新建记录', 'record.organize':'整理记录' }[props.proposal.kind] || '操作'))
+const actionLabel = computed(() => getActionLabel(props.proposal.kind))
 const recordDraft = computed(() => props.proposal.payload?.recordDraft || props.proposal.preview?.recordDraft)
 const recordFallback = computed(() => props.proposal.kind?.startsWith('record.') && recordDraft.value?.preparationStatus === 'SAVE_ONLY')
 const preparationFailureMessage = computed(() => {

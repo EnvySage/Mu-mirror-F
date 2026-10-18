@@ -1,0 +1,13 @@
+const labels = {
+  'todo.create': '创建待办',
+  'todo.update': '修改待办',
+  'todo.complete': '完成待办',
+  'todo.delete': '删除待办',
+  'record.create': '新建记录',
+  'record.organize': '整理记录',
+  'record.memory.disable': '停止未来记忆使用',
+}
+
+export function getActionLabel(kind) {
+  return labels[kind] || '操作'
+}
