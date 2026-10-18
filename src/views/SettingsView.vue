@@ -195,7 +195,7 @@ async function selectProtocol(protocol) {
 
 async function setDefaultRecordMode(mode) {
   if (settingsStore.settings.default_record_mode === mode) return
-  const ok = await settingsStore.updateSettings({ default_record_mode: mode })
+  const ok = await settingsStore.updateSettings({ defaultRecordMode: mode })
   if (ok) toast.success(mode === 'AI_ASSISTED' ? '新记录默认由 AI 准备候选' : '新记录默认仅保存')
   else toast.error(settingsStore.error || '保存失败')
 }
