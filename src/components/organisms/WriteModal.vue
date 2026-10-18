@@ -8,6 +8,7 @@ import { useToastStore } from '@/stores/toast'
 import { useActionsStore } from '@/stores/actions'
 import ActionCard from '@/components/organisms/ActionCard.vue'
 import { createPrepareKey } from '@/api/actions'
+import { completeCreatedRecordAction, createActionStatusPoller } from '@/utils/writeActionPolling'
 
 const props = defineProps({
   show: Boolean,
@@ -20,6 +21,10 @@ const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const toast = useToastStore()
 const actionsStore = useActionsStore()
+const actionPoller = createActionStatusPoller({
+  refresh: id => actionsStore.refresh(id),
+  onUpdate: card => onActionUpdated(card),
+})
 
 const content = ref('')
 const saveMode = ref('ONLY_SAVE')
@@ -50,6 +55,7 @@ const count = computed(() => content.value.length)
 const enabled = computed(() => content.value.trim().length > 0 && !loading.value)
 
 watch(() => props.show, async (val) => {
+  actionPoller.stop()
   if (val) {
     focusOpen.value = true
     openedAt.value = new Date()
@@ -122,6 +128,7 @@ async function handleSubmit() {
 
 function onClose() {
   prepareGeneration += 1
+  actionPoller.stop()
   if (loading.value && !preparingAction.value) return
   if (loading.value && preparingAction.value && !preparedAction.value) { emit('close'); return }
   if (preparedAction.value?.state === 'PENDING') {
@@ -132,12 +139,19 @@ function onClose() {
 }
 
 async function onActionUpdated(card) {
-  if (card?.state !== 'SUCCEEDED') return
-  await recordsStore.fetchRecords()
-  const id = card.result?.recordId ?? card.result?.record_id ?? card.result?.id
-  const saved = id == null ? recordsStore.records[0] : recordsStore.getById(id)
-  emit('saved', saved || { id })
-  emit('close')
+  if (!card) return
+  preparedAction.value = card
+  const state = String(card.state || '').toUpperCase()
+  if (state === 'PENDING' || state === 'EXECUTING') {
+    actionPoller.start(card.id, state)
+    return
+  }
+  actionPoller.stop()
+  await completeCreatedRecordAction(card, {
+    fetchRecords: () => recordsStore.fetchRecords(),
+    records: recordsStore.records,
+    emit,
+  })
 }
 
 // ---- 桌面/移动形态切换（2a）：≥900px 居中 modal，<900px 底部抽屉 ----
@@ -156,6 +170,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  actionPoller.stop()
   desktopMq?.removeEventListener?.('change', onMqChange)
 })
 </script>
