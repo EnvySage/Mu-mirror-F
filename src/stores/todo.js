@@ -252,6 +252,12 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
+  /** Refresh server truth after a confirmed assistant action or direct edit. */
+  async function refreshAfterAction() {
+    registryLoaded = false
+    return Promise.all([fetch(), fetchChains(), fetchRegistry(true)])
+  }
+
   /** 归一化 todo 主键（后端 TodoItemVO.id / 兼容 todo_id、todoId 口径） */
   function todoIdOf(t) {
     return t?.id ?? t?.todo_id ?? t?.todoId ?? null
@@ -373,7 +379,7 @@ export const useTodoStore = defineStore('todo', () => {
     pendingSuggestions, chains, recordSuggestions, registry, manualLinks,
     loading, chainsLoading, recordSugLoading, registryLoading, removingId, error, resolutions,
     pendingCount, resolutionsPayload,
-    fetch, fetchChains, fetchRecordSuggestions, fetchRegistry,
+    fetch, fetchChains, fetchRecordSuggestions, fetchRegistry, refreshAfterAction,
     setSuggestionResolution, clearResolutions,
     addManualLink, setManualLinkStatus, removeManualLink,
     removeTodo,

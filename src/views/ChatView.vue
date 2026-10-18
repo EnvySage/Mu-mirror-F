@@ -3,6 +3,7 @@ import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
+import { useActionsStore } from '@/stores/actions'
 import { useVaultStore } from '@/stores/vault'
 import { useToastStore } from '@/stores/toast'
 import ChatSessionsPanel from '@/components/organisms/ChatSessionsPanel.vue'
@@ -10,8 +11,7 @@ import FilePreviewModal from '@/components/organisms/FilePreviewModal.vue'
 import VaultRefCard from '@/components/molecules/VaultRefCard.vue'
 import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
-import ToolTrail from '@/components/molecules/ToolTrail.vue'
-import ThinkingPanel from '@/components/molecules/ThinkingPanel.vue'
+import ActionCard from '@/components/organisms/ActionCard.vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { validateVaultFile, deriveDisplayName, formatBytes } from '@/constants/fileTypes'
 import request from '@/api/request'
@@ -33,6 +33,7 @@ import request from '@/api/request'
  */
 const ui = useUIStore()
 const chat = useChatStore()
+const actions = useActionsStore()
 const vault = useVaultStore()
 const toast = useToastStore()
 
@@ -43,6 +44,10 @@ const inputEl = ref(null)
 const showSessions = ref(false)
 
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
+function actionCardsFor(message) {
+  const sessionId = chat.activeSessionId || chat.sessionId
+  return actions.inSession(sessionId).filter(card => String(card.source_message_id || card.sourceMessageId || '') === String(message.actionSourceMessage || message.serverMessageId || ''))
+}
 
 /** 消化完成待回执的条目（消化到 extracted 即出回执卡——确认门禁：等用户确认/补描述才可检索） */
 const receiptItems = computed(() =>
@@ -423,23 +428,7 @@ async function onRemoveSession(id) {
               :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai']"
             >
               <div class="chat-msg-bubble">
-                <!-- AI 消息：工具轨迹芯片（E6，气泡上方） -->
-                <ToolTrail v-if="msg.role !== 'user' && msg.toolsUsed && msg.toolsUsed.length" :tools="msg.toolsUsed" />
-
-                <!-- AI 消息：思考过程折叠条（SSE thinking 事件；历史消息无 thinking 不渲染） -->
-                <ThinkingPanel
-                  v-if="msg.role !== 'user' && msg.thinking"
-                  :thinking="msg.thinking"
-                  :streaming="!!msg.typing"
-                />
-
-                <!-- AI 消息：意图路由眉标 -->
-                <div v-if="msg.role !== 'user' && msg.route" class="chat-route">
-                  INTENT <b>{{ msg.route }}</b>
-                </div>
-
-                <!-- typing dots（thinking 进行中不出打字点，思考面板已表达"进行中"） -->
-                <span v-if="msg.typing && !msg.thinking" class="typing-dots"><i /><i /><i /></span>
+                <span v-if="msg.typing" class="typing-dots"><i /><i /><i /></span>
                 <template v-else-if="!msg.typing">
                   <template v-for="(seg, si) in parseCitations(msg.content, msg.sources, msg.vaultRefs)" :key="si">
                     <button
@@ -487,6 +476,8 @@ async function onRemoveSession(id) {
                     @download="downloadRef"
                   />
                 </div>
+
+                <ActionCard v-for="proposal in actionCardsFor(msg)" :key="proposal.id" :proposal="proposal" />
               </div>
             </div>
 

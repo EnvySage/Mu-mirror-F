@@ -71,12 +71,18 @@ export function getTodos() {
   return request.get('/todos')
 }
 
+/** Direct business-page operations; assistant cards must use /assistant/actions instead. */
+export function createTodo(payload) { return request.post('/todos', payload) }
+export function updateTodo(id, expectedVersion, payload) {
+  return request.patch(`/todos/${id}`, { ...payload, expectedVersion })
+}
+
 /**
  * 删除待办（软删；侧栏「管理层操作」特例直点，需先经影响清单弹框确认）
  * 契约：DELETE /api/todos/{id}
  * @param {number|string} id - todo_registry.id
  * @returns {Promise<{ code: number, data: Object|null }>}
  */
-export function deleteTodo(id) {
-  return request.delete(`/todos/${id}`)
+export function deleteTodo(id, expectedVersion) {
+  return request.delete(`/todos/${id}`, expectedVersion == null ? undefined : { params: { expectedVersion } })
 }

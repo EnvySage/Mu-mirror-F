@@ -6,6 +6,7 @@ import {
   getSession as apiGetSession,
   deleteSession as apiDeleteSession,
 } from '@/api/chat'
+import { useActionsStore } from '@/stores/actions'
 
 /**
  * 对话 store（T-B-4 已就绪：POST /api/mirror/chat SSE 流式 + 会话 CRUD）
@@ -92,7 +93,9 @@ export const useChatStore = defineStore('chat', () => {
   let restoreInProgress = null
 
   function pushUser(content) {
-    messages.value.push({ id: String(++msgId), role: 'user', content })
+    const message = { id: String(++msgId), role: 'user', content }
+    messages.value.push(message)
+    return messages.value[messages.value.length - 1]
   }
 
   function pushAiPlaceholder(route) {
@@ -168,10 +171,12 @@ export const useChatStore = defineStore('chat', () => {
     if (!text || sending.value) return
 
     hasLocalChatActivity = true
-    pushUser(text)
+    const userMsg = pushUser(text)
     sending.value = true
     // 续聊中路由未知：不发眉标，等 meta 事件补上
     const aiMsg = pushAiPlaceholder(null)
+    const cards = useActionsStore()
+    aiMsg.actionSourceMessage = userMsg.id
 
     abortController = new AbortController()
     let received = false
@@ -217,13 +222,13 @@ export const useChatStore = defineStore('chat', () => {
         while ((idx = buffer.indexOf('\n\n')) !== -1) {
           const frame = buffer.slice(0, idx)
           buffer = buffer.slice(idx + 2)
-          handleFrame(frame, aiMsg)
+          handleFrame(frame, aiMsg, userMsg, cards)
           received = true
         }
       }
       // 残余帧（部分实现最后不带空行）
       if (buffer.trim()) {
-        handleFrame(buffer, aiMsg)
+        handleFrame(buffer, aiMsg, userMsg, cards)
         received = true
       }
 
@@ -246,7 +251,7 @@ export const useChatStore = defineStore('chat', () => {
    * @param {string} frame
    * @param {ChatMessage} aiMsg
    */
-  function handleFrame(frame, aiMsg) {
+  function handleFrame(frame, aiMsg, userMsg, cards = useActionsStore()) {
     let event = 'message'
     const dataLines = []
     for (const line of frame.split('\n')) {
@@ -271,13 +276,14 @@ export const useChatStore = defineStore('chat', () => {
             // 后端建会话（首条消息）→ 写入存档
             saveSessionId(payload.sessionId)
           }
+          if (payload.sourceMessageId) {
+            userMsg.serverMessageId = String(payload.sourceMessageId)
+            aiMsg.actionSourceMessage = String(payload.sourceMessageId)
+          }
         }
         break
       case 'thinking':
-        // 思考增量（与 delta 同构；parseData 失败已静默返回 null → 半包/坏帧直接忽略）
-        if (payload && typeof payload.content === 'string') {
-          aiMsg.thinking = (aiMsg.thinking || '') + payload.content
-        }
+        // Deliberately discard raw reasoning; the UI exposes only brief action states.
         break
       case 'delta':
         if (payload && typeof payload.content === 'string') {
@@ -297,6 +303,10 @@ export const useChatStore = defineStore('chat', () => {
         if (Array.isArray(payload)) {
           aiMsg.vaultRefs = normalizeVaultRefs(payload)
         }
+        break
+      case 'action_proposal':
+      case 'action_status':
+        if (payload) cards.upsert(payload)
         break
       case 'done':
         // done: { sessionId, route, fallback } —— 结束标志。
@@ -373,9 +383,18 @@ export const useChatStore = defineStore('chat', () => {
         return false
       }
       const data = res.data
-      const list = (data?.messages || []).map(m => ({
+      const cards = useActionsStore()
+      const sessionActions = Array.isArray(data?.actions) ? data.actions : await cards.loadForSession(id).catch(() => [])
+      sessionActions.forEach(card => cards.upsert(card))
+      let lastUserMessageId = null
+      const list = (data?.messages || []).map(m => {
+        const role = m.role === 'assistant' ? 'ai' : 'user'
+        if (role === 'user') lastUserMessageId = String(m.id ?? '')
+        return ({
         id: String(m.id ?? ++msgId),
-        role: m.role === 'assistant' ? 'ai' : 'user',
+        serverMessageId: String(m.id ?? ''),
+        role,
+        actionSourceMessage: role === 'ai' ? lastUserMessageId : null,
         content: m.content || '',
         route: null,
         typing: false,
@@ -387,7 +406,7 @@ export const useChatStore = defineStore('chat', () => {
         vaultRefs: normalizeVaultRefs(m.vault_refs || []),
         // thinking 不落 conversation_history——历史消息永远没有思考面板（契约）
         thinking: '',
-      }))
+      })})
       messages.value = list
       activeSessionId.value = id
       sessionId.value = id
