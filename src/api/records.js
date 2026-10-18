@@ -9,10 +9,6 @@ export function createRecord(data) {
   return request.post('/records', data)
 }
 
-export function organizeRecord(id) {
-  return request.post(`/records/${id}/organize`)
-}
-
 export function updateRawRecord(id, content) {
   return request.put(`/records/${id}/content`, { content })
 }
@@ -120,15 +116,6 @@ export function getRecordSuggestions(id) {
 export function confirmReview(id, payload) {
   // 补分类仍可能同步调用 AI；向量重建已改为后台任务。
   return request.put(`/records/${id}/confirm`, payload ?? null, { timeout: 120000 })
-}
-
-/**
- * 重试失败记录（重跑管道；后端实现前调用会 404/405）
- * @param {number|string} id - 记录ID
- * @returns {Promise<{ code: number, data: RecordVO }>}
- */
-export function retryRecord(id) {
-  return request.post(`/records/${id}/retry`)
 }
 
 /**

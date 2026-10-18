@@ -193,6 +193,13 @@ async function selectProtocol(protocol) {
   else toast.error(settingsStore.error || '保存失败')
 }
 
+async function setDefaultRecordMode(mode) {
+  if (settingsStore.settings.default_record_mode === mode) return
+  const ok = await settingsStore.updateSettings({ default_record_mode: mode })
+  if (ok) toast.success(mode === 'AI_ASSISTED' ? '新记录默认由 AI 准备候选' : '新记录默认仅保存')
+  else toast.error(settingsStore.error || '保存失败')
+}
+
 /** 切换 Embedding 来源（1024 维硬约束说明见下方 note） */
 async function toggleEmbeddingSource() {
   const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
@@ -334,11 +341,18 @@ function handleLogout() {
       <div class="settings-group">
         <div class="settings-group-title">AI 使用与授权</div>
         <div class="settings-card card">
+          <div class="record-mode-setting">
+            <div><b>新记录默认方式</b><p>只影响之后新建的记录，每条记录仍可单独选择。</p></div>
+            <div class="protocol-chips" role="group" aria-label="新记录默认方式">
+              <button :class="['chip', { selected: settingsStore.settings.default_record_mode === 'ONLY_SAVE' }]" :disabled="settingsStore.loading" @click="setDefaultRecordMode('ONLY_SAVE')">仅保存</button>
+              <button :class="['chip', { selected: settingsStore.settings.default_record_mode === 'AI_ASSISTED' }]" :disabled="settingsStore.loading" @click="setDefaultRecordMode('AI_ASSISTED')">AI 帮我整理</button>
+            </div>
+          </div>
           <SettingsItem
             icon="eye"
             icon-bg="var(--processing)"
             label="逐片段确认后进入长期记忆"
-            description="仅记录不会调用 AI；主动整理后，记忆与待办仍需分别确认。"
+            description="仅保存的记录不会调用 AI 整理；AI 整理候选须由你审核确认。旧的“自动审核”设置也会保留人工确认，不会自动进入记忆。"
             action="none"
           />
         </div>
@@ -603,6 +617,9 @@ function handleLogout() {
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 .settings-wrap { max-width: 720px; margin: 0 auto; }
+.record-mode-setting { display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;border-bottom:1px solid var(--line); }
+.record-mode-setting b { color:var(--text-hi);font-size:12px; }
+.record-mode-setting p { margin:5px 0 0;color:var(--text-mid);font-size:11px;line-height:1.5; }
 
 /* 分组间距统一由相邻兄弟控制（原先散落的 margin-bottom 与组内 note 的下 padding 叠加出不一致空隙） */
 .settings-wrap > * + * { margin-top: 22px; }

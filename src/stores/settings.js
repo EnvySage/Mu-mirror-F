@@ -21,6 +21,7 @@ import {
  * @property {string} [embedding_api_key] - Embedding API Key（脱敏）
  * @property {string} embedding_model - Embedding 模型名
  * @property {string} review_mode - 审核模式（manual / auto）
+ * @property {'ONLY_SAVE'|'AI_ASSISTED'} default_record_mode - 新记录默认处理方式
  * @property {boolean} [auto_review_available] - 自动审核是否可用（只读门禁；契约字段 autoReviewAvailable，经 request.js 响应拦截器统一转 snake_case）
  * @property {number} [rag_half_life] - 检索时间衰减半衰期（7-365 天，默认 30）
  * @property {number} [mirror_lookback] - 镜子原文回看深度（0-3，默认 1，rolling-mirror-design.md §2）
@@ -41,6 +42,7 @@ export const useSettingsStore = defineStore('settings', () => {
     embedding_api_key: '',
     embedding_model: 'BAAI/bge-m3',
     review_mode: 'manual',
+    default_record_mode: 'ONLY_SAVE',
     auto_review_available: false,
     rag_half_life: 30,
     mirror_lookback: 1,
@@ -66,6 +68,8 @@ export const useSettingsStore = defineStore('settings', () => {
         // auto_review_available：后端新只读门禁（契约字段 autoReviewAvailable）。字段缺失/undefined 一律按 false，
         // 前端隐藏 auto 开关（与 review.auto-enabled 软禁用语义对齐）
         if (settings.value.auto_review_available == null) settings.value.auto_review_available = false
+        // Existing users remain on save-only unless the server explicitly returns a preference.
+        if (!['ONLY_SAVE', 'AI_ASSISTED'].includes(settings.value.default_record_mode)) settings.value.default_record_mode = 'ONLY_SAVE'
         settingsLoaded.value = true
       }
     } catch (err) {

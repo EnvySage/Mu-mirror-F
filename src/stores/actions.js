@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { listActions, getAction, editAction, confirmAction, cancelAction } from '@/api/actions'
+import { listActions, getAction, editAction, confirmAction, cancelAction, prepareAction as apiPrepareAction } from '@/api/actions'
 
 const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'STALE'])
 const camelize = value => Array.isArray(value) ? value.map(camelize) : value && typeof value === 'object'
@@ -37,6 +37,12 @@ export const useActionsStore = defineStore('assistantActions', () => {
     list.forEach(item => { upsert(item); found.add(item.id) })
     sessionIds.value = { ...sessionIds.value, [`session:${sessionId}`]: [...found] }
     return list
+  }
+
+  async function prepare(kind, payload, prepareKey) {
+    const response = await apiPrepareAction(kind, payload, prepareKey)
+    upsert(response.data)
+    return byId.value[response.data?.id] || response.data
   }
 
   function inSession(sessionId) {
@@ -81,9 +87,9 @@ export const useActionsStore = defineStore('assistantActions', () => {
     return run(id, card => cancelAction(id, { expectedVersion: card.version }))
   }
 
-  function canEdit(card) { return card?.state === 'PENDING' && card?.preparation_status !== 'RUNNING' }
+  function canEdit(card) { return card?.state === 'PENDING' && card?.preparation_status !== 'RUNNING' && card?.payload?.recordDraft?.preparationStatus !== 'RUNNING' }
   function canConfirm(card) { return canEdit(card) }
-  function canCancel(card) { return canEdit(card) }
+  function canCancel(card) { return card?.state === 'PENDING' }
 
-  return { byId, busy, upsert, loadForSession, inSession, edit, confirm, cancel, refresh, canEdit, canConfirm, canCancel, terminal }
+  return { byId, busy, upsert, prepare, loadForSession, inSession, edit, confirm, cancel, refresh, canEdit, canConfirm, canCancel, terminal }
 })

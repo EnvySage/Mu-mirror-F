@@ -2,22 +2,30 @@
 import { computed, ref } from 'vue'
 import { useActionsStore } from '@/stores/actions'
 import TodoActionForm from './action-forms/TodoActionForm.vue'
+import RecordActionForm from './action-forms/RecordActionForm.vue'
 
-const props = defineProps({ proposal: { type: Object, required: true } })
+const props = defineProps({ proposal: { type: Object, required: true }, hideEdit: { type: Boolean, default: false } })
+const emit = defineEmits(['updated'])
 const actions = useActionsStore()
 const editing = ref(false)
 const error = ref('')
 const busy = computed(() => !!actions.busy[props.proposal.id])
-const title = computed(() => props.proposal.payload?.title || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || '待办操作')
+const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || '待办操作')
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
-const canEditAction = computed(() => canEdit.value && props.proposal.kind !== 'todo.delete')
-const actionLabel = computed(() => ({ 'todo.create':'创建待办', 'todo.update':'修改待办', 'todo.complete':'完成待办', 'todo.delete':'删除待办' }[props.proposal.kind] || '操作'))
+const canCancel = computed(() => actions.canCancel(props.proposal))
+const canEditAction = computed(() => canEdit.value && props.proposal.kind !== 'todo.delete' && props.proposal.payload?.recordDraft?.preparationStatus !== 'RUNNING' && props.proposal.preview?.recordDraft?.preparationStatus !== 'RUNNING')
+const actionLabel = computed(() => ({ 'todo.create':'创建待办', 'todo.update':'修改待办', 'todo.complete':'完成待办', 'todo.delete':'删除待办', 'record.create':'新建记录', 'record.organize':'整理记录' }[props.proposal.kind] || '操作'))
+const recordDraft = computed(() => props.proposal.payload?.recordDraft || props.proposal.preview?.recordDraft)
+const recordFallback = computed(() => props.proposal.kind?.startsWith('record.') && recordDraft.value?.preparationStatus === 'SAVE_ONLY')
+const description = computed(() => recordFallback.value
+  ? `${recordDraft.value.preparationError || props.proposal.preview?.description || 'AI 整理未能完成'}。建议仅保存，仍待你确认；确认后不会加入记忆。`
+  : props.proposal.preview?.description)
 const resultMessage = computed(() => {
   const result = props.proposal.result || {}
-  if (result.outcome === 'SAVED_ONLY_FALLBACK') return '已仅保存，未加入记忆。'
+  if (result.outcome === 'SAVED_ONLY_FALLBACK' || result.outcome === 'SAVE_ONLY_FALLBACK') return '已仅保存，未加入记忆。'
   if (props.proposal.state === 'SUCCEEDED') return result.message || '服务端已确认完成。'
-  if (props.proposal.state === 'CANCELLED') return '没有创建或修改待办。'
+  if (props.proposal.state === 'CANCELLED') return props.proposal.kind?.startsWith('record.') ? '这条记录没有创建或整理。' : '没有创建或修改待办。'
   if (props.proposal.state === 'STALE') return '目标数据已变化，请重新发起操作。'
   return result.message || ''
 })
@@ -36,6 +44,7 @@ async function confirm() {
   try {
     const card = await actions.confirm(props.proposal.id)
     await refreshTodosIfSucceeded(card)
+    emit('updated', card)
   } catch (e) {
     error.value = e?.message || '确认结果未知，已尝试查询最新状态。'
     // The confirm response may be lost after the server committed the action.
@@ -48,6 +57,7 @@ async function cancel() {
   error.value = ''
   try { await actions.cancel(props.proposal.id) }
   catch (e) { error.value = e?.message || '取消结果未知，已尝试查询最新状态。' }
+  emit('updated', actions.byId[props.proposal.id])
 }
 async function save(payload) {
   error.value = ''
@@ -65,13 +75,14 @@ async function refreshStatus() {
   <section class="action-card" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡">
     <header><span class="action-kind">{{ actionLabel }}</span><span class="action-state" :class="`state-${String(proposal.state || '').toLowerCase()}`">{{ stateLabel }}</span></header>
     <strong class="action-title">{{ title }}</strong>
-    <p v-if="proposal.preview?.description" class="action-description">{{ proposal.preview.description }}</p>
+    <p v-if="description" class="action-description">{{ description }}</p>
     <details v-if="proposal.preview"><summary>查看影响与预览</summary><pre>{{ previewText(proposal.preview) }}</pre></details>
     <p v-if="resultMessage" class="action-result" role="status">{{ resultMessage }}</p>
     <p v-if="proposal.error_code" class="action-error-code">状态编号：{{ proposal.error_code }}</p>
     <p v-if="error" class="action-error" role="alert">{{ error }}</p>
     <TodoActionForm v-if="editing && canEditAction && proposal.kind?.startsWith('todo.')" :proposal="proposal" @save="save" @cancel="editing=false" />
-    <footer v-else-if="canEdit"><button v-if="canEditAction" type="button" :disabled="busy" @click="editing=true">展开修改</button><button type="button" :disabled="busy" @click="cancel">取消</button><button type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '正在处理…' : '确认执行' }}</button></footer>
+    <RecordActionForm v-else-if="editing && canEditAction && proposal.kind?.startsWith('record.')" :proposal="proposal" @save="save" @cancel="editing=false" />
+    <footer v-else-if="canCancel"><button v-if="canEditAction && canEdit && !hideEdit" type="button" :disabled="busy" @click="editing=true">展开修改</button><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canEdit" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '正在处理…' : '确认执行' }}</button></footer>
     <footer v-else-if="proposal.state === 'EXECUTING'"><button type="button" :disabled="busy" @click="refreshStatus">刷新状态</button></footer>
   </section>
 </template>

@@ -4,8 +4,11 @@ import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
 import { useStatsStore } from '@/stores/stats'
 import { useTodoStore } from '@/stores/todo'
+import { useActionsStore } from '@/stores/actions'
 import { useToastStore } from '@/stores/toast'
 import ReviewPanel from '@/components/organisms/ReviewPanel.vue'
+import ActionCard from '@/components/organisms/ActionCard.vue'
+import { createPrepareKey } from '@/api/actions'
 import { findObjectSource, playObjectTransition, playElementExit, cancelObjectTransitions } from '@/composables/useObjectTransition'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { formatFullDate } from '@/utils/time'
@@ -14,6 +17,7 @@ const ui = useUIStore()
 const recordsStore = useRecordsStore()
 const statsStore = useStatsStore()
 const todoStore = useTodoStore()
+const actionsStore = useActionsStore()
 const toast = useToastStore()
 const panelEl = ref(null)
 const readerEl = ref(null)
@@ -26,6 +30,9 @@ const actionError = ref(null)
 const authorizationDirty = ref(false)
 const rawEditing = ref(false)
 const rawDraft = ref('')
+const preparedRecordAction = ref(null)
+let pendingRecordPrepareKey = null
+let pendingRecordPrepareFingerprint = ''
 let requestGeneration = 0
 let authorizationRequestId = 0
 useDialogFocus(() => !!ui.selectedRecordId, panelEl, '.detail-back', close)
@@ -162,6 +169,9 @@ watch(() => ui.selectedRecordId, async (id) => {
   closing.value = false
   confirming.value = false
   authorizationRequestId += 1
+  preparedRecordAction.value = null
+  pendingRecordPrepareKey = null
+  pendingRecordPrepareFingerprint = ''
   authorizationDirty.value = false
   loadingRecord.value = !recordsStore.getById(id)
   detailError.value = ''
@@ -322,29 +332,57 @@ async function saveRaw() {
 }
 
 async function organizeSavedRecord() {
-  const updated = await recordsStore.organizeRecord(record.value.id)
-  if (updated) {
-    ui.detailMode = 'processing'
-    startStepAnimation()
-    startPolling(updated.id)
-    toast.info('已请求 Mirror 整理')
-  } else actionError.value = recordsStore.error || '请求整理失败'
+  if (!record.value || confirming.value) return
+  const source = record.value
+  const generation = requestGeneration
+  const fingerprint = `record.organize:${source.id}:${source.content}`
+  if (!pendingRecordPrepareKey || pendingRecordPrepareFingerprint !== fingerprint) {
+    pendingRecordPrepareFingerprint = fingerprint
+    pendingRecordPrepareKey = createPrepareKey()
+  }
+  confirming.value = true
+  actionError.value = null
+  try {
+    const action = await actionsStore.prepare('record.organize', {
+      rawContent: source.content,
+      mode: 'AI_ASSISTED',
+      privateInput: false,
+      sourceRecordId: source.id,
+    }, pendingRecordPrepareKey)
+    if (generation !== requestGeneration || String(ui.selectedRecordId) !== String(source.id)) {
+      if (action?.id) await actionsStore.cancel(action.id).catch(() => {})
+      return
+    }
+    preparedRecordAction.value = action
+    pendingRecordPrepareKey = null
+    pendingRecordPrepareFingerprint = ''
+    toast.info('整理候选已准备，确认后才会更新这条记录')
+  } catch (err) {
+    actionError.value = err.message || '准备整理候选失败'
+  } finally {
+    if (generation === requestGeneration) confirming.value = false
+  }
+}
+
+async function onRecordActionUpdated(card) {
+  if (card?.state !== 'SUCCEEDED' || !record.value) return
+  await recordsStore.fetchRecord(record.value.id, { isCurrent: () => String(ui.selectedRecordId) === String(record.value?.id) })
+}
+
+async function saveRecordActionDraft(payload) {
+  if (!preparedRecordAction.value) return
+  try {
+    preparedRecordAction.value = await actionsStore.edit(preparedRecordAction.value.id, payload)
+  } catch (err) {
+    actionError.value = err.message || '候选修改失败，请重试'
+  }
 }
 
 /** failed：重试 / 删除 */
 const submitting = ref(false)
 
 async function retryProcessing() {
-  if (!record.value || submitting.value) return
-  submitting.value = true
-  const newRecord = await recordsStore.retryRecord(record.value.id)
-  submitting.value = false
-  if (newRecord) {
-    toast.info('已重新提交，AI 处理中…')
-    ui.selectedRecordId = newRecord.id
-  } else {
-    actionError.value = recordsStore.error || '重试失败，请重试'
-  }
+  await organizeSavedRecord()
 }
 
 async function deleteRecord() {
@@ -378,7 +416,7 @@ async function deleteRecord() {
             :disabled="confirming"
             @click="onConfirm"
           >{{ confirming ? '保存授权…' : record.status === 'reviewing' ? '确认所选片段' : '更新记忆授权' }}</button>
-          <button v-else-if="record?.status === 'record_only'" class="detail-confirm" @click="organizeSavedRecord">让 Mirror 整理</button>
+          <button v-else-if="record?.status === 'record_only'" class="detail-confirm" :disabled="confirming" @click="organizeSavedRecord">{{ confirming ? '准备候选…' : '让 Mirror 整理' }}</button>
           <span v-else class="detail-title" />
         </div>
 
@@ -387,6 +425,7 @@ async function deleteRecord() {
           <div v-else-if="detailError && !record" class="detail-load-state" role="alert"><p>{{ detailError }}</p><button class="detail-confirm" @click="retryLoad">重试</button><button class="detail-back" @click="close">返回列表</button></div>
           <template v-else-if="record">
           <div v-if="actionError" class="detail-error">{{ actionError }}</div>
+          <ActionCard v-if="preparedRecordAction" :proposal="preparedRecordAction" hide-edit @updated="onRecordActionUpdated" />
 
           <!-- 处理中：三步动画 -->
           <div v-if="ui.detailMode === 'processing'" class="processing-view">
@@ -420,15 +459,16 @@ async function deleteRecord() {
               {{ record.fail_reason || '处理失败（可能是模型配置问题或内容被判定无意义）' }}
             </div>
             <div class="failed-actions">
-              <button class="chip chip-accent" :disabled="submitting" @click="retryProcessing">
-                {{ submitting ? '重试中…' : '重试' }}
+              <button class="chip chip-accent" :disabled="confirming || submitting" @click="retryProcessing">
+                {{ confirming ? '准备候选…' : '重新生成整理候选' }}
               </button>
               <button class="chip chip-danger" :disabled="submitting" @click="deleteRecord">删除</button>
             </div>
           </div>
 
           <div v-else-if="record.status === 'record_only'" class="record-only-view">
-            <p class="record-only-note">这条内容只保存在你的记录里，Mirror 尚未读取。</p>
+            <p class="record-only-note">这条内容当前仅保存在记录中，尚未加入 Mirror 记忆。</p>
+            <ReviewPanel v-if="preparedRecordAction" :record="record" :proposal="preparedRecordAction" @proposal-save="saveRecordActionDraft" />
             <textarea v-if="rawEditing" v-model="rawDraft" class="record-only-editor" aria-label="编辑仅记录原文" />
             <div v-else class="review-original-text">{{ record.content }}</div>
             <div class="failed-actions">

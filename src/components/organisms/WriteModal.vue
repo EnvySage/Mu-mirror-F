@@ -5,6 +5,9 @@ import { useDialogFocus } from '@/composables/useDialogFocus'
 import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
 import { useToastStore } from '@/stores/toast'
+import { useActionsStore } from '@/stores/actions'
+import ActionCard from '@/components/organisms/ActionCard.vue'
+import { createPrepareKey } from '@/api/actions'
 
 const props = defineProps({
   show: Boolean,
@@ -15,9 +18,16 @@ const router = useRouter()
 const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const toast = useToastStore()
+const actionsStore = useActionsStore()
 
 const content = ref('')
-const saveMode = ref('record-only')
+const saveMode = ref('ONLY_SAVE')
+const privateInput = ref(false)
+const preparedAction = ref(null)
+const preparingAction = ref(false)
+let prepareGeneration = 0
+let pendingPrepareKey = null
+let pendingPrepareFingerprint = ''
 const loading = ref(false)
 const error = ref('')
 const textareaEl = ref(null)
@@ -33,7 +43,7 @@ useDialogFocus(() => focusOpen.value, dialogEl, 'textarea', onClose)
 function afterModalLeave() { if (!props.show) focusOpen.value = false }
 function choosePrompt(index) { activePrompt.value = index; textareaEl.value?.focus() }
 
-const MAX = 500
+const MAX = 2000
 
 const count = computed(() => content.value.length)
 const enabled = computed(() => content.value.trim().length > 0 && !loading.value)
@@ -44,7 +54,10 @@ watch(() => props.show, async (val) => {
     openedAt.value = new Date()
     activePrompt.value = 0
     content.value = ''
-    saveMode.value = 'record-only'
+    saveMode.value = settingsStore.settings.default_record_mode || 'ONLY_SAVE'
+    privateInput.value = false
+    preparedAction.value = null
+    prepareGeneration += 1
     error.value = ''
     await nextTick()
     textareaEl.value?.focus()
@@ -54,7 +67,7 @@ watch(() => props.show, async (val) => {
 async function handleSubmit() {
   if (!enabled.value) return
 
-  const requestAiProcessing = saveMode.value === 'organize'
+  const requestAiProcessing = saveMode.value === 'AI_ASSISTED' && !privateInput.value
   if (requestAiProcessing && !settingsStore.isModelConfigComplete) {
     const msg = settingsStore.getModelConfigMissingMessage()
     toast.warning(msg || '请先完成 AI 模型配置后再写日记')
@@ -65,22 +78,63 @@ async function handleSubmit() {
 
   loading.value = true
   error.value = ''
+  const generation = ++prepareGeneration
+  preparingAction.value = requestAiProcessing
   try {
-    const record = await recordsStore.createRecord(content.value.trim(), requestAiProcessing)
+    if (requestAiProcessing) {
+      const fingerprint = `record.create:${content.value.trim()}`
+      if (!pendingPrepareKey || pendingPrepareFingerprint !== fingerprint) {
+        pendingPrepareFingerprint = fingerprint
+        pendingPrepareKey = createPrepareKey()
+      }
+      const action = await actionsStore.prepare('record.create', {
+        rawContent: content.value.trim(),
+        mode: 'AI_ASSISTED',
+        privateInput: false,
+      }, pendingPrepareKey)
+      if (generation !== prepareGeneration || !props.show) {
+        if (action?.id) await actionsStore.cancel(action.id).catch(() => {})
+        return
+      }
+      preparedAction.value = action
+      pendingPrepareKey = null
+      pendingPrepareFingerprint = ''
+      toast.info('整理候选已准备，确认后才会创建记录')
+      return action
+    }
+    const record = await recordsStore.createRecord(content.value.trim(), false)
+    pendingPrepareKey = null
+    pendingPrepareFingerprint = ''
+    if (generation !== prepareGeneration || !props.show) return
     emit('saved', record)
     emit('close')
-    toast.success(requestAiProcessing ? '已保存，Mirror 开始整理' : '已保存为仅记录')
+    toast.success(privateInput.value ? '私密记录已保存，未交给 AI 处理' : '已保存为仅记录')
     return record
   } catch (err) {
     error.value = err.message || '创建失败，请重试'
   } finally {
     loading.value = false
+    preparingAction.value = false
   }
 }
 
 function onClose() {
-  if (loading.value) return
-  if (content.value.trim() && !window.confirm('这段日记还没有保存。放弃并关闭吗？')) return
+  prepareGeneration += 1
+  if (loading.value && !preparingAction.value) return
+  if (loading.value && preparingAction.value && !preparedAction.value) { emit('close'); return }
+  if (preparedAction.value?.state === 'PENDING') {
+    if (!window.confirm('关闭会取消这张待确认卡。继续吗？')) return
+    actionsStore.cancel(preparedAction.value.id).catch(() => {})
+  } else if (!preparedAction.value && content.value.trim() && !window.confirm('这段日记还没有保存。放弃并关闭吗？')) return
+  emit('close')
+}
+
+async function onActionUpdated(card) {
+  if (card?.state !== 'SUCCEEDED') return
+  await recordsStore.fetchRecords()
+  const id = card.result?.recordId ?? card.result?.record_id ?? card.result?.id
+  const saved = id == null ? recordsStore.records[0] : recordsStore.getById(id)
+  emit('saved', saved || { id })
   emit('close')
 }
 
@@ -120,21 +174,23 @@ onBeforeUnmount(() => {
           <div class="write-body">
             <p class="write-address" aria-hidden="true">Dear myself,</p>
             <div v-if="error" class="write-error" role="alert">{{ error }}</div>
-            <textarea ref="textareaEl" v-model="content" class="write-textarea" aria-label="日记内容" :placeholder="prompts[activePrompt]" :maxlength="MAX" :disabled="loading" aria-describedby="write-hint" />
+            <textarea ref="textareaEl" v-model="content" class="write-textarea" aria-label="日记内容" :placeholder="prompts[activePrompt]" :maxlength="MAX" :disabled="loading || !!preparedAction" aria-describedby="write-hint" />
             <div class="write-prompts" aria-label="书写灵感"><span>从这里开始</span><button v-for="(label, index) in ['一件小事', '此刻心情', '一点进展']" :key="label" :aria-pressed="activePrompt === index + 1" @click="choosePrompt(index + 1)">{{ label }} <i aria-hidden="true">↗</i></button></div>
           </div>
           <footer class="write-footer">
             <div class="write-permission" role="radiogroup" aria-label="保存方式">
-              <label :class="['permission-option', { selected: saveMode === 'record-only' }]">
-                <input v-model="saveMode" type="radio" value="record-only" :disabled="loading">
-                <span><b>仅记录</b><small>保存、回看、编辑，不交给 AI 整理</small></span>
+              <label :class="['permission-option', { selected: saveMode === 'ONLY_SAVE' }]">
+                <input v-model="saveMode" type="radio" value="ONLY_SAVE" :disabled="loading || privateInput || !!preparedAction">
+                <span><b>仅保存</b><small>这次不调用 AI 整理；以后可单独请求整理</small></span>
               </label>
-              <label :class="['permission-option', { selected: saveMode === 'organize' }]">
-                <input v-model="saveMode" type="radio" value="organize" :disabled="loading">
-                <span><b>让 Mirror 整理</b><small>只授权这次处理，记忆片段之后再逐项确认</small></span>
+              <label :class="['permission-option', { selected: saveMode === 'AI_ASSISTED' && !privateInput }]">
+                <input v-model="saveMode" type="radio" value="AI_ASSISTED" :disabled="loading || privateInput || !!preparedAction">
+                <span><b>AI 帮我整理</b><small>先生成可编辑候选；每条记忆仍需你确认后才生效</small></span>
               </label>
             </div>
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'record-only' ? '默认仅保存。之后也可以再请求 Mirror 整理。' : 'AI 会生成片段候选，确认后才进入后续记忆。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '保存中…' : saveMode === 'record-only' ? '仅保存' : '保存并整理' }} <span aria-hidden="true">↗</span></button></div>
+            <label class="private-input"><input v-model="privateInput" type="checkbox" :disabled="loading || !!preparedAction" @change="privateInput && (saveMode = 'ONLY_SAVE')"><span><b>这是私密内容</b><small>从这个原记录入口保存，不会发送给 AI。</small></span></label>
+            <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ privateInput ? '私密输入会直接保存，绕过 AI。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' || privateInput ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
           </footer>
         </div>
       </section>
@@ -158,6 +214,7 @@ onBeforeUnmount(() => {
 .write-prompts{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:22px}.write-prompts>span{font-size:10px;color:var(--text-low);margin-right:3px}.write-prompts button{font-size:11px;color:var(--text-mid);border:1px solid var(--line);padding:7px 10px;background:white}.write-prompts button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}.write-prompts i{font-style:normal;margin-left:10px;color:var(--accent)}
 .write-footer{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:16px 34px 20px;border-top:1px solid var(--line);flex-wrap:wrap}.write-permission{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-basis:100%}.permission-option{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);background:white;cursor:pointer}.permission-option.selected{border-color:var(--accent);background:var(--accent-soft)}.permission-option input{margin:3px 0 0;accent-color:var(--accent)}.permission-option span{display:flex;flex-direction:column;gap:3px}.permission-option b{font-size:11px;color:var(--text-hi)}.permission-option small{font-size:10px;color:var(--text-mid);line-height:1.4}.write-footer-main{display:flex;align-items:center;gap:18px;width:100%}.write-hint{font-size:10px;color:var(--text-mid);line-height:1.5}.write-shortcut{display:block;font:11px var(--font-display);color:var(--text-low);margin-top:5px}.write-counter{margin-left:auto;white-space:nowrap;font:16px var(--font-display);color:var(--text-low)}.write-counter b{font-weight:600;color:var(--text-hi)}.write-counter.full b{color:var(--danger)}
 .write-submit{display:flex;align-items:center;justify-content:space-between;gap:26px;padding:13px 18px;min-height:46px;font-size:13px;font-weight:800;background:#dce5f3;color:#8091ad;white-space:nowrap;transition:background .15s,box-shadow .15s}.write-submit.enabled{background:var(--accent);color:white;box-shadow:4px 4px 0 var(--cyan)}.write-submit.enabled:hover{background:var(--accent-hover)}.write-submit:disabled{cursor:not-allowed}.write-submit span{font-size:19px}
+.write-footer :deep(.action-card){width:100%;max-width:none;max-height:34dvh;overflow:auto;margin:0}
 @media(min-width:900px){.write-modal.desktop{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 80px));height:min(740px,88dvh);grid-template-columns:310px minmax(0,1fr)} }
 @media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:120px;font-size:16px}.write-footer{padding:12px 22px 16px;gap:9px}.write-permission{gap:6px}.permission-option{padding:8px}.permission-option small{font-size:9px}.write-footer-main{gap:10px}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
 @media(max-height:650px) and (min-width:900px){.write-stage-copy{margin-top:40px}.write-stage h2{font-size:30px}.write-stage p{margin-top:12px}.write-body{padding-top:20px}.write-textarea{min-height:130px}.write-prompts{margin-top:14px}.write-footer{padding-top:14px;padding-bottom:16px}}

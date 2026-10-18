@@ -231,11 +231,10 @@ async function onDeleteRecord(record) {
   else toast.error(recordsStore.error || '删除失败，请重试')
 }
 
-/** failed 重试：POST /records/{id}/retry（store 内含回退逻辑） */
-async function onRetryRecord(record) {
-  const updated = await recordsStore.retryRecord(record.id)
-  if (updated) toast.info('已重新提交，AI 处理中…')
-  else toast.error(recordsStore.error || '重试失败，请重试')
+/** failed 重试先打开详情，再由用户准备并确认新的整理卡。 */
+function onRetryRecord(record) {
+  ui.selectedRecordId = record.id
+  ui.showDetail = true
 }
 </script>
 

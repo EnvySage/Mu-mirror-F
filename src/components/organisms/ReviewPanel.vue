@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRecordsStore } from '@/stores/records'
 import { useTodoStore } from '@/stores/todo'
 import ChunkCard from '@/components/organisms/ChunkCard.vue'
+import RecordActionForm from '@/components/organisms/action-forms/RecordActionForm.vue'
 import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
 
 /**
@@ -15,14 +16,17 @@ import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
 const props = defineProps({
   record: { type: Object, required: true },
   authorizationBusy: { type: Boolean, default: false },
+  proposal: { type: Object, default: null },
 })
 
-const emit = defineEmits(['open-record', 'authorization-change'])
+const emit = defineEmits(['open-record', 'authorization-change', 'proposal-save', 'proposal-cancel'])
 
 const recordsStore = useRecordsStore()
 const todoStore = useTodoStore()
 
 const editable = computed(() => props.record.status === 'reviewing')
+const candidateMode = computed(() => !!props.proposal)
+const candidateEditing = ref(true)
 const chunksEditable = computed(() => ['reviewing', 'done'].includes(props.record.status))
 const readonly = computed(() => !chunksEditable.value)
 const chunks = computed(() => props.record.chunks || [])
@@ -34,6 +38,7 @@ const dirtyChunks = ref(new Set())
 const originalOpen = ref(true)
 const chunkNodes = ref([])
 const sameSet = (a, b) => a.size === b.size && [...a].every((id) => b.has(id))
+watch(() => props.proposal?.id, () => { candidateEditing.value = true })
 
 function emitAuthorizationChange() {
   emit('authorization-change', {
@@ -238,6 +243,12 @@ function onAddChunk() {
 
 <template>
   <div class="review-panel">
+    <div v-if="candidateMode" class="review-candidate-editor">
+      <div class="review-list-label"><span>{{ proposal.kind === 'record.organize' ? '整理候选 · 确认前可编辑' : '新记录候选 · 确认前可编辑' }}</span><span>待你确认</span></div>
+      <RecordActionForm v-if="candidateEditing" :proposal="proposal" @save="emit('proposal-save', $event)" @cancel="candidateEditing = false; emit('proposal-cancel')" />
+      <button v-else type="button" class="add-chunk-btn" @click="candidateEditing = true">展开修改候选</button>
+    </div>
+    <template v-else>
     <!-- 原文面板 —— "光源" -->
     <div class="review-original">
       <button class="review-label review-original-toggle" :aria-expanded="originalOpen" @click="originalOpen = !originalOpen">
@@ -379,6 +390,7 @@ function onAddChunk() {
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v5"/></svg>
         合并：把 A 的文本改成合并内容，再删掉 B。拆分：把 A 改成前半句，再点「新增片段」补后半。改动文本的片段会在确认时自动重新分类。
       </div>
+    </template>
     </template>
   </div>
 </template>

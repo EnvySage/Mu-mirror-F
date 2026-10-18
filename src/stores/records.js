@@ -5,7 +5,6 @@ import {
   getRecords as apiGetRecords,
   getRecord as apiGetRecord,
   createRecord as apiCreateRecord,
-  organizeRecord as apiOrganizeRecord,
   updateRawRecord as apiUpdateRawRecord,
   updateChunk as apiUpdateChunk,
   deleteChunk as apiDeleteChunk,
@@ -13,7 +12,6 @@ import {
   deleteRecord as apiDeleteRecord,
   confirmReview as apiConfirmReview,
   retryChunkEmbedding as apiRetryChunkEmbedding,
-  retryRecord as apiRetryRecord,
   getCalendarMarks as apiGetCalendarMarks,
 } from '@/api/records'
 
@@ -182,18 +180,6 @@ export const useRecordsStore = defineStore('records', () => {
       records.value.unshift(newRecord)
     }
     return newRecord
-  }
-
-  async function organizeRecord(id) {
-    try {
-      const res = await apiOrganizeRecord(id)
-      const index = records.value.findIndex(r => String(r.id) === String(id))
-      if (index !== -1 && res.data) records.value[index] = res.data
-      return res.data || null
-    } catch (err) {
-      error.value = err.message || '请求整理失败'
-      return null
-    }
   }
 
   async function updateRawRecord(id, content) {
@@ -395,29 +381,6 @@ export const useRecordsStore = defineStore('records', () => {
   }
 
   /**
-   * 重试失败记录（重跑管道；后端未实现时回退为删除+重建）
-   * @param {string|number} id
-   * @returns {Promise<Object|null>} 新的记录
-   */
-  async function retryRecord(id) {
-    const old = records.value.find(r => r.id === id)
-    try {
-      const res = await apiRetryRecord(id)
-      const updated = res.data
-      const index = records.value.findIndex(r => r.id === id)
-      if (index !== -1 && updated) records.value[index] = updated
-      return updated || null
-    } catch (err) {
-      // 后端未实现 retry：回退为软删除 + 重新提交原文
-      console.warn('retry endpoint failed, falling back to recreate:', err.message)
-      const content = old ? old.content : ''
-      await deleteRecord(id)
-      if (!content) return null
-      return createRecord(content)
-    }
-  }
-
-  /**
    * 根据 ID 获取本地记录
    * @param {string|number} id
    * @returns {Record|undefined}
@@ -565,7 +528,6 @@ export const useRecordsStore = defineStore('records', () => {
     fetchRecords,
     fetchRecord,
     createRecord,
-    organizeRecord,
     updateRawRecord,
     updateChunk,
     retryChunkEmbedding,
@@ -574,7 +536,6 @@ export const useRecordsStore = defineStore('records', () => {
     createChunkForRecord,
     deleteRecord,
     confirmReview,
-    retryRecord,
     fetchCalendarMarks,
     getById,
     getByDate,
