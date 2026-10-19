@@ -28,7 +28,6 @@ const actionPoller = createActionStatusPoller({
 
 const content = ref('')
 const saveMode = ref('ONLY_SAVE')
-const privateInput = ref(false)
 const preparedAction = ref(null)
 const preparingAction = ref(false)
 let prepareGeneration = 0
@@ -62,7 +61,6 @@ watch(() => props.show, async (val) => {
     activePrompt.value = 0
     content.value = ''
     saveMode.value = settingsStore.settings.default_record_mode || 'ONLY_SAVE'
-    privateInput.value = false
     preparedAction.value = null
     prepareGeneration += 1
     error.value = ''
@@ -74,7 +72,7 @@ watch(() => props.show, async (val) => {
 async function handleSubmit() {
   if (!enabled.value) return
 
-  const requestAiProcessing = saveMode.value === 'AI_ASSISTED' && !privateInput.value
+  const requestAiProcessing = saveMode.value === 'AI_ASSISTED'
   if (requestAiProcessing && !settingsStore.isModelConfigComplete) {
     const msg = settingsStore.getModelConfigMissingMessage()
     toast.warning(msg || '请先完成 AI 模型配置后再写日记')
@@ -97,7 +95,6 @@ async function handleSubmit() {
       const action = await actionsStore.prepare('record.create', {
         rawContent: content.value.trim(),
         mode: 'AI_ASSISTED',
-        privateInput: false,
         ...(props.correctionOfRecordId ? { correctionOfRecordId: props.correctionOfRecordId } : {}),
       }, pendingPrepareKey)
       if (generation !== prepareGeneration || !props.show) {
@@ -116,7 +113,7 @@ async function handleSubmit() {
     if (generation !== prepareGeneration || !props.show) return
     emit('saved', record)
     emit('close')
-    toast.success(privateInput.value ? '私密记录已保存，未交给 AI 处理' : props.correctionOfRecordId ? '补充 / 更正记录已保存并关联来源' : '已保存为仅记录')
+    toast.success(props.correctionOfRecordId ? '补充 / 更正记录已保存并关联来源' : '已保存为仅记录')
     return record
   } catch (err) {
     error.value = err.message || '创建失败，请重试'
@@ -197,17 +194,16 @@ onBeforeUnmount(() => {
           <footer class="write-footer">
             <div class="write-permission" role="radiogroup" aria-label="保存方式">
               <label :class="['permission-option', { selected: saveMode === 'ONLY_SAVE' }]">
-                <input v-model="saveMode" type="radio" value="ONLY_SAVE" :disabled="loading || privateInput || !!preparedAction">
+                <input v-model="saveMode" type="radio" value="ONLY_SAVE" :disabled="loading || !!preparedAction">
                 <span><b>仅保存</b><small>这次不调用 AI 整理；以后可单独请求整理</small></span>
               </label>
-              <label :class="['permission-option', { selected: saveMode === 'AI_ASSISTED' && !privateInput }]">
-                <input v-model="saveMode" type="radio" value="AI_ASSISTED" :disabled="loading || privateInput || !!preparedAction">
+              <label :class="['permission-option', { selected: saveMode === 'AI_ASSISTED' }]">
+                <input v-model="saveMode" type="radio" value="AI_ASSISTED" :disabled="loading || !!preparedAction">
                 <span><b>AI 帮我整理</b><small>先生成可编辑候选；每条记忆仍需你确认后才生效</small></span>
               </label>
             </div>
-            <label class="private-input"><input v-model="privateInput" type="checkbox" :disabled="loading || !!preparedAction" @change="privateInput && (saveMode = 'ONLY_SAVE')"><span><b>这是私密内容</b><small>从这个原记录入口保存，不会发送给 AI。</small></span></label>
             <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ correctionOfRecordId ? '这是关联来源的新补充 / 更正记录，原记录不会被改写；更正默认不重复增加成长贡献。' : privateInput ? '私密输入会直接保存，绕过 AI。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' || privateInput ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ correctionOfRecordId ? '这是关联来源的新补充 / 更正记录，原记录不会被改写；更正默认不重复增加成长贡献。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
           </footer>
         </div>
       </section>
