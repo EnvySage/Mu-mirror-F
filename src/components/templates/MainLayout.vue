@@ -16,6 +16,11 @@ import SummarySheet from '@/components/organisms/SummarySheet.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
 import { cancelObjectTransitions } from '@/composables/useObjectTransition'
+import { usePresentationMode } from '@/composables/usePresentationMode'
+import PresentationLayout from '@/components/templates/PresentationLayout.vue'
+import DesktopLayout from '@/components/templates/DesktopLayout.vue'
+import MobileLayout from '@/components/templates/MobileLayout.vue'
+import { resolvePresentationPage } from '@/router/presentationPages'
 
 const router = useRouter()
 const route = useRoute()
@@ -25,6 +30,8 @@ const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
+const presentation = usePresentationMode()
+const pageComponent = computed(() => resolvePresentationPage(presentation.mode.value, route.name))
 
 router.beforeEach((to, from) => {
   if (to.fullPath !== from.fullPath && !ui.consumeNavigationApproval(to.fullPath) && !ui.confirmNavigationDrafts()) return false
@@ -76,21 +83,21 @@ function openWrite() {
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" :class="`presentation-mode-${presentation.mode.value}`">
     <div class="app-water" aria-hidden="true" />
-    <AppSidebar />
+    <DesktopLayout><AppSidebar /></DesktopLayout>
     <main class="main">
-      <MobileHeader
-        :title="mobileTitle"
-        @write="openWrite"
-        @summary="ui.openSummarySheet()"
-        @sessions="ui.requestChatSessions()"
-      />
-      <RouterView v-slot="{ Component }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" :key="route.name" />
-        </Transition>
-      </RouterView>
+      <MobileLayout>
+        <MobileHeader
+          :title="mobileTitle"
+          @write="openWrite"
+          @summary="ui.openSummarySheet()"
+          @sessions="ui.requestChatSessions()"
+        />
+      </MobileLayout>
+      <PresentationLayout :mode="presentation.mode.value">
+        <component :is="pageComponent" :key="route.name" v-bind="route.name === 'records' ? { date: route.params.date } : {}" />
+      </PresentationLayout>
       <div :key="route.name" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
         <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[route.name] }}</span>
@@ -108,4 +115,33 @@ function openWrite() {
 .app { position: relative; isolation: isolate; z-index: 1; display: flex; height: 100dvh; background: #06123f; }
 .app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #03133d99, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+@media (min-width: 900px) {
+  .presentation-mode-mobile { flex-direction: column; }
+}
+.presentation-mode-desktop :deep(.sidebar) { display: flex; }
+.presentation-mode-desktop :deep(.mobile-chrome) { display:none; }
+.presentation-mode-desktop :deep(.bottom-nav), .presentation-mode-desktop :deep(.write-fab) { display: none; }
+.presentation-mode-desktop :deep(.mobile-header) { display: none; }
+.presentation-mode-mobile :deep(.desktop-chrome) { display:none; }
+.presentation-mode-mobile :deep(.sidebar) { display: none; }
+.presentation-mode-mobile :deep(.bottom-nav) { display: flex; }
+.presentation-mode-mobile :deep(.mobile-header) { display: flex; }
+.presentation-mode-mobile { display:flex; flex-direction:column; }
+.presentation-mode-mobile :deep(.main) { width:100%; max-width:720px; margin:0 auto; }
+@media (max-width: 600px) {
+  .presentation-mode-desktop :deep(.sidebar) { flex:0 0 64px; width:64px; padding:12px 4px; }
+  .presentation-mode-desktop :deep(.brand-name), .presentation-mode-desktop :deep(.sidebar-date), .presentation-mode-desktop :deep(.sidebar-write) { display:none; }
+  .presentation-mode-desktop :deep(.sidebar-bottom) { display:block; margin-top:auto; padding:0; }
+  .presentation-mode-desktop :deep(.sidebar-bottom .settings-row) { display:flex; justify-content:center; padding:12px 0; font-size:0; }
+  .presentation-mode-desktop :deep(.sidebar-bottom .settings-row svg) { display:block; }
+  .presentation-mode-desktop :deep(.sidebar-bottom .presentation-mode-button) { justify-content:center; padding:12px 0; font-size:0; }
+  .presentation-mode-desktop :deep(.sidebar-bottom .presentation-mode-button svg) { display:block; }
+  .presentation-mode-desktop :deep(.sidebar-bottom .pending) { display:none; }
+  .presentation-mode-desktop :deep(.user-row), .presentation-mode-desktop :deep(.author), .presentation-mode-desktop :deep(.projects) { display:none; }
+  .presentation-mode-desktop :deep(.brand) { justify-content:center; padding:0; }
+  .presentation-mode-desktop :deep(.brand-mark) { font-size:32px; }
+  .presentation-mode-desktop :deep(.nav-row) { justify-content:center; padding:8px; }
+  .presentation-mode-desktop :deep(.nav-row span) { display:none; }
+  .presentation-mode-desktop :deep(.nav-row svg) { width:22px; height:22px; }
+}
 </style>

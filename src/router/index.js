@@ -1,6 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+function safeInternalPath(value) {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : null
+}
+
+function preferredHome(to = null) {
+  const deepLink = safeInternalPath(to?.query?.redirect)
+  if (deepLink) return deepLink
+  const selected = window.localStorage.getItem('mirror.home-page')
+  if (selected === 'chat' || selected === 'records') return `/${selected}`
+  const override = window.localStorage.getItem('mirror.presentation-mode')
+  const mobile = override === 'mobile' || (override !== 'desktop' && window.innerWidth < 900)
+  return mobile ? '/chat' : '/records'
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -9,7 +23,7 @@ const router = createRouter({
       component: () => import('@/components/templates/MainLayout.vue'),
       meta: { requiresAuth: true },
       children: [
-        { path: '', redirect: '/records' },
+        { path: '', redirect: preferredHome },
         {
           path: 'records/:date?',
           name: 'records',
@@ -69,10 +83,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { name: 'login' }
+    return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
   }
   if (to.path.startsWith('/auth') && authStore.isAuthenticated) {
-    return { name: 'records' }
+    return safeInternalPath(to.query.redirect) || preferredHome()
   }
   // 放行：返回 undefined / true 均可，显式 true 更可读
   return true

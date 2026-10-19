@@ -11,6 +11,7 @@ import { exportData } from '@/api/export'
 import SettingsItem from '@/components/molecules/SettingsItem.vue'
 import TermCard from '@/components/molecules/TermCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
+import { usePresentationMode } from '@/composables/usePresentationMode'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
@@ -18,6 +19,14 @@ const auth = useAuthStore()
 const toast = useToastStore()
 const glossary = useGlossaryStore()
 const ui = useUIStore()
+const presentation = usePresentationMode()
+const homePage = ref(localStorage.getItem('mirror.home-page') || 'auto')
+
+function setHomePage(value) {
+  homePage.value = value
+  if (value === 'auto') localStorage.removeItem('mirror.home-page')
+  else localStorage.setItem('mirror.home-page', value)
+}
 
 // ==================== 个人词典（lexicon-design.md 5b） ====================
 
@@ -249,6 +258,13 @@ function handleLogout() {
       <nav class="settings-index" aria-label="设置分区"><a href="#settings-model">模型连接</a><a href="#settings-glossary">个人词典</a><a href="#settings-memory">镜子的记忆</a><a href="#settings-data">数据与账号</a></nav>
       <div v-if="settingsStore.error" class="settings-load-error" role="alert">{{ settingsStore.error }}<button class="p3-link" @click="settingsStore.fetchSettings()">重试</button></div>
       <div class="settings-wrap">
+      <div class="settings-group" id="settings-presentation">
+        <div class="settings-group-title">页面呈现</div>
+        <div class="settings-card card presentation-settings">
+          <div class="presentation-setting"><div><strong>当前布局</strong><small>切换不会中断正在进行的对话</small></div><div class="presentation-buttons"><button :aria-pressed="presentation.override.value === 'auto'" @click="presentation.requestMode('auto')">自动</button><button :aria-pressed="presentation.mode.value === 'mobile' && presentation.override.value !== 'auto'" @click="presentation.requestMode('mobile')">手机</button><button :aria-pressed="presentation.mode.value === 'desktop' && presentation.override.value !== 'auto'" @click="presentation.requestMode('desktop')">桌面</button></div></div>
+          <label class="presentation-setting"><span><strong>默认首页</strong><small>自动按屏幕选择；手机进入对话，桌面进入记录</small></span><select :value="homePage" @change="setHomePage($event.target.value)"><option value="auto">自动</option><option value="chat">对话</option><option value="records">记录</option></select></label>
+        </div>
+      </div>
       <!-- AI 模型 -->
       <div class="settings-group" id="settings-model">
         <div class="settings-group-title">AI 模型连接</div>
@@ -617,6 +633,15 @@ function handleLogout() {
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
 }
 .settings-wrap { max-width: 720px; margin: 0 auto; }
+.presentation-setting { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 18px; }
+.presentation-setting + .presentation-setting { border-top:1px solid var(--line); }
+.presentation-setting strong,.presentation-setting small { display:block; }
+.presentation-setting strong { color:var(--text-high); font-size:13px; }
+.presentation-setting small { margin-top:4px; color:var(--text-low); font-size:11px; }
+.presentation-setting select { min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text-high); }
+.presentation-buttons { display:flex; gap:6px; }
+.presentation-buttons button { min-height:40px; padding:0 14px; border:1px solid var(--line); border-radius:8px; color:var(--text-mid); }
+.presentation-buttons button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent); color:white; }
 .record-mode-setting { display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;border-bottom:1px solid var(--line); }
 .record-mode-setting b { color:var(--text-hi);font-size:12px; }
 .record-mode-setting p { margin:5px 0 0;color:var(--text-mid);font-size:11px;line-height:1.5; }

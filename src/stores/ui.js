@@ -91,13 +91,6 @@ export const useUIStore = defineStore('ui', () => {
     showSummarySheet.value = false
   }
 
-  function updateMobile() {
-    isMobile.value = window.innerWidth < 900
-  }
-
-  // Listen for resize
-  window.addEventListener('resize', updateMobile)
-
   return {
     currentPage,
     registerNavigationGuard,

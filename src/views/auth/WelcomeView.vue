@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 const mode = ref('login')
@@ -86,7 +87,13 @@ async function handleSubmit() {
     } else {
       await auth.register(username.value, password.value)
     }
-    router.push('/records')
+    const candidate = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const redirect = candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : null
+    router.push(redirect || (localStorage.getItem('mirror.home-page') === 'chat'
+      ? '/chat'
+      : localStorage.getItem('mirror.home-page') === 'records'
+        ? '/records'
+        : (localStorage.getItem('mirror.presentation-mode') === 'mobile' || (localStorage.getItem('mirror.presentation-mode') !== 'desktop' && window.innerWidth < 900) ? '/chat' : '/records')))
   } catch (err) {
     errorMsg.value = err.message || '操作失败，请重试'
   }

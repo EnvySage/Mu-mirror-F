@@ -73,6 +73,9 @@ function parseData(raw) {
 export const useChatStore = defineStore('chat', () => {
   /** @type {import('vue').Ref<ChatMessage[]>} */
   const messages = ref([])
+  // Draft remains session-scoped in memory so presentation changes can swap
+  // page composition without persisting potentially sensitive text.
+  const draft = ref('')
   const sending = ref(false)
   /** 最近一次对话的会话 ID（发送时携带，续聊同一会话） */
   const sessionId = ref(null)
@@ -577,6 +580,7 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     messages,
+    draft,
     sending,
     sessionId,
     todaySession,

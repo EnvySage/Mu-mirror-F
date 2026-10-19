@@ -41,7 +41,7 @@ const actions = useActionsStore()
 const vault = useVaultStore()
 const toast = useToastStore()
 
-const input = ref('')
+const input = computed({ get: () => chat.draft, set: value => { chat.draft = value } })
 const messagesEl = ref(null)
 const inputEl = ref(null)
 

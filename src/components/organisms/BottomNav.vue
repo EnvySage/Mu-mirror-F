@@ -1,11 +1,12 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 
 const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
+const showMore = ref(false)
 
 /**
  * 底栏只放 5 个页面入口（等分即对称）；「写日记」移出条外成为右下悬浮 FAB。
@@ -15,10 +16,10 @@ const ui = useUIStore()
 const NAV = [
   { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
   { page: 'calendar', label: '日历', icon: 'calendar' },
-  { page: 'vault', label: '资产', icon: 'archive' },
   { page: 'mirror', label: '镜子', icon: 'clock' },
   { page: 'chat', label: '对话', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
 ]
+const MORE = [{ page: 'vault', label: '记忆资产' }, { page: 'settings', label: '设置' }]
 
 const activePage = computed(() => route.name)
 /** 对话页不挂 FAB：底部是输入条，FAB 会紧贴甚至压住输入框（该页写日记走顶部 header 入口） */
@@ -29,6 +30,7 @@ const isChat = computed(() => route.name === 'chat')
  * DetailPanel 是 fixed 全屏层，只 push 路由不复位的话记录详情会盖住新页面。
  */
 function handleNav(item) {
+  showMore.value = false
   if (!ui.confirmNavigationDrafts()) return
   ui.approveNavigation(router.resolve({ name: item.page }).fullPath)
   if (item.page === 'records') ui.sidebarSelectedDate = null
@@ -61,6 +63,13 @@ function handleNav(item) {
       </svg>
       <span>{{ item.label }}</span>
     </button>
+    <button class="nav-item more-item" :aria-expanded="showMore" @click="showMore = !showMore">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      <span>更多</span>
+    </button>
+    <div v-if="showMore" class="more-menu" aria-label="更多入口">
+      <button v-for="item in MORE" :key="item.page" :class="{ active: activePage === item.page }" @click="handleNav(item)">{{ item.label }}</button>
+    </div>
   </nav>
 
   <!-- 写日记：右下悬浮 FAB（与底栏 5 项脱钩，桌面端有侧栏入口故隐藏） -->
@@ -89,6 +98,9 @@ function handleNav(item) {
 .nav-item svg { width: 21px; height: 21px; stroke: currentColor; fill: none; }
 .nav-item:active { transform: scale(.94); }
 .nav-item.active { color: var(--accent); font-weight: 500; }
+.more-menu { position:absolute; right:10px; bottom:calc(100% + 8px); min-width:144px; padding:6px; display:grid; gap:3px; border:1px solid var(--line); border-radius:14px; background:var(--card); box-shadow:0 8px 28px #071a3b30; }
+.more-menu button { min-height:44px; padding:0 12px; border-radius:9px; text-align:left; color:var(--text-mid); }
+.more-menu button.active { color:var(--accent); background:#eef3ff; }
 
 /* 写日记 FAB：悬在底栏上方右侧；52px 直径保证 44px+ 的可点区 */
 .write-fab {

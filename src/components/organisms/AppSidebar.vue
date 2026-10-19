@@ -4,7 +4,9 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useGlossaryStore } from '@/stores/glossary'
+import { usePresentationMode } from '@/composables/usePresentationMode'
 const router = useRouter(), route = useRoute(), ui = useUIStore(), auth = useAuthStore(), glossary = useGlossaryStore()
+const presentation = usePresentationMode()
 const activePage = computed(() => route.name)
 const today = new Date()
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit' }).format(today)
@@ -39,6 +41,7 @@ function switchPage(page) {
   <button class="sidebar-write" @click="ui.openWriteModal()"><span aria-hidden="true">＋</span> 写下此刻 <small>NEW RECORD</small></button>
   <div class="sidebar-bottom">
    <button :class="['settings-row',{active:activePage==='settings'}]" @click="switchPage('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg>设置<span v-if="glossary.pendingCount" class="pending">{{ glossary.pendingCount }}</span></button>
+   <button class="presentation-mode-button" @click="presentation.requestMode('mobile')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="7" y="2" width="10" height="20" rx="1.5"/><path d="M10 5h4M11 19h2"/></svg>手机布局</button>
    <div class="user-row"><div class="user-avatar">{{ (auth.user?.username || 'M').slice(0,1).toUpperCase() }}</div><div><strong>{{ auth.user?.username || 'Mirror' }}</strong><span>属于你的生活存档</span></div><span class="online-dot" title="已登录" /></div>
    <a class="author" href="https://github.com/EnvySage" target="_blank" rel="noopener noreferrer">Made by EnvySage <span>↗</span></a>
    <div class="projects"><a v-for="p in projects" :key="p.label" :href="p.url" target="_blank" rel="noopener noreferrer">{{ p.label }}</a></div>
@@ -53,6 +56,8 @@ function switchPage(page) {
 .sidebar-nav{display:flex;flex-direction:column;gap:9px}.nav-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;min-height:64px;padding:10px 15px;text-align:left;color:#91b0e2;isolation:isolate;transition:color .18s,transform .18s}.nav-row::before{content:'';position:absolute;inset:0;z-index:-1;background:transparent;transform:skewY(-3deg);border-left:3px solid transparent}.nav-row svg{width:20px;height:20px;flex-shrink:0}.nav-row b{display:block;font:italic 800 24px/.95 var(--font-display);letter-spacing:.015em}.nav-row small{display:block;font-size:10px;margin-top:5px}.nav-row:hover{color:white;transform:translateX(3px)}.nav-row.active{color:var(--night)}.nav-row.active::before{background:var(--cyan);border-left-color:white;box-shadow:4px 4px 0 var(--electric)}.nav-arrow{margin-left:auto;font-size:11px}
 .sidebar-write{margin:28px 6px 16px;padding:11px 10px;background:white;color:var(--night);font-size:13px;font-weight:800;transform:skew(-7deg);box-shadow:4px 4px 0 var(--pink)}.sidebar-write>span{font-size:18px;margin-right:5px}.sidebar-write small{display:block;font:italic 700 11px var(--font-display);letter-spacing:.08em;margin-left:15px}
 .sidebar-bottom{margin-top:auto;padding:22px 6px 0}.settings-row{display:flex;align-items:center;gap:10px;color:#a7bfe7;font-size:12px;width:100%;padding:8px 0 18px}.settings-row svg{width:19px;height:19px}.settings-row.active{color:var(--cyan)}.pending{margin-left:auto;background:var(--pink);color:white;padding:0 5px}
+.presentation-mode-button { display:flex; align-items:center; gap:10px; width:100%; padding:8px 0 14px; color:#a7bfe7; font-size:12px; }
+.presentation-mode-button svg { width:19px; height:19px; }
 .user-row{border-top:1px solid #5275b43d;padding:19px 0 16px;display:flex;gap:9px;align-items:center}.user-avatar{width:32px;height:35px;display:grid;place-items:center;background:#143570;color:var(--cyan);font:italic 800 23px var(--font-display);clip-path:polygon(0 0,100% 0,100% 83%,75% 100%,0 100%)}.user-row strong{display:block;font-size:12px}.user-row span{display:block;color:#809cc7;font-size:9px}.user-row .online-dot{margin-left:auto;width:5px;height:5px;background:var(--cyan);border-radius:50%}.author{display:flex;justify-content:space-between;color:#91aad3;font:12px var(--font-display)}.projects{display:flex;gap:12px;margin-top:11px}.projects a{color:#7794c1;font-size:9px}
 @media(max-height:820px){.sidebar{padding-top:24px}.sidebar-date{margin:28px 6px 18px}.nav-row{min-height:56px}.sidebar-write{margin-top:22px}.sidebar-bottom{padding-top:8px}}
 .sidebar-nav { position:relative; --nav-row-height:64px; }

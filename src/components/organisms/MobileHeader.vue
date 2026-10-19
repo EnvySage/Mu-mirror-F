@@ -1,6 +1,7 @@
 <script setup>
 import { useRoute } from 'vue-router'
 import { useGlossaryStore } from '@/stores/glossary'
+import { usePresentationMode } from '@/composables/usePresentationMode'
 
 defineProps({
   title: { type: String, default: '' },
@@ -10,6 +11,7 @@ const emit = defineEmits(['write', 'summary', 'sessions'])
 /** 历史会话入口仅对话页展示（桌面 header 会话按钮在 900px 以下隐藏，移动端靠这里） */
 const route = useRoute()
 const glossary = useGlossaryStore()
+const presentation = usePresentationMode()
 </script>
 
 <template>
@@ -37,6 +39,9 @@ const glossary = useGlossaryStore()
         </svg>
         <!-- 词典 pending 角标（移动端设置入口，与桌面侧栏同一数据源） -->
         <span v-if="glossary.pendingCount" class="header-icon-badge">{{ glossary.pendingCount > 9 ? '9+' : glossary.pendingCount }}</span>
+      </button>
+      <button class="header-icon-btn" :title="presentation.mode.value === 'mobile' ? '切换到桌面布局' : '切换到手机布局'" :aria-label="presentation.mode.value === 'mobile' ? '切换到桌面布局' : '切换到手机布局'" @click="presentation.requestMode(presentation.mode.value === 'mobile' ? 'desktop' : 'mobile')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4M7 8h10"/></svg>
       </button>
     </div>
   </div>
