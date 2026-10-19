@@ -12,9 +12,13 @@ import VaultRefCard from '@/components/molecules/VaultRefCard.vue'
 import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
 import ActionCard from '@/components/organisms/ActionCard.vue'
+import ChatDaySummaryCard from '@/components/organisms/ChatDaySummaryCard.vue'
+import ChatMemoryPanel from '@/components/organisms/ChatMemoryPanel.vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { validateVaultFile, deriveDisplayName, formatBytes } from '@/constants/fileTypes'
 import request from '@/api/request'
+import { retryDaySummary as apiRetryDaySummary } from '@/api/chat'
+import { resolveDaySummaryActions } from '@/utils/chatDaySummaryActions'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -42,8 +46,36 @@ const messagesEl = ref(null)
 const inputEl = ref(null)
 
 const showSessions = ref(false)
+const showMemoryPanel = ref(false)
 
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
+const retryingSummaryId = ref(null)
+const visibleEndedSummaries = computed(() => chat.endedDaySummaries || [])
+
+function summaryActions(summary) {
+  return resolveDaySummaryActions({
+    summary,
+    activeSessionId: chat.activeSessionId,
+    actionsById: actions.byId,
+    getSessionActions: sessionId => actions.inSession(sessionId),
+  })
+}
+
+async function retrySummary(summary) {
+  const sessionId = summary.sourceSessionId || summary.source_session_id
+  if (!sessionId || retryingSummaryId.value) return
+  retryingSummaryId.value = sessionId
+  try {
+    await apiRetryDaySummary(sessionId)
+    await chat.fetchTodaySession()
+    await chat.fetchSessions()
+    toast.success('已重新开始整理')
+  } catch (err) {
+    toast.error(err?.message || '重试失败，请稍后再试')
+  } finally {
+    retryingSummaryId.value = null
+  }
+}
 function actionCardsFor(message) {
   // A proposal belongs to the assistant reply for its source turn. User and
   // assistant messages share that source id, so rendering on both duplicates
@@ -165,7 +197,13 @@ async function send() {
   const text = input.value
   input.value = ''
   if (inputEl.value) inputEl.value.style.height = 'auto'
-  await chat.sendMessage(text)
+  const sent = await chat.sendMessage(text)
+  if (sent === false) {
+    input.value = text
+    await nextTick()
+    autoGrow()
+    return
+  }
   await scrollToBottom()
   // 发送成功后刷新会话列表（新会话首次落库）
   chat.fetchSessions()
@@ -384,7 +422,7 @@ async function onOpenSession(id) {
 
 function onNewSession() {
   showSessions.value = false
-  chat.newConversation()
+  chat.openTodaySession()
 }
 
 async function onRemoveSession(id) {
@@ -395,7 +433,8 @@ async function onRemoveSession(id) {
 
 <template>
   <div class="page chat-page">
-    <div class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">新对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button></PageMasthead></div>
+    <div class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button></PageMasthead></div>
+    <ChatMemoryPanel v-if="showMemoryPanel" @close="showMemoryPanel = false" />
 
     <!-- 会话列表抽屉（<1440px 主入口；≥1440px 隐藏按钮但仍可通过 MobileHeader 打开） -->
     <Transition name="fade">
@@ -422,10 +461,27 @@ async function onRemoveSession(id) {
             <span class="chat-empty-en" aria-hidden="true">HELLO, MYSELF.</span>
             <h2>{{ chat.historyLoading ? emptyTitle : chat.historyError ? '暂时没能找回这段对话' : '和另一个自己，聊聊。' }}</h2>
             <p>{{ emptyDesc }}</p>
+            <ChatDaySummaryCard
+              v-for="summary in visibleEndedSummaries"
+              :key="summary.sourceSessionId || summary.source_session_id || summary.sourceDate || summary.source_date"
+              :summary="summary"
+              :actions="summaryActions(summary)"
+              :loading="retryingSummaryId === (summary.sourceSessionId || summary.source_session_id)"
+              @retry="retrySummary"
+              @open-session="onOpenSession"
+            />
             <div v-if="!chat.historyLoading && !chat.historyError" class="chat-prompts"><button v-for="prompt in ['最近我做了哪些事情？','这段时间，我的状态怎么样？','有什么事情还在等我完成？']" :key="prompt" @click="input = prompt; send()">{{ prompt }}<span aria-hidden="true">↗</span></button></div>
           </div>
 
           <!-- 消息列表 -->
+          <ChatDaySummaryCard
+            v-if="chat.daySummary && chat.messages.length"
+            :summary="chat.daySummary"
+            :actions="summaryActions(chat.daySummary)"
+            :loading="retryingSummaryId === (chat.daySummary.sourceSessionId || chat.daySummary.source_session_id)"
+            @retry="retrySummary"
+            @open-session="onOpenSession"
+          />
           <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions">
             <div
               v-for="msg in chat.messages"

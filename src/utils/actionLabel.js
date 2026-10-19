@@ -8,6 +8,9 @@ const labels = {
   'record.delete': '删除记录',
   'record.memory.disable': '停止未来记忆使用',
   'growth.adjust': '更正成长贡献',
+  'memory.accept': '确认记忆候选',
+  'memory.edit': '修改记忆候选',
+  'memory.forget': '遗忘聊天记忆',
 }
 
 export function getActionLabel(kind) {

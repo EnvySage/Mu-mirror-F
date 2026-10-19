@@ -8,6 +8,21 @@ export function getSessions() {
   return request.get('/mirror/sessions')
 }
 
+/** Resolve the server's Asia/Shanghai session for today without creating one. */
+export function getTodaySession() {
+  return request.get('/mirror/sessions/today')
+}
+
+/** Idempotently resolve or create today's session before the first message. */
+export function resolveTodaySession() {
+  return request.post('/mirror/sessions/today')
+}
+
+/** Retry the saved summary for an ended daily session after a model failure. */
+export function retryDaySummary(sessionId) {
+  return request.post(`/mirror/sessions/${sessionId}/summary/retry`)
+}
+
 /**
  * 会话历史（全部消息时间正序，assistant 消息带 sources [{record_id, quote, date}]）
  * @param {string} id - 会话 ID（UUID）

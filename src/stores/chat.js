@@ -5,6 +5,8 @@ import {
   getSessions as apiGetSessions,
   getSession as apiGetSession,
   deleteSession as apiDeleteSession,
+  getTodaySession as apiGetTodaySession,
+  resolveTodaySession as apiResolveTodaySession,
 } from '@/api/chat'
 import { useActionsStore } from '@/stores/actions'
 
@@ -74,6 +76,10 @@ export const useChatStore = defineStore('chat', () => {
   const sending = ref(false)
   /** 最近一次对话的会话 ID（发送时携带，续聊同一会话） */
   const sessionId = ref(null)
+  const todaySession = ref(null)
+  const todaySessionLoaded = ref(false)
+  const endedDaySummaries = ref([])
+  const daySummary = ref(null)
 
   /** @type {import('vue').Ref<ChatSession[]>} */
   const sessions = ref([])
@@ -91,6 +97,54 @@ export const useChatStore = defineStore('chat', () => {
   let hasLocalChatActivity = false
   /** 合并同一时刻的自动恢复调用（路由重复挂载时只发一次历史请求） */
   let restoreInProgress = null
+
+  function readDailyPayload(data) {
+    const value = data && typeof data === 'object' ? data : {}
+    historyError.value = false
+    const session = value.session || value.todaySession || value.today_session || (value.id ? value : null)
+    todaySession.value = session?.id ? session : null
+    todaySessionLoaded.value = true
+    const summaries = value.endedDaySummaries || value.ended_day_summaries || value.summaries
+    if (Array.isArray(summaries)) {
+      endedDaySummaries.value = summaries
+      const actionStore = useActionsStore()
+      summaries.flatMap(summary => summary?.actions || []).forEach(action => actionStore.upsert(action))
+    }
+    return todaySession.value
+  }
+
+  async function fetchTodaySession() {
+    const response = await apiGetTodaySession()
+    return readDailyPayload(response?.data)
+  }
+
+  async function ensureTodaySession() {
+    let current = await fetchTodaySession()
+    if (!current) {
+      const response = await apiResolveTodaySession()
+      current = readDailyPayload(response?.data)
+    }
+    if (!current?.id) throw new Error('无法建立今日会话')
+    if (String(activeSessionId.value || '') !== String(current.id)) {
+      const loaded = await loadSession(String(current.id))
+      if (!loaded) throw new Error('无法读取今日会话')
+    }
+    todaySession.value = current
+    return current
+  }
+
+  async function openTodaySession() {
+    try {
+      const current = await fetchTodaySession()
+      if (current?.id) return await loadSession(String(current.id))
+      clearMessages()
+      return false
+    } catch (err) {
+      console.error('Failed to open today session:', err)
+      historyError.value = true
+      return false
+    }
+  }
 
   function pushUser(content) {
     const message = { id: String(++msgId), role: 'user', content }
@@ -170,6 +224,16 @@ export const useChatStore = defineStore('chat', () => {
     const text = content.trim()
     if (!text || sending.value) return
 
+    // Resolve the server day once before starting this turn. A stream that
+    // crosses midnight keeps its original session; the next send resolves again.
+    try {
+      await ensureTodaySession()
+    } catch (err) {
+      console.error("Failed to resolve today's chat session:", err)
+      historyError.value = true
+      return false
+    }
+
     hasLocalChatActivity = true
     const userMsg = pushUser(text)
     sending.value = true
@@ -244,6 +308,7 @@ export const useChatStore = defineStore('chat', () => {
       sending.value = false
       abortController = null
     }
+    return true
   }
 
   /**
@@ -386,6 +451,7 @@ export const useChatStore = defineStore('chat', () => {
       const cards = useActionsStore()
       const sessionActions = Array.isArray(data?.actions) ? data.actions : await cards.loadForSession(id).catch(() => [])
       sessionActions.forEach(card => cards.upsert(card))
+      daySummary.value = data?.daySummary || data?.day_summary || null
       let lastUserMessageId = null
       const list = (data?.messages || []).map(m => {
         const role = m.role === 'assistant' ? 'ai' : 'user'
@@ -417,7 +483,6 @@ export const useChatStore = defineStore('chat', () => {
       console.error('Failed to load session:', err)
       historyError.value = true
       // 失败归因：err.code 为数字 = 后端明确报错（404 已删 / 业务码）；否则是网络层失败（后端未起/超时）
-      lastLoadFailureKind = (typeof err?.code === 'number') ? 'missing' : 'network'
       return false
     } finally {
       historyLoading.value = false
@@ -432,6 +497,8 @@ export const useChatStore = defineStore('chat', () => {
     try {
       await apiDeleteSession(id)
       sessions.value = sessions.value.filter(s => s.id !== id)
+      endedDaySummaries.value = endedDaySummaries.value.filter(summary => String(summary.sourceSessionId || summary.source_session_id || '') !== String(id))
+      if (String(todaySession.value?.id || '') === String(id)) todaySession.value = null
       // 删的是当前打开的会话 → 回到新会话空态
       if (activeSessionId.value === id) {
         clearMessages()
@@ -465,15 +532,9 @@ export const useChatStore = defineStore('chat', () => {
 
   // ==================== 进页自动恢复 ====================
 
-  /** 最近一次 loadSession 失败归因：null / 'missing'（会话已删等后端明确报错）/ 'network'（网络层失败） */
-  let lastLoadFailureKind = null
-
   /**
-   * 进页恢复流程（ChatView onMounted 调用）：
-   *   1. 有存档 id → loadSession 恢复消息流；后端明确报错（已删/404）→ 清存档继续；
-   *      网络层失败 → 保留存档下次再试
-   *   2. 无存档 → 今天有历史会话则自动恢复最近一个（updated_at 最新）
-   *   3. 今天没有会话 → 不预建（首条消息时后端自动建），保持空态引导文案
+   * 进入聊天页时仅恢复服务器认定的今日会话；昨天及更早的会话仍从历史列表打开。
+   * 今日会话不存在时保持空态，不创建空会话。
    * @returns {Promise<boolean>} 是否成功恢复了某个会话
    */
   async function restoreLastSession() {
@@ -482,34 +543,19 @@ export const useChatStore = defineStore('chat', () => {
     if (restoreInProgress) return restoreInProgress
 
     restoreInProgress = (async () => {
-      // 1. localStorage 存档
-      const savedId = getSavedSessionId()
-      if (savedId) {
-        const ok = await loadSession(savedId, { preserveLocalState: true })
-        if (ok) return true
-        // 自动恢复等待期间用户已开始操作，保留当前对话与存档。
-        if (hasLocalChatActivity || sending.value || messages.value.length > 0) return false
-        // 网络层失败（后端未起/超时）：保留存档下次再试，空态有兜底文案
-        if (lastLoadFailureKind === 'network') return false
-        // 后端明确报错（会话已删/404/无权限）→ 清存档，继续尝试今天的会话
-        clearSavedSessionId()
+      // The server owns Asia/Shanghai day boundaries. Never auto-restore a
+      // yesterday session just because it was the last locally saved one.
+      historyLoading.value = true
+      try {
+        const current = await fetchTodaySession()
+        if (current?.id) return await loadSession(String(current.id), { preserveLocalState: true })
+        if (!sessionsLoaded.value) await fetchSessions()
+      } catch (err) {
+        console.error('Failed to resolve today session:', err)
+        historyError.value = true
+      } finally {
+        historyLoading.value = false
       }
-
-      // 2. 今天最近一个会话（created_at 为北京时间字符串 yyyy-MM-dd HH:mm:ss，取日期段与本地今天比对）
-      if (!sessionsLoaded.value) {
-        await fetchSessions()
-        // 会话列表也拉不到（后端未起）：不继续，空态兜底
-        if (!sessionsLoaded.value) return false
-      }
-      const todayKey = localDateKey(new Date())
-      const todaySession = sessions.value
-        .filter(s => localDateKey(s.created_at) === todayKey)
-        .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0]
-      if (todaySession) {
-        return loadSession(todaySession.id, { preserveLocalState: true })
-      }
-
-      // 3. 今天还没有会话：不预建，等首条消息时后端自动建
       return false
     })()
     try {
@@ -519,24 +565,13 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /** 本地日期 key（yyyy-MM-dd），兼容 "yyyy-MM-dd HH:mm:ss" 与 ISO 字符串 */
-  function localDateKey(dateLike) {
-    if (!dateLike) return ''
-    if (typeof dateLike === 'string') {
-      const m = dateLike.match(/^(\d{4})-(\d{2})-(\d{2})/)
-      if (m) return `${m[1]}-${m[2]}-${m[3]}`
-      dateLike = new Date(dateLike.replace(' ', 'T'))
-    }
-    if (!(dateLike instanceof Date) || Number.isNaN(dateLike.getTime())) return ''
-    return `${dateLike.getFullYear()}-${String(dateLike.getMonth() + 1).padStart(2, '0')}-${String(dateLike.getDate()).padStart(2, '0')}`
-  }
-
   function clearMessages() {
     hasLocalChatActivity = true
     messages.value = []
     sessionId.value = null
     activeSessionId.value = null
     historyError.value = false
+    daySummary.value = null
     clearSavedSessionId()
   }
 
@@ -544,6 +579,10 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     sending,
     sessionId,
+    todaySession,
+    todaySessionLoaded,
+    endedDaySummaries,
+    daySummary,
     sessions,
     sessionsLoading,
     sessionsLoaded,
@@ -558,6 +597,8 @@ export const useChatStore = defineStore('chat', () => {
     abort,
     clearMessages,
     restoreLastSession,
+    openTodaySession,
+    fetchTodaySession,
     getSavedSessionId,
   }
 })

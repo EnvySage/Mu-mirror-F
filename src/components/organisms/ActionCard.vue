@@ -6,6 +6,7 @@ import { useRecordsStore } from '@/stores/records'
 import TodoActionForm from './action-forms/TodoActionForm.vue'
 import RecordActionForm from './action-forms/RecordActionForm.vue'
 import GrowthActionForm from './action-forms/GrowthActionForm.vue'
+import MemoryActionForm from './action-forms/MemoryActionForm.vue'
 import { getActionLabel } from '@/utils/actionLabel'
 
 const props = defineProps({ proposal: { type: Object, required: true }, hideEdit: { type: Boolean, default: false } })
@@ -16,7 +17,7 @@ const records = useRecordsStore()
 const editing = ref(false)
 const error = ref('')
 const busy = computed(() => !!actions.busy[props.proposal.id])
-const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind?.startsWith('growth.') ? '成长贡献' : '待办操作'))
+const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
 const hasGrowthSuggestions = computed(() => Array.isArray(recordDraft.value?.growthSuggestions || recordDraft.value?.growth_suggestions))
@@ -49,12 +50,13 @@ const resultMessage = computed(() => {
   const result = props.proposal.result || {}
   if (result.outcome === 'SAVED_ONLY_FALLBACK' || result.outcome === 'SAVE_ONLY_FALLBACK') return '已仅保存，未加入记忆。'
   if (props.proposal.state === 'SUCCEEDED') return result.message || '服务端已确认完成。'
-  if (props.proposal.state === 'CANCELLED') return props.proposal.kind?.startsWith('record.') ? '这条记录没有创建或整理。' : '没有创建或修改待办。'
+  if (props.proposal.state === 'CANCELLED') return props.proposal.kind?.startsWith('record.') ? '这条记录没有创建或整理。' : props.proposal.kind?.startsWith('memory.') ? '已放弃此候选，没有启用记忆。' : '没有创建或修改待办。'
   if (props.proposal.state === 'STALE') return '目标数据已变化，请重新发起操作。'
   return result.message || ''
 })
 const isTodoAction = card => ['todo.create','todo.update','todo.complete','todo.delete'].includes(card?.kind)
 const isGrowthAction = card => card?.kind === 'growth.adjust'
+const isMemoryAction = card => card?.kind?.startsWith('memory.')
 const isRecordDeleteAction = card => card?.kind === 'record.delete'
 const deleteImpact = computed(() => {
   if (!isRecordDeleteAction(props.proposal)) return ''
@@ -146,6 +148,7 @@ async function refreshStatus() {
     <TodoActionForm v-if="editing && canEditAction && proposal.kind?.startsWith('todo.')" :proposal="proposal" @save="save" @cancel="editing=false" />
     <RecordActionForm v-else-if="editing && canEditAction && proposal.kind?.startsWith('record.')" :proposal="proposal" @save="save" @cancel="editing=false" />
     <GrowthActionForm v-else-if="editing && canEditAction && isGrowthAction(proposal)" :proposal="proposal" @save="save" @cancel="editing=false" />
+    <MemoryActionForm v-else-if="editing && canEditAction && isMemoryAction(proposal)" :proposal="proposal" @save="save" @cancel="editing=false" />
     <footer v-else-if="canCancel"><button v-if="isPreparingRecord" type="button" :disabled="busy" @click="refreshStatus">刷新状态</button><button v-if="canEditAction && canEdit && !hideEdit" type="button" :disabled="busy" @click="editing=true">展开修改</button><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canConfirmAction" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '正在处理…' : '确认执行' }}</button></footer>
     <footer v-else-if="proposal.state === 'EXECUTING'"><button type="button" :disabled="busy" @click="refreshStatus">刷新状态</button></footer>
   </section>

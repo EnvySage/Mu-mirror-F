@@ -28,26 +28,28 @@ const isRail = computed(() => props.variant === 'rail')
 
 // ==================== 日期分组：今天 / 昨天 / 更早（自 ChatView 迁入） ====================
 
-/** 按本地日期归类（yyyy-MM-dd），与后端北京时间字符串直接比对 */
-function localDateKey(value) {
+/** Use the server's fixed Asia/Shanghai calendar day for daily sessions. */
+function shanghaiDayKey(value) {
   if (!value) return ''
-  if (typeof value === 'string') {
+  if (typeof value === 'string' && !/[T ]\d{2}:\d{2}/.test(value)) {
     const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (m) return `${m[1]}-${m[2]}-${m[3]}`
-    value = new Date(value.replace(' ', 'T'))
   }
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return ''
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+  const date = value instanceof Date ? value : new Date(String(value).replace(' ', 'T'))
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+  const part = type => parts.find(item => item.type === type)?.value || ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }
 
-function dayKeyOffset(offset) {
-  const d = new Date()
-  d.setDate(d.getDate() + offset)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function shanghaiDayOffset(offset) {
+  const base = new Date(`${shanghaiDayKey(new Date())}T12:00:00+08:00`)
+  base.setTime(base.getTime() + offset * 24 * 60 * 60 * 1000)
+  return shanghaiDayKey(base)
 }
 
-const todayKey = dayKeyOffset(0)
-const yesterdayKey = dayKeyOffset(-1)
+const todayKey = computed(() => shanghaiDayOffset(0))
+const yesterdayKey = computed(() => shanghaiDayOffset(-1))
 
 /** 分组后的会话列表：组间按 今天 → 昨天 → 更早，组内 updated_at 倒序 */
 const groupedSessions = computed(() => {
@@ -61,9 +63,9 @@ const groupedSessions = computed(() => {
     String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
   )
   for (const s of sorted) {
-    const k = localDateKey(s.updated_at || s.created_at)
-    if (k === todayKey) byKey.today.items.push(s)
-    else if (k === yesterdayKey) byKey.yesterday.items.push(s)
+    const k = s.dayKey || s.day_key || shanghaiDayKey(s.updated_at || s.created_at)
+    if (k === todayKey.value) byKey.today.items.push(s)
+    else if (k === yesterdayKey.value) byKey.yesterday.items.push(s)
     else byKey.earlier.items.push(s)
   }
   return groups.filter(g => g.items.length > 0)
@@ -77,7 +79,7 @@ const groupedSessions = computed(() => {
       <div class="sessions-head-actions">
         <button class="sessions-new" @click="emit('new-session')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg>
-          新话题
+          回到今日
         </button>
         <button v-if="!isRail" class="sessions-close" @click="emit('close')">关闭</button>
       </div>
