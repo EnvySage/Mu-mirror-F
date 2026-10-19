@@ -20,7 +20,10 @@ const busy = computed(() => !!actions.busy[props.proposal.id])
 const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
-const hasGrowthSuggestions = computed(() => Array.isArray(recordDraft.value?.growthSuggestions || recordDraft.value?.growth_suggestions))
+const hasGrowthSuggestions = computed(() => {
+  const suggestions = recordDraft.value?.growthSuggestions ?? recordDraft.value?.growth_suggestions
+  return Array.isArray(suggestions) && suggestions.length > 0
+})
 const candidateNeedsRecheck = computed(() => {
   if (!props.proposal.kind?.startsWith('record.') || !hasGrowthSuggestions.value) return false
   if (!growth.axesDefinition) return true
@@ -35,13 +38,15 @@ const isPreparingRecord = computed(() => props.proposal.state === 'PENDING' && p
 const canEditAction = computed(() => canEdit.value && !candidateNeedsRecheck.value && !['todo.delete', 'record.delete'].includes(props.proposal.kind) && props.proposal.payload?.recordDraft?.preparationStatus !== 'RUNNING' && props.proposal.preview?.recordDraft?.preparationStatus !== 'RUNNING')
 const actionLabel = computed(() => getActionLabel(props.proposal.kind))
 const recordDraft = computed(() => props.proposal.payload?.recordDraft || props.proposal.preview?.recordDraft)
+const recheckingGrowth = ref(false)
+const growthRecheckFailed = ref(false)
 const recordFallback = computed(() => props.proposal.kind?.startsWith('record.') && recordDraft.value?.preparationStatus === 'SAVE_ONLY')
 const preparationFailureMessage = computed(() => {
   if (!props.proposal.kind?.startsWith('record.') || preparationStatus.value !== 'FAILED') return ''
   return props.proposal.preview?.preparationError || recordDraft.value?.preparationError || '候选准备失败，尚未创建或修改记录。请取消后重新准备。'
 })
 watch(hasGrowthSuggestions, hasSuggestions => {
-  if (hasSuggestions && !growth.axesDefinition) growth.fetchAxes().catch(() => {})
+  if (hasSuggestions && !growth.axesDefinition) recheckGrowthDefinition()
 }, { immediate: true })
 const description = computed(() => recordFallback.value
   ? `${recordDraft.value.preparationError || props.proposal.preview?.description || 'AI 整理未能完成'}。建议仅保存，仍待你确认；确认后不会加入记忆。`
@@ -78,6 +83,17 @@ watch(isPreparingRecord, running => {
   }, 1500)
 }, { immediate: true })
 onBeforeUnmount(stopPreparationPoll)
+async function recheckGrowthDefinition() {
+  recheckingGrowth.value = true
+  growthRecheckFailed.value = false
+  try {
+    await growth.fetchAxes(true)
+  } catch {
+    growthRecheckFailed.value = true
+  } finally {
+    recheckingGrowth.value = false
+  }
+}
 async function refreshTodosIfSucceeded(card) {
   if (card?.state !== 'SUCCEEDED' || !isTodoAction(card)) return
   const { useTodoStore } = await import('@/stores/todo')
@@ -139,7 +155,7 @@ async function refreshStatus() {
     <p v-if="description" class="action-description">{{ description }}</p>
     <p v-if="deleteImpact" class="action-description delete-impact" role="alert">{{ deleteImpact }}</p>
     <p v-if="isPreparingRecord" class="action-description" role="status">正在准备可编辑候选；确认前不会创建或修改记录。</p>
-    <p v-if="candidateNeedsRecheck" class="action-error" role="alert">{{ growth.axesDefinition ? '五维定义版本已变化，这份成长建议不能沿用。请取消本卡并重新准备候选。' : '暂时无法核对五维定义版本。请重试加载，核对完成前不会确认这张卡。' }} <button v-if="!growth.axesDefinition" type="button" @click="growth.fetchAxes">重试核对</button></p>
+    <p v-if="candidateNeedsRecheck" class="action-error" role="alert">{{ growthRecheckFailed || !growth.axesDefinition ? '暂时无法核对五维定义版本；核对完成前不会确认这张卡。' : '当前五维定义与候选版本不一致。点“重新核对”刷新后，若仍不一致，请取消本卡并重新准备候选。' }} <button type="button" :disabled="recheckingGrowth" @click="recheckGrowthDefinition">{{ recheckingGrowth ? '正在核对…' : '重新核对' }}</button></p>
     <p v-if="preparationFailureMessage" class="action-error" role="alert">{{ preparationFailureMessage }}</p>
     <details v-if="proposal.preview"><summary>查看影响与预览</summary><pre>{{ previewText(proposal.preview) }}</pre></details>
     <p v-if="resultMessage" class="action-result" role="status">{{ resultMessage }}</p>
