@@ -10,6 +10,7 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
 import { dateLabel, formatFullDate } from '@/utils/time'
 import RecordCard from '@/components/molecules/RecordCard.vue'
+import ActionCard from '@/components/organisms/ActionCard.vue'
 import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
@@ -24,8 +25,10 @@ const summariesStore = useSummariesStore()
 const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const toast = useToastStore()
+const deleteProposal = ref(null)
 
 const recordFilter = ref('all')
+const selectedTag = ref('')
 const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
 const firstLoadCascade = ref(false)
 let cascadeTimer = null
@@ -45,6 +48,18 @@ const grouped = computed(() => {
     .sort()
     .reverse()
     .map(k => ({ dateKey: k, label: dateLabel(groups[k][0].created_at), items: groups[k] }))
+})
+
+const tagOptions = computed(() => {
+  const values = new Set()
+  for (const record of recordsStore.records) {
+    for (const chunk of record.chunks || []) {
+      const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []
+      if (Array.isArray(tags)) tags.forEach(tag => { if (tag) values.add(String(tag)) })
+    }
+  }
+  if (selectedTag.value) values.add(selectedTag.value)
+  return [...values].sort((a, b) => a.localeCompare(b, 'zh-CN'))
 })
 
 function dateKey(dateStr) {
@@ -76,6 +91,7 @@ const highlightedRecordHidden = computed(() => !!ui.highlightRecordId
   && !visibleRecordIds.value.has(String(ui.highlightRecordId)))
 async function revealHighlightedRecord() {
   recordFilter.value = 'all'
+  selectedTag.value = ''
   ui.sidebarSelectedDate = null
   await nextTick()
   document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(ui.highlightRecordId))}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -93,11 +109,11 @@ watch(() => ui.highlightRecordId, async (id) => {
 }, { flush: 'post' })
 
 function loadByDate(dateStr) {
-  return recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr })
+  return recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr, ...(selectedTag.value ? { tags: selectedTag.value } : {}) })
 }
 
 function loadAll() {
-  return recordsStore.fetchRecords()
+  return recordsStore.fetchRecords(selectedTag.value ? { tags: selectedTag.value } : undefined)
 }
 
 // ---- 侧栏形态：≥1440px 常驻右栏；窄屏（手机/平板）FAB + 抽屉 ----
@@ -133,6 +149,10 @@ watch(() => props.date, (d) => {
   d ? loadByDate(d) : loadAll()
 })
 
+watch(selectedTag, () => {
+  filterDate.value ? loadByDate(filterDate.value) : loadAll()
+})
+
 watch(() => ui.sidebarSelectedDate, (newDate) => {
   if (newDate) loadByDate(formatDateStr(newDate))
   else loadAll()
@@ -154,8 +174,8 @@ function scheduleListPolling() {
   if (!recordsStore.processingRecords.length) return
   pollTimer = setTimeout(async () => {
     await recordsStore.fetchRecords(filterDate.value
-      ? { startDate: filterDate.value, endDate: filterDate.value }
-      : undefined)
+      ? { startDate: filterDate.value, endDate: filterDate.value, ...(selectedTag.value ? { tags: selectedTag.value } : {}) }
+      : (selectedTag.value ? { tags: selectedTag.value } : undefined))
     scheduleListPolling()
   }, 3000)
 }
@@ -225,10 +245,22 @@ function groupIndex(group) {
 
 /** 列表内软删除（REVIEWING / FAILED） */
 async function onDeleteRecord(record) {
-  if (!window.confirm('确定删除这条记录？软删除后不可恢复。')) return
-  const ok = await recordsStore.deleteRecord(record.id)
-  if (ok) toast.success('记录已删除')
-  else toast.error(recordsStore.error || '删除失败，请重试')
+  const proposal = await recordsStore.deleteRecord(record.id)
+  if (proposal) deleteProposal.value = proposal
+  else toast.error(recordsStore.error || '删除确认卡准备失败，请重试')
+}
+
+async function onDeleteActionUpdated(card) {
+  deleteProposal.value = card?.state === 'PENDING' || card?.state === 'EXECUTING' || card?.state === 'FAILED' ? card : null
+  if (card?.state === 'SUCCEEDED') {
+    toast.success('记录已删除，关联成长贡献已按预览移除')
+    await recordsStore.fetchRecords(filterDate.value
+      ? { startDate: filterDate.value, endDate: filterDate.value, ...(selectedTag.value ? { tags: selectedTag.value } : {}) }
+      : (selectedTag.value ? { tags: selectedTag.value } : undefined))
+    statsStore.fetchStats(30, true)
+  } else if (card?.state === 'CANCELLED') {
+    toast.info('已取消删除，记录保持不变')
+  }
 }
 
 /** failed 重试先打开详情，再由用户准备并确认新的整理卡。 */
@@ -242,11 +274,12 @@ function onRetryRecord(record) {
   <div class="page records-page">
     <div class="page-content">
       <PageMasthead title="日常记录" english="DAILY RECORDS" :description="subtitle"><button class="p3-button secondary" @click="openSummarySheet">每日总结</button></PageMasthead>
+      <ActionCard v-if="deleteProposal" :proposal="deleteProposal" @updated="onDeleteActionUpdated" />
       <section :class="['record-intro', { 'records-first-load': firstLoadCascade }]" aria-label="记录此刻">
         <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
         <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
       </section>
-      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><span class="record-count">{{ subtitle }}</span></div>
+      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><label class="record-tag-filter">自由标签<select v-model="selectedTag" aria-label="按自由标签筛选"><option value="">全部标签</option><option v-for="tag in tagOptions" :key="tag" :value="tag">{{ tag }}</option></select></label><span class="record-count">{{ subtitle }}</span></div>
       <div v-if="highlightedRecordHidden" class="record-arrival-notice" role="status">新记录已保存，但当前筛选中看不到。<button @click="revealHighlightedRecord">查看新记录</button></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
       <div class="records-layout">
@@ -477,6 +510,7 @@ function onRetryRecord(record) {
 
 .record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 6px; padding-bottom:13px; border-bottom:1px solid #7bafff45; }
 .record-filters { display:flex; gap:6px; }
+.record-tag-filter{display:flex;align-items:center;gap:7px;color:#adc8f4;font-size:11px}.record-tag-filter select{max-width:170px;min-height:34px;padding:5px 24px 5px 9px;border:1px solid #7bafff65;border-radius:3px;background:#071f55;color:white;font:inherit}
 .record-filters button { min-height:36px; padding:6px 16px; font-size:12px; color:#adc8f4; }
 .record-filters button.selected { color:var(--night); background:var(--cyan); font-weight:800; transform:skew(-7deg); box-shadow:3px 3px 0 var(--electric); }
 .record-filters span { margin-left:7px; background:var(--pink); color:white; font-size:10px; padding:0 5px; }
@@ -486,6 +520,6 @@ function onRetryRecord(record) {
 .records-main > .empty-state .empty-title { color:white; }
 .records-main > .empty-state .empty-desc { color:var(--on-dark); }
 @media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:90%}}
-@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
+@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-tag-filter{flex:1 1 100%;justify-content:flex-start}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
 
 </style>

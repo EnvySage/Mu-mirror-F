@@ -51,6 +51,7 @@ const edit = reactive({
   mood: [],
   taskStatus: '',
   keywords: '',
+  userTags: '',
 })
 
 /** 只读态 md 渲染（renderMarkdown escape-first：用户内容永远以纯文本形态出现，防 XSS） */
@@ -64,6 +65,7 @@ function resetFrom(chunk) {
   edit.mood = [...(chunk.metadata?.mood || [])]
   edit.taskStatus = chunk.metadata?.taskStatus || ''
   edit.keywords = (chunk.metadata?.keywords || []).join('，')
+  edit.userTags = (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []).join('，')
 }
 
 watch(() => props.chunk.id, () => resetFrom(props.chunk), { immediate: true })
@@ -81,6 +83,7 @@ watch(() => props.chunk.metadata, (metadata) => {
   edit.mood = [...(metadata?.mood || [])]
   edit.taskStatus = metadata?.taskStatus || ''
   edit.keywords = (metadata?.keywords || []).join('，')
+  edit.userTags = (metadata?.userTags ?? metadata?.user_tags ?? []).join('，')
 })
 
 /** 新增空片段自动聚焦 */
@@ -149,6 +152,11 @@ async function onKeywordsBlur() {
   await save({ keywords })
 }
 
+async function onUserTagsBlur() {
+  const userTags = [...new Set(edit.userTags.split(/[，,\n]/).map(s => s.trim()).filter(Boolean))]
+  await save({ userTags })
+}
+
 /** 组装扁平 payload（ChunkDTO 契约） */
 async function save(fields) {
   if (saving.value) return
@@ -164,6 +172,7 @@ async function save(fields) {
     mood: edit.mood,
     taskStatus: (showTaskStatus.value && edit.taskStatus) || undefined,
     keywords: edit.keywords.split(/[，,]/).map(s => s.trim()).filter(Boolean),
+    userTags: [...new Set(edit.userTags.split(/[，,\n]/).map(s => s.trim()).filter(Boolean))],
     ...fields,
   } : { ...fields }
   let ok
@@ -324,6 +333,23 @@ async function removeChunk() {
       </div>
     </div>
 
+    <!-- 自由标签，与 AI 关键词分开保存 -->
+    <div class="chunk-field">
+      <div class="chunk-field-label">自由标签 · 记录筛选使用</div>
+      <input
+        v-if="canEdit"
+        v-model="edit.userTags"
+        class="keywords-input"
+        placeholder="用逗号分隔"
+        :disabled="saving"
+        @input="notifyDirty"
+        @blur="onUserTagsBlur"
+      >
+      <div v-else class="record-user-tags">
+        <span v-for="tag in (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? [])" :key="tag">{{ tag }}</span>
+      </div>
+    </div>
+
     <!-- 关键词 -->
     <div class="chunk-field">
       <div class="chunk-field-label">关键词 KEYWORDS · 3-5 个</div>
@@ -445,6 +471,7 @@ async function removeChunk() {
 .keywords-input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent); }
 
 .record-keywords { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.record-user-tags{display:flex;gap:6px;flex-wrap:wrap}.record-user-tags span{padding:2px 7px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:3px;color:var(--accent);font-size:10px}
 
 /* 只读态（done 记录）：控件禁用 + 弱化视觉，"不可修改"一眼可见 */
 .chunk-card.chunk-readonly { opacity: .72; }

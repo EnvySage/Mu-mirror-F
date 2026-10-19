@@ -35,6 +35,14 @@ const types = computed(() =>
 )
 
 const moodChips = computed(() => (firstChunk.value?.metadata?.mood || []).slice(0, 2))
+const userTags = computed(() => {
+  const values = new Set()
+  for (const chunk of chunks.value) {
+    const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []
+    if (Array.isArray(tags)) tags.forEach(tag => { if (tag) values.add(String(tag)) })
+  }
+  return [...values]
+})
 
 /** 处理中摘要截断 */
 const processingPreview = computed(() => {
@@ -110,6 +118,9 @@ const processingPreview = computed(() => {
     <div v-if="(firstChunk?.metadata?.keywords || []).length" class="record-keywords">
       <span v-for="k in firstChunk.metadata.keywords" :key="k" class="keyword">{{ k }}</span>
     </div>
+    <div v-if="userTags.length" class="record-user-tags" aria-label="自由标签">
+      <span v-for="tag in userTags" :key="tag">{{ tag }}</span>
+    </div>
     <div v-if="isMulti" class="record-footer">
       <span class="chunk-count">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -126,6 +137,7 @@ const processingPreview = computed(() => {
   position: relative; overflow: hidden;
   animation: cardIn .3s ease backwards;
 }
+.record-user-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.record-user-tags span{padding:2px 7px;border:1px solid #65d9ff65;border-radius:3px;color:var(--cyan,#65d9ff);font-size:10px;line-height:1.4}
 /* 左缘墨蓝条 */
 .record-card::before {
   content: ""; position: absolute; left: 0; top: 12px; bottom: 12px;

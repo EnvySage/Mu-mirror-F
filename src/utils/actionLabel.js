@@ -5,7 +5,9 @@ const labels = {
   'todo.delete': '删除待办',
   'record.create': '新建记录',
   'record.organize': '整理记录',
+  'record.delete': '删除记录',
   'record.memory.disable': '停止未来记忆使用',
+  'growth.adjust': '更正成长贡献',
 }
 
 export function getActionLabel(kind) {

@@ -23,6 +23,7 @@ export function updateRawRecord(id, content) {
  * @param {string} [params.status] - 按处理状态筛选
  * @param {string} [params.startDate] - 开始日期（yyyy-MM-dd）
  * @param {string} [params.endDate] - 结束日期（yyyy-MM-dd）
+ * @param {string|string[]} [params.tags] - 匹配任一自由标签
  * @returns {Promise<{ code: number, data: RecordVO[] }>}
  */
 export function getRecords(params) {

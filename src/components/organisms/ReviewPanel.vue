@@ -5,6 +5,8 @@ import { useTodoStore } from '@/stores/todo'
 import ChunkCard from '@/components/organisms/ChunkCard.vue'
 import RecordActionForm from '@/components/organisms/action-forms/RecordActionForm.vue'
 import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
+import { useGrowthStore } from '@/stores/growth'
+import { createPrepareKey } from '@/api/actions'
 
 /**
  * 审核面板（v2 原型版）
@@ -23,6 +25,7 @@ const emit = defineEmits(['open-record', 'authorization-change', 'proposal-save'
 
 const recordsStore = useRecordsStore()
 const todoStore = useTodoStore()
+const growth = useGrowthStore()
 
 const memoryState = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? (['reviewing', 'record_only'].includes(props.record.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
 const editable = computed(() => memoryState.value === 'NONE')
@@ -52,17 +55,82 @@ const initialMemorySelection = ref(new Set())
 const initialTodoSelection = ref(new Set())
 const dirtyChunks = ref(new Set())
 const originalOpen = ref(true)
+const growthDraft = ref([])
+const growthReviewVersion = ref(null)
+const growthTouched = ref(false)
+const growthReviewMin = computed(() => Number(growth.config?.review_min ?? growth.config?.reviewMin ?? NaN))
+const growthReviewMax = computed(() => Number(growth.config?.review_max ?? growth.config?.reviewMax ?? NaN))
 const chunkNodes = ref([])
 const sameSet = (a, b) => a.size === b.size && [...a].every((id) => b.has(id))
 watch(() => props.proposal?.id, () => { candidateEditing.value = true })
 
 function emitAuthorizationChange() {
+  const configured = Number.isFinite(growthReviewMin.value) && Number.isFinite(growthReviewMax.value)
+  const growthAdjustments = (configured ? growthDraft.value : [])
+    .filter(item => Number(item.points) > 0 && String(item.reason || '').trim())
+    .map(item => ({
+      requestId: item.requestId,
+      dimensionId: item.dimensionId,
+      points: Number(item.points),
+      reason: String(item.reason).trim(),
+    }))
+  const growthValid = !configured || !growthDraft.value.some(item => {
+    const points = Number(item.points)
+    return !Number.isInteger(points) || points < growthReviewMin.value || points > growthReviewMax.value || (points > 0 && !String(item.reason || '').trim())
+  }) && !(growthDraft.value.length && Number(growth.axesDefinition?.version) !== Number(growthReviewVersion.value))
   emit('authorization-change', {
     aiMemoryChunkIds: [...memorySelection.value],
     todoChunkIds: [...todoSelection.value],
-    dirty: dirtyChunks.value.size > 0 || !sameSet(memorySelection.value, initialMemorySelection.value) || !sameSet(todoSelection.value, initialTodoSelection.value),
+    growthAdjustments,
+    growthAxesVersion: growth.axesDefinition?.version ?? null,
+    growthValid,
+    dirty: growthTouched.value || dirtyChunks.value.size > 0 || !sameSet(memorySelection.value, initialMemorySelection.value) || !sameSet(todoSelection.value, initialTodoSelection.value),
   })
 }
+
+function initializeGrowthDraft() {
+  const axes = growth.axesDefinition?.axes || []
+  if (axes.length !== 5) return
+  const currentVersion = Number(growth.axesDefinition.version)
+  const priorDefinitionChanged = growthDraft.value.length === 5
+    && growthReviewVersion.value !== null
+    && Number(growthReviewVersion.value) !== currentVersion
+  const suggestions = priorDefinitionChanged ? [] : (props.record.growth_suggestions ?? props.record.growthSuggestions ?? [])
+  const byId = new Map((Array.isArray(suggestions) ? suggestions : []).map(item => [item.dimension_id ?? item.dimensionId, item]))
+  growthReviewVersion.value = currentVersion
+  growthTouched.value = false
+  growthDraft.value = axes.map(axis => {
+    const suggestion = byId.get(axis.id) || {}
+    return {
+      requestId: createPrepareKey(),
+      dimensionId: axis.id,
+      name: axis.name,
+      description: axis.description,
+      points: Number(suggestion.points ?? 0),
+      reason: suggestion.reason || '',
+    }
+  })
+  emitAuthorizationChange()
+}
+
+function updateGrowth(index, key, value) {
+  growthDraft.value = growthDraft.value.map((item, current) => current === index
+    ? { ...item, [key]: key === 'points' ? Number(value) : value }
+    : item)
+  growthTouched.value = true
+  emitAuthorizationChange()
+}
+
+async function recheckGrowthDefinition() {
+  await growth.fetchAxes(true).catch(() => {})
+  initializeGrowthDraft()
+}
+
+const growthDefinitionChanged = computed(() => growthDraft.value.length === 5
+  && Number(growth.axesDefinition?.version) !== Number(growthReviewVersion.value))
+
+growth.fetchAxes().then(initializeGrowthDraft).catch(() => {})
+watch(() => props.record.id, () => initializeGrowthDraft())
 
 function setChunkDirty({ id, dirty }) {
   const next = new Set(dirtyChunks.value)
@@ -291,6 +359,22 @@ function onAddChunk() {
       <div v-if="originalOpen" class="review-original-text">{{ record.content }}</div>
     </div>
 
+    <section v-if="editable" class="review-growth" aria-label="本条记录的成长贡献">
+      <div class="review-list-label"><span>本条记录的成长贡献</span><span>只在完整入库后入账</span></div>
+      <p v-if="growth.config" class="review-growth-note">AI 建议仅供参考。按这条记录里具体发生的事调整 {{ growthReviewMin }}–{{ growthReviewMax }} 分；不选记忆片段或入库降级时不会加分，之后可独立手动记一笔。</p>
+      <p v-else class="review-growth-note" role="status">五维分值配置暂不可用；本次记录审核仍可继续，但不会记成长分。</p>
+      <p v-if="growthDefinitionChanged" class="review-growth-warning" role="alert">五维定义在审核期间发生变化，当前分数不能确认。请按新定义重新审核。</p>
+      <p v-else-if="growth.axesDefinition && growthDraft.length !== 5" class="review-growth-note">正在读取五维定义…</p>
+      <div v-else-if="!growth.axesDefinition" class="review-growth-note" role="status">五维定义暂不可用；本次记录审核仍可继续，但不会记成长分。</div>
+      <div v-for="(item, index) in growthDraft" :key="item.dimensionId" class="review-growth-row">
+        <div><b>{{ item.name }}</b><small>{{ item.description }}</small></div>
+        <label><span>分数</span><input :value="item.points" type="number" :min="growthReviewMin" :max="growthReviewMax" step="1" :disabled="authorizationBusy || growthDefinitionChanged || !growth.config" :aria-label="`${item.name}成长分数`" @input="updateGrowth(index, 'points', $event.target.value)"></label>
+        <label class="review-growth-reason"><span>本条依据</span><input :value="item.reason" maxlength="500" :disabled="authorizationBusy || growthDefinitionChanged" :aria-label="`${item.name}贡献原因`" placeholder="有具体进展再填写" @input="updateGrowth(index, 'reason', $event.target.value)"></label>
+      </div>
+      <button v-if="growthDefinitionChanged" type="button" class="growth-recheck" :disabled="authorizationBusy" @click="recheckGrowthDefinition">按新定义重新审核</button>
+      <p v-if="growthDraft.some(item => Number(item.points) > 0 && !String(item.reason || '').trim())" class="review-growth-warning" role="alert">有分数的维度需要填写具体依据。</p>
+    </section>
+
     <!-- 片段卡片列表 -->
     <div class="review-list-label">
       <span>{{ readonly ? '片段卡片 · CHUNKS（已入库，只读）' : '片段卡片 · CHUNKS' }}</span>
@@ -429,7 +513,8 @@ function onAddChunk() {
 </template>
 
 <style scoped>
-.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}
+.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}.review-growth{margin:14px 0;padding:12px;background:var(--card);border:1px solid var(--line)}.review-growth-note,.review-growth-warning{margin:6px 0;color:var(--text-mid);font-size:11px;line-height:1.5}.review-growth-warning{color:var(--danger)}.review-growth-row{display:grid;grid-template-columns:minmax(100px,.7fr) 88px minmax(130px,1.4fr);align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.review-growth-row>div{display:grid;gap:3px}.review-growth-row b{font-size:12px}.review-growth-row small{color:var(--text-low);font-size:10px}.review-growth-row label{display:grid;gap:4px;color:var(--text-low);font-size:10px}.review-growth-row input{width:100%;min-height:34px;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text-hi);font:inherit}.growth-recheck{margin-top:8px;padding:7px 10px;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);cursor:pointer}
+@media(max-width:560px){.review-growth-row{grid-template-columns:minmax(80px,1fr) 72px}.review-growth-reason{grid-column:1/-1}}
 .memory-state-banner{display:grid;gap:4px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--text-low);background:var(--card);color:var(--text-mid);font-size:12px;line-height:1.5}.memory-state-banner b{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-hi)}.memory-state-banner small{font-size:11px;color:var(--text-mid)}.memory-state-banner[data-state="PENDING"]{border-left-color:var(--cyan);background:#eaf7ff}.memory-state-banner[data-state="READY"]{border-left-color:#3eb27d;background:#effaf4}.memory-state-banner[data-state="DISABLED"],.memory-state-banner[data-state="UNKNOWN"]{border-left-color:var(--warn);background:var(--warn-bg)}
 .review-panel { animation: fadeIn .3s ease; }
 

@@ -17,6 +17,7 @@ import TodoRing from '@/components/charts/TodoRing.vue'
 import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
+import GrowthPanel from '@/components/organisms/GrowthPanel.vue'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
@@ -400,6 +401,7 @@ onBeforeUnmount(() => {
         <span class="period-caption">近 30 天</span>
         <button class="p3-button" :disabled="mirror.generating || mirror.loading" @click="onGenerate">{{ mirror.generating ? '正在显影…' : '生成新快照' }}<span aria-hidden="true">↗</span></button>
       </PageMasthead>
+      <GrowthPanel />
       <section class="reflection-stage" aria-label="近 30 天生活回顾">
         <div class="stage-word" aria-hidden="true">REFLECT.</div>
         <div class="stage-orbit" aria-hidden="true" />

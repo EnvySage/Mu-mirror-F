@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { useActionsStore } from '@/stores/actions'
 import { dateLabel } from '@/utils/time'
 import {
   getRecords as apiGetRecords,
@@ -315,6 +316,7 @@ export const useRecordsStore = defineStore('records', () => {
         contentType: payload.contentType,
         mood: payload.mood,
         keywords: payload.keywords,
+        userTags: payload.userTags,
         ...(payload.taskStatus ? { taskStatus: payload.taskStatus } : {}),
       })
       const chunk = res.data
@@ -334,6 +336,7 @@ export const useRecordsStore = defineStore('records', () => {
         ...(payload.contentType ? { contentType: payload.contentType } : {}),
         ...(payload.mood && payload.mood.length ? { mood: payload.mood } : {}),
         ...(payload.keywords && payload.keywords.length ? { keywords: payload.keywords } : {}),
+        ...(payload.userTags && payload.userTags.length ? { userTags: payload.userTags } : {}),
         ...(payload.taskStatus ? { taskStatus: payload.taskStatus } : {}),
       }
       return true
@@ -347,15 +350,20 @@ export const useRecordsStore = defineStore('records', () => {
    */
   async function deleteRecord(id) {
     try {
-      await apiDeleteRecord(id)
-      // 从本地列表移除
-      records.value = records.value.filter(r => r.id !== id)
-      return true
+      const res = await apiDeleteRecord(id)
+      const proposal = res.data
+      if (!proposal?.id) throw new Error('删除确认卡暂不可用，请刷新记录后重试')
+      useActionsStore().upsert(proposal)
+      return proposal
     } catch (err) {
       console.error('Failed to delete record:', err)
       error.value = err.message || '删除记录失败'
-      return false
+      return null
     }
+  }
+
+  function removeRecordLocally(id) {
+    records.value = records.value.filter(record => String(record.id) !== String(id))
   }
 
   /**
@@ -535,6 +543,7 @@ export const useRecordsStore = defineStore('records', () => {
     addChunk,
     createChunkForRecord,
     deleteRecord,
+    removeRecordLocally,
     confirmReview,
     fetchCalendarMarks,
     getById,

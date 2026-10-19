@@ -32,6 +32,7 @@ const rawEditing = ref(false)
 const rawDraft = ref('')
 const preparedRecordAction = ref(null)
 const memoryLifecycleAction = ref(null)
+const deleteRecordAction = ref(null)
 let pendingRecordPrepareKey = null
 let pendingRecordPrepareFingerprint = ''
 let pendingMemoryDisableKey = null
@@ -229,6 +230,7 @@ watch(() => ui.selectedRecordId, async (id) => {
   confirming.value = false
   authorizationRequestId += 1
   preparedRecordAction.value = null
+  deleteRecordAction.value = null
   stopRecordActionPolling()
   memoryLifecycleAction.value = null
   pendingMemoryDisableKey = null
@@ -338,15 +340,25 @@ async function retryLoad() {
 // ---- 确认入库（长时 loading 文案） ----
 const aiMemoryChunkIds = ref([])
 const todoChunkIds = ref([])
+const growthAdjustments = ref([])
+const growthAxesVersion = ref(null)
+const growthReviewValid = ref(true)
 
 function onAuthorizationChange(value) {
   aiMemoryChunkIds.value = value.aiMemoryChunkIds
   todoChunkIds.value = value.todoChunkIds
+  growthAdjustments.value = value.growthAdjustments || []
+  growthAxesVersion.value = value.growthAxesVersion ?? null
+  growthReviewValid.value = value.growthValid !== false
   authorizationDirty.value = !!value.dirty
 }
 
 async function onConfirm() {
   if (confirming.value) return
+  if (!growthReviewValid.value) {
+    actionError.value = '请先修正成长分数，或按最新五维定义重新审核。'
+    return
+  }
   confirming.value = true
   const id = ui.selectedRecordId
   const operation = ++authorizationRequestId
@@ -357,6 +369,7 @@ async function onConfirm() {
   const payload = {
     aiMemoryChunkIds: aiMemoryChunkIds.value,
     todoChunkIds: todoChunkIds.value,
+    ...(growthAdjustments.value.length ? { growthAdjustments: growthAdjustments.value, axesVersion: growthAxesVersion.value } : {}),
     ...(todoResolutions.length ? { todoResolutions } : {}),
   }
   const updated = await recordsStore.confirmReview(id, payload, { isCurrent: () => operation === authorizationRequestId && String(ui.selectedRecordId) === String(id) })
@@ -472,6 +485,17 @@ async function onMemoryLifecycleUpdated(card) {
   }
 }
 
+async function onDeleteRecordActionUpdated(card) {
+  if (card) deleteRecordAction.value = card
+  if (card?.state === 'SUCCEEDED') {
+    toast.success('记录已删除，关联成长贡献已按预览移除')
+    authorizationDirty.value = false
+    rawEditing.value = false
+    ui.detailDraftDirty = false
+    await close()
+  }
+}
+
 /** failed：重试 / 删除 */
 const submitting = ref(false)
 
@@ -481,13 +505,11 @@ async function retryProcessing() {
 
 async function deleteRecord() {
   if (!record.value || submitting.value) return
-  if (!window.confirm('确定删除这条记录？软删除后不可恢复。')) return
   submitting.value = true
-  const ok = await recordsStore.deleteRecord(record.value.id)
+  const proposal = await recordsStore.deleteRecord(record.value.id)
   submitting.value = false
-  if (ok) {
-    toast.success('记录已删除')
-    close()
+  if (proposal) {
+    deleteRecordAction.value = proposal
   } else {
     actionError.value = recordsStore.error || '删除失败，请重试'
   }
@@ -507,7 +529,7 @@ async function deleteRecord() {
           <button
             v-if="showConfirm"
             class="detail-confirm"
-            :disabled="confirming"
+            :disabled="confirming || !growthReviewValid"
             @click="onConfirm"
           >{{ confirming ? '保存授权…' : record.status === 'reviewing' ? '确认所选片段' : '更新记忆授权' }}</button>
           <button v-if="canOfferCorrection" class="detail-confirm" type="button" @click="ui.openWriteModal(record.id)">补充 / 更正</button>
@@ -523,6 +545,7 @@ async function deleteRecord() {
           <div v-if="actionError" class="detail-error">{{ actionError }}</div>
           <ActionCard v-if="preparedRecordAction" :proposal="preparedRecordAction" hide-edit @updated="onRecordActionUpdated" />
           <ActionCard v-if="memoryLifecycleAction" :proposal="memoryLifecycleAction" hide-edit @updated="onMemoryLifecycleUpdated" />
+          <ActionCard v-if="deleteRecordAction" :proposal="deleteRecordAction" hide-edit @updated="onDeleteRecordActionUpdated" />
 
           <!-- 处理中：三步动画 -->
           <div v-if="ui.detailMode === 'processing'" class="processing-view">
