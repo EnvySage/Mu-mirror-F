@@ -6,7 +6,17 @@ import {
   getSessions as apiGetSessions,
   getSession as apiGetSession,
   deleteSession as apiDeleteSession,
+  getRun as apiGetRun,
 } from '@/api/chat'
+import {
+  applyChatError,
+  applyTransportError,
+  createChatRequest,
+  normalizeChatDone,
+  normalizeChatMeta,
+  normalizeCreatedRecords,
+  retryChatRequest,
+} from '@/utils/chatProtocol'
 
 /**
  * 对话 store（T-B-4 已就绪：POST /api/mirror/chat SSE 流式 + 会话 CRUD）
@@ -87,13 +97,25 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 中断当前流（切页/新会话时防串流） */
   let abortController = null
+  let activeAiMessage = null
+  let pendingRetry = null
+
+  function discardRetry() {
+    if (pendingRetry?.message) pendingRetry.message.retryable = false
+    pendingRetry = null
+  }
 
   function pushUser(content) {
     messages.value.push({ id: String(++msgId), role: 'user', content })
   }
 
   function pushAiPlaceholder(route) {
-    const msg = { id: String(++msgId), role: 'ai', content: '', thinking: '', route: route || null, typing: true, sources: [], toolsUsed: [], vaultRefs: [] }
+    const msg = {
+      id: String(++msgId), role: 'ai', content: '', thinking: '', route: route || null,
+      typing: true, status: null, outcome: null, errorCode: null, errorMessage: '',
+      requestId: null, runId: null, retryable: false, checkingRun: false,
+      sources: [], toolsUsed: [], vaultRefs: [], createdRecords: [],
+    }
     messages.value.push(msg)
     // 必须返回数组里的响应式代理，不能返回原始 msg：之后 SSE 每一帧都往这个对象上写
     // thinking/content，改原始对象不触发 Vue 更新——界面会一直停着，直到流结束时
@@ -164,22 +186,63 @@ export const useChatStore = defineStore('chat', () => {
     const text = content.trim()
     if (!text || sending.value) return
 
+    discardRetry()
+    const request = createChatRequest(text, sessionId.value)
     pushUser(text)
-    sending.value = true
     // 续聊中路由未知：不发眉标，等 meta 事件补上
     const aiMsg = pushAiPlaceholder(null)
+    aiMsg.requestId = request.requestId
+    return runChatRequest(request, aiMsg)
+  }
+
+  async function retryLastMessage(messageId = null) {
+    if (sending.value || !pendingRetry) return false
+    if (messageId != null && String(pendingRetry.message.id) !== String(messageId)) return false
+    const { request, message } = pendingRetry
+    pendingRetry = null
+    message.content = ''
+    message.thinking = ''
+    message.route = null
+    message.status = null
+    message.outcome = null
+    message.errorCode = null
+    message.errorMessage = ''
+    message.requestId = request.requestId
+    message.runId = null
+    message.retryable = false
+    message.sources = []
+    message.toolsUsed = []
+    message.vaultRefs = []
+    message.createdRecords = []
+    message.typing = true
+    return runChatRequest(retryChatRequest(request), message)
+  }
+
+  async function runChatRequest(request, aiMsg) {
+    sending.value = true
+    activeAiMessage = aiMsg
 
     if (IS_DEMO_PREVIEW) {
-      await new Promise(resolve => setTimeout(resolve, 650))
-      aiMsg.typing = false
-      aiMsg.route = 'reflection'
-      aiMsg.content = `这是预览环境中的示例回应。你提到“${text.slice(0, 80)}”，可以先把它拆成一件具体的小事，再看看它和最近的节奏、感受有什么联系。演示对话不会发送到 AI 服务，也不会保存。`
-      sending.value = false
-      return
+      try {
+        await new Promise(resolve => setTimeout(resolve, 650))
+        // Cancellation or a newer message may have replaced this mock run while it waited.
+        if (activeAiMessage !== aiMsg) return false
+        aiMsg.typing = false
+        aiMsg.status = 'completed'
+        aiMsg.route = 'reflection'
+        aiMsg.content = `这是预览环境中的示例回应。你提到“${request.question.slice(0, 80)}”，可以先把它拆成一件具体的小事，再看看它和最近的节奏、感受有什么联系。演示对话不会发送到 AI 服务，也不会保存。`
+      } finally {
+        if (activeAiMessage === aiMsg) {
+          sending.value = false
+          activeAiMessage = null
+        }
+      }
+      return true
     }
 
-    abortController = new AbortController()
-    let received = false
+    const controller = new AbortController()
+    abortController = controller
+    let receivedTerminal = false
 
     try {
       const token = getStorage('token')
@@ -189,12 +252,8 @@ export const useChatStore = defineStore('chat', () => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          question: text,
-          // 续聊归属同一会话；新会话为 null 由后端创建
-          sessionId: sessionId.value,
-        }),
-        signal: abortController.signal,
+        body: JSON.stringify(request),
+        signal: controller.signal,
       })
 
       if (!res.ok || !res.body) {
@@ -222,28 +281,36 @@ export const useChatStore = defineStore('chat', () => {
         while ((idx = buffer.indexOf('\n\n')) !== -1) {
           const frame = buffer.slice(0, idx)
           buffer = buffer.slice(idx + 2)
-          handleFrame(frame, aiMsg)
-          received = true
+          if (handleFrame(frame, aiMsg)) receivedTerminal = true
         }
       }
       // 残余帧（部分实现最后不带空行）
       if (buffer.trim()) {
-        handleFrame(buffer, aiMsg)
-        received = true
+        if (handleFrame(buffer, aiMsg)) receivedTerminal = true
       }
 
-      if (!received) {
-        finishWithFallback(aiMsg, FALLBACK_TEXT)
-      }
+      // A clean EOF without a done event is still an interrupted stream.
+      if (!receivedTerminal && aiMsg.status !== 'cancelled') applyTransportError(aiMsg, FALLBACK_TEXT)
     } catch (err) {
       if (err.name === 'AbortError') return
-      // fetch / 流读取失败（后端未起、断网等）→ 兜底文案，页面不白屏
       console.error('Chat stream failed:', err)
-      finishWithFallback(aiMsg, FALLBACK_TEXT)
+      applyTransportError(aiMsg, FALLBACK_TEXT)
     } finally {
-      sending.value = false
-      abortController = null
+      if (abortController === controller) abortController = null
+      if (activeAiMessage === aiMsg) {
+        sending.value = false
+        activeAiMessage = null
+      }
     }
+
+    if (receivedTerminal || aiMsg.status !== 'transport_error') {
+      aiMsg.retryable = false
+      if (pendingRetry?.message === aiMsg) pendingRetry = null
+    } else {
+      aiMsg.retryable = true
+      pendingRetry = { request: retryChatRequest(request), message: aiMsg }
+    }
+    return receivedTerminal
   }
 
   /**
@@ -261,25 +328,25 @@ export const useChatStore = defineStore('chat', () => {
         dataLines.push(line.slice(5).replace(/^ /, ''))
       }
     }
-    if (!dataLines.length) return
+    if (!dataLines.length) return false
     const payload = parseData(dataLines.join('\n'))
 
     switch (event) {
       case 'meta':
         if (payload) {
-          aiMsg.route = payload.route || aiMsg.route
-          // 工具轨迹（E6）：meta.tools_used ["search_records:12条"] → 气泡上方芯片行
-          if (payload.tools_used) aiMsg.toolsUsed = normalizeToolsUsed(payload.tools_used)
-          if (payload.sessionId) {
-            sessionId.value = payload.sessionId
-            activeSessionId.value = payload.sessionId
-            // 后端建会话（首条消息）→ 写入存档
-            saveSessionId(payload.sessionId)
+          const meta = normalizeChatMeta(payload)
+          aiMsg.route = meta.route || aiMsg.route
+          aiMsg.runId = meta.runId || aiMsg.runId
+          aiMsg.requestId = meta.requestId || aiMsg.requestId
+          if (meta.toolsUsed.length) aiMsg.toolsUsed = normalizeToolsUsed(meta.toolsUsed)
+          if (meta.sessionId) {
+            sessionId.value = meta.sessionId
+            activeSessionId.value = meta.sessionId
+            saveSessionId(meta.sessionId)
           }
         }
         break
       case 'thinking':
-        // 思考增量（与 delta 同构；parseData 失败已静默返回 null → 半包/坏帧直接忽略）
         if (payload && typeof payload.content === 'string') {
           aiMsg.thinking = (aiMsg.thinking || '') + payload.content
         }
@@ -298,29 +365,65 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'vault_refs':
-        // 对话文件卡（4.1）：Java 解析 AI 输出 [n] 标记后下发，此处归一化 + 同气泡去重
-        if (Array.isArray(payload)) {
-          aiMsg.vaultRefs = normalizeVaultRefs(payload)
+        if (Array.isArray(payload)) aiMsg.vaultRefs = normalizeVaultRefs(payload)
+        break
+      case 'done': {
+        const done = normalizeChatDone(payload || {})
+        aiMsg.typing = false
+        aiMsg.status = done.status
+        aiMsg.outcome = done.outcome
+        aiMsg.errorCode = done.errorCode
+        aiMsg.runId = done.runId || aiMsg.runId
+        aiMsg.requestId = done.requestId || aiMsg.requestId
+        aiMsg.route = done.route || aiMsg.route
+        aiMsg.createdRecords = done.createdRecords
+        if (done.sessionId) {
+          sessionId.value = done.sessionId
+          activeSessionId.value = done.sessionId
+          saveSessionId(done.sessionId)
         }
-        break
-      case 'done':
-        // done: { sessionId, route, fallback } —— 结束标志。
-        // 思考收尾：done 即流式结束，ThinkingPanel 据 typing 翻转自动折叠（答完收起可回看）
-        aiMsg.typing = false
-        break
+        if (['failed', 'cancelled', 'abandoned'].includes(done.status) && !aiMsg.content) {
+          aiMsg.content = done.status === 'cancelled' ? '本轮请求已取消' : FALLBACK_TEXT
+        }
+        return true
+      }
       case 'error':
-        aiMsg.typing = false
-        aiMsg.content = (payload && payload.message) || FALLBACK_TEXT
+        applyChatError(aiMsg, payload || {}, FALLBACK_TEXT)
         break
       default:
         break
     }
+    return false
   }
 
-  /** 兜底收尾：无任何事件/流中断时展示兜底文案 */
-  function finishWithFallback(aiMsg, text) {
-    aiMsg.typing = false
-    if (!aiMsg.content) aiMsg.content = text
+  async function refreshRun(message) {
+    if (!message?.runId || message.checkingRun) return null
+    message.checkingRun = true
+    try {
+      const response = await apiGetRun(message.runId)
+      const run = response?.data
+      if (!run) return null
+      message.status = run.status || message.status
+      message.outcome = run.outcome || null
+      message.errorCode = run.error_code || null
+      if (run.assistant) {
+        const assistant = run.assistant
+        if (typeof assistant.content === 'string') message.content = assistant.content
+        message.sources = (assistant.sources || [])
+          .filter(source => source && source.record_id > 0)
+          .map(source => ({ n: source.n ?? null, recordId: source.record_id, quote: source.quote || '', date: source.date || '' }))
+        message.toolsUsed = normalizeToolsUsed(assistant.tools_used || [])
+        message.vaultRefs = normalizeVaultRefs(assistant.vault_refs || [])
+        message.createdRecords = normalizeCreatedRecords(assistant.created_records || [])
+      }
+      message.typing = false
+      return run
+    } catch (err) {
+      console.error('Failed to refresh chat run:', err)
+      return null
+    } finally {
+      message.checkingRun = false
+    }
   }
 
   // ==================== 会话存档（localStorage） ====================
@@ -366,6 +469,7 @@ export const useChatStore = defineStore('chat', () => {
    */
   async function loadSession(id) {
     if (sending.value) abort()
+    discardRetry()
     historyLoading.value = true
     historyError.value = false
     try {
@@ -383,6 +487,13 @@ export const useChatStore = defineStore('chat', () => {
         // 历史回放：B 在消息 VO 带出 tools_used / vault_refs 才有值，缺省空数组不渲染
         toolsUsed: normalizeToolsUsed(m.tools_used || []),
         vaultRefs: normalizeVaultRefs(m.vault_refs || []),
+        createdRecords: normalizeCreatedRecords(m.created_records || []),
+        status: 'completed',
+        outcome: null,
+        requestId: null,
+        runId: null,
+        retryable: false,
+        checkingRun: false,
         // thinking 不落 conversation_history——历史消息永远没有思考面板（契约）
         thinking: '',
       }))
@@ -434,11 +545,18 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 中断当前流式请求 */
   function abort() {
+    discardRetry()
+    if (activeAiMessage) {
+      activeAiMessage.typing = false
+      activeAiMessage.status = 'cancelled'
+      activeAiMessage.retryable = false
+    }
     if (abortController) {
       abortController.abort()
       abortController = null
     }
     sending.value = false
+    activeAiMessage = null
   }
 
   // ==================== 进页自动恢复 ====================
@@ -500,6 +618,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearMessages() {
+    discardRetry()
     messages.value = []
     sessionId.value = null
     activeSessionId.value = null
@@ -518,6 +637,8 @@ export const useChatStore = defineStore('chat', () => {
     historyLoading,
     historyError,
     sendMessage,
+    retryLastMessage,
+    refreshRun,
     fetchSessions,
     loadSession,
     removeSession,

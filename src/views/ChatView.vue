@@ -10,6 +10,7 @@ import FilePreviewModal from '@/components/organisms/FilePreviewModal.vue'
 import VaultRefCard from '@/components/molecules/VaultRefCard.vue'
 import VaultUploadCard from '@/components/molecules/VaultUploadCard.vue'
 import VaultDigestReceipt from '@/components/molecules/VaultDigestReceipt.vue'
+import CreatedRecordReceipt from '@/components/molecules/CreatedRecordReceipt.vue'
 import ToolTrail from '@/components/molecules/ToolTrail.vue'
 import ThinkingPanel from '@/components/molecules/ThinkingPanel.vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
@@ -166,6 +167,21 @@ function openSource(msg) {
   if (!msg.recordId) return
   ui.selectedRecordId = msg.recordId
   ui.showDetail = true
+}
+
+function openCreatedRecord(receipt) {
+  if (!receipt?.recordId) return
+  ui.selectedRecordId = receipt.recordId
+  ui.showDetail = true
+}
+
+async function refreshRun(message) {
+  const run = await chat.refreshRun(message)
+  if (!run) {
+    toast.error('查询本轮状态失败，请稍后再试')
+  } else if (run.outcome === 'action_unknown') {
+    toast.info('保存结果仍待确认，请稍后重新查询')
+  }
 }
 
 /**
@@ -480,6 +496,30 @@ async function onRemoveSession(id) {
                     @download="downloadRef"
                   />
                 </div>
+
+                <CreatedRecordReceipt
+                  v-for="record in msg.createdRecords || []"
+                  :key="`created-record-${record.recordId}`"
+                  :record="record"
+                  @open="openCreatedRecord"
+                />
+
+                <div v-if="msg.outcome === 'action_unknown' || msg.status === 'running'" class="chat-msg-state chat-msg-state-pending">
+                  <span>保存结果待确认</span>
+                  <button type="button" :disabled="msg.checkingRun || !msg.runId" @click="refreshRun(msg)">
+                    {{ msg.checkingRun ? '正在查询…' : '查询本轮状态' }}
+                  </button>
+                </div>
+                <div v-else-if="['failed', 'cancelled', 'abandoned'].includes(msg.status)" class="chat-msg-state chat-msg-state-error">
+                  <span>{{ msg.errorMessage || (msg.status === 'cancelled' ? '本轮请求已取消' : '本轮未能完成') }}</span>
+                </div>
+                <div v-else-if="msg.status === 'transport_error'" class="chat-msg-state chat-msg-state-error">
+                  <span>{{ msg.errorMessage || '连接中断，本轮可能仍在服务端处理' }}</span>
+                  <button v-if="msg.retryable" type="button" @click="chat.retryLastMessage(msg.id)">重试本轮</button>
+                  <button v-if="msg.runId" type="button" :disabled="msg.checkingRun" @click="refreshRun(msg)">
+                    {{ msg.checkingRun ? '正在查询…' : '查询本轮状态' }}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -689,6 +729,21 @@ async function onRemoveSession(id) {
 
 /* 对话文件卡容器（vault_refs，与 sources 分区隔开） */
 .chat-msg-vaultrefs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+.chat-msg-state {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: 11.5px; line-height: 1.5;
+}
+.chat-msg-state-pending { color: var(--warn); background: var(--warn-bg); }
+.chat-msg-state-error { color: var(--danger); background: var(--danger-bg); }
+.chat-msg-state button {
+  flex: 0 0 auto; padding: 4px 9px; border: 1px solid currentColor;
+  border-radius: var(--radius-sm); background: #FFFFFF; color: inherit;
+  font-size: 11px; cursor: pointer;
+}
+.chat-msg-state button:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 520px) { .chat-msg-state { align-items: flex-start; flex-wrap: wrap; } }
 
 /* 回执气泡：白底全宽（回执卡自身带边框，气泡退为容器） */
 .chat-msg-bubble-receipt { background: transparent; border: none; padding: 0; max-width: 100%; width: 100%; }

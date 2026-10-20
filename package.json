@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:chat-protocol": "node --test tests/chat-protocol.test.mjs",
     "build:preview": "vite build --mode preview",
     "preview": "vite preview"
   },
