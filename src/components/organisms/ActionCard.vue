@@ -17,7 +17,7 @@ const records = useRecordsStore()
 const editing = ref(false)
 const error = ref('')
 const busy = computed(() => !!actions.busy[props.proposal.id])
-const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
+const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind === 'record.memory.disable' ? '永久移除记忆' : props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
 const hasGrowthSuggestions = computed(() => {
@@ -79,7 +79,10 @@ watch(isPreparingRecord, running => {
   stopPreparationPoll()
   if (!running) return
   preparationPoll = setInterval(() => {
-    if (!actions.busy[props.proposal.id]) actions.refresh(props.proposal.id).catch(() => {})
+    if (actions.busy[props.proposal.id]) return
+    actions.refresh(props.proposal.id)
+      .then(card => { if (card) emit('updated', card) })
+      .catch(() => {})
   }, 1500)
 }, { immediate: true })
 onBeforeUnmount(stopPreparationPoll)
@@ -149,12 +152,13 @@ async function refreshStatus() {
 </script>
 
 <template>
-  <section class="action-card" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡">
+  <section class="action-card" :class="{ 'action-danger': (proposal.preview?.afterMemoryState ?? proposal.preview?.after_memory_state) === 'DISABLED' }" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡">
     <header><span class="action-kind">{{ actionLabel }}</span><span class="action-state" :class="`state-${String(proposal.state || '').toLowerCase()}`">{{ candidateNeedsRecheck ? '五维定义需重新确认' : isPreparingRecord ? '正在准备候选' : stateLabel }}</span></header>
     <strong class="action-title">{{ title }}</strong>
     <p v-if="description" class="action-description">{{ description }}</p>
     <p v-if="deleteImpact" class="action-description delete-impact" role="alert">{{ deleteImpact }}</p>
     <p v-if="isPreparingRecord" class="action-description" role="status">正在准备可编辑候选；确认前不会创建或修改记录。</p>
+    <p v-if="recordDraft?.mode === 'AI_ASSISTED' && proposal.kind?.startsWith('record.')" class="action-description">确认后会加入 Mirror 记忆；不想继续使用可在记忆管理中停止。</p>
     <p v-if="candidateNeedsRecheck" class="action-error" role="alert">{{ growthRecheckFailed || !growth.axesDefinition ? '暂时无法核对五维定义版本；核对完成前不会确认这张卡。' : '当前五维定义与候选版本不一致。点“重新核对”刷新后，若仍不一致，请取消本卡并重新准备候选。' }} <button type="button" :disabled="recheckingGrowth" @click="recheckGrowthDefinition">{{ recheckingGrowth ? '正在核对…' : '重新核对' }}</button></p>
     <p v-if="preparationFailureMessage" class="action-error" role="alert">{{ preparationFailureMessage }}</p>
     <details v-if="proposal.preview"><summary>查看影响与预览</summary><pre>{{ previewText(proposal.preview) }}</pre></details>
@@ -171,5 +175,6 @@ async function refreshStatus() {
 </template>
 
 <style scoped>
-.action-card{margin:12px 0;padding:15px;border:1px solid #7186c966;border-left:4px solid var(--accent,#566bd8);border-radius:10px;background:var(--surface,#f8f9ff);color:var(--text,#18213a);max-width:620px}.action-card header,.action-card footer{display:flex;align-items:center;gap:8px}.action-card header{justify-content:space-between}.action-kind{font-size:11px;letter-spacing:.04em;color:var(--text-low,#6d7895)}.action-state{font-size:12px;font-weight:700}.state-succeeded{color:#14804a}.state-failed,.state-stale{color:#b34332}.state-cancelled{color:#697386}.action-title{display:block;margin-top:9px}.action-description,.action-result{margin:7px 0;font-size:13px;line-height:1.5}.action-card details{margin-top:9px;font-size:12px}.action-card pre{max-height:220px;overflow:auto;padding:9px;background:#68708012;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}.action-card footer{justify-content:flex-end;margin-top:12px}.action-card footer button{padding:7px 10px;border:1px solid #7186c966;border-radius:6px;background:transparent;color:inherit;cursor:pointer}.action-card footer .primary{border-color:var(--accent,#566bd8);background:var(--accent,#566bd8);color:white}.action-card button:disabled{opacity:.55;cursor:wait}.action-error{color:#ad3027;font-size:12px}.action-error-code{font-size:11px;color:#7b6470}
+.action-card{margin:12px 0;padding:15px;border:1px solid #7186c966;border-left:4px solid var(--accent,#566bd8);border-radius:10px;background:var(--surface,#f8f9ff);color:var(--text,#18213a);max-width:620px}
+.action-card.action-danger{border-color:#e0667e;border-left-color:#d9294c;background:#fff1f4}.action-card header,.action-card footer{display:flex;align-items:center;gap:8px}.action-card header{justify-content:space-between}.action-kind{font-size:11px;letter-spacing:.04em;color:var(--text-low,#6d7895)}.action-state{font-size:12px;font-weight:700}.state-succeeded{color:#14804a}.state-failed,.state-stale{color:#b34332}.state-cancelled{color:#697386}.action-title{display:block;margin-top:9px}.action-description,.action-result{margin:7px 0;font-size:13px;line-height:1.5}.action-card details{margin-top:9px;font-size:12px}.action-card pre{max-height:220px;overflow:auto;padding:9px;background:#68708012;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}.action-card footer{justify-content:flex-end;margin-top:12px}.action-card footer button{padding:7px 10px;border:1px solid #7186c966;border-radius:6px;background:transparent;color:inherit;cursor:pointer}.action-card footer .primary{border-color:var(--accent,#566bd8);background:var(--accent,#566bd8);color:white}.action-card button:disabled{opacity:.55;cursor:wait}.action-error{color:#ad3027;font-size:12px}.action-error-code{font-size:11px;color:#7b6470}
 </style>

@@ -12,7 +12,6 @@ import { completeCreatedRecordAction, createActionStatusPoller } from '@/utils/w
 
 const props = defineProps({
   show: Boolean,
-  correctionOfRecordId: { type: [String, Number], default: null },
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -87,7 +86,7 @@ async function handleSubmit() {
   preparingAction.value = requestAiProcessing
   try {
     if (requestAiProcessing) {
-      const fingerprint = `record.create:${props.correctionOfRecordId || ''}:${content.value.trim()}`
+      const fingerprint = `record.create:${content.value.trim()}`
       if (!pendingPrepareKey || pendingPrepareFingerprint !== fingerprint) {
         pendingPrepareFingerprint = fingerprint
         pendingPrepareKey = createPrepareKey()
@@ -95,7 +94,6 @@ async function handleSubmit() {
       const action = await actionsStore.prepare('record.create', {
         rawContent: content.value.trim(),
         mode: 'AI_ASSISTED',
-        ...(props.correctionOfRecordId ? { correctionOfRecordId: props.correctionOfRecordId } : {}),
       }, pendingPrepareKey)
       if (generation !== prepareGeneration || !props.show) {
         if (action?.id) await actionsStore.cancel(action.id).catch(() => {})
@@ -104,16 +102,16 @@ async function handleSubmit() {
       preparedAction.value = action
       pendingPrepareKey = null
       pendingPrepareFingerprint = ''
-      toast.info(props.correctionOfRecordId ? '补充 / 更正候选已准备，确认后会新建关联记录' : '整理候选已准备，确认后才会创建记录')
+      toast.info('整理候选已准备，确认后才会创建记录')
       return action
     }
-    const record = await recordsStore.createRecord(content.value.trim(), false, props.correctionOfRecordId)
+    const record = await recordsStore.createRecord(content.value.trim(), false)
     pendingPrepareKey = null
     pendingPrepareFingerprint = ''
     if (generation !== prepareGeneration || !props.show) return
     emit('saved', record)
     emit('close')
-    toast.success(props.correctionOfRecordId ? '补充 / 更正记录已保存并关联来源' : '已保存为仅记录')
+    toast.success('已保存为仅记录')
     return record
   } catch (err) {
     error.value = err.message || '创建失败，请重试'
@@ -183,7 +181,7 @@ onBeforeUnmount(() => {
           <div class="write-stage-copy"><span class="write-kicker">留给未来的自己</span><h2 id="write-title">这一刻，<br>值得留下。</h2><p>不必写得完整，也不用想好答案。<br>从今天的一件小事开始。</p></div>
           <span class="write-stage-bottom">MIRROR / 生活正在显影</span>
         </aside>
-        <div class="write-paper">
+        <div class="write-paper" :class="{ 'has-action': !!preparedAction }">
           <header class="write-header"><div><span>写日记</span><time :datetime="openedAt.toLocaleDateString('sv-SE')">{{ dateLabel }}</time></div><button class="write-cancel" :disabled="loading" @click="onClose" aria-label="关闭写日记">关闭 <span aria-hidden="true">×</span></button></header>
           <div class="write-body">
             <p class="write-address" aria-hidden="true">Dear myself,</p>
@@ -203,7 +201,7 @@ onBeforeUnmount(() => {
               </label>
             </div>
             <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ correctionOfRecordId ? '这是关联来源的新补充 / 更正记录，原记录不会被改写；更正默认不重复增加成长贡献。' : saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录，记忆仍需逐项选择。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
           </footer>
         </div>
       </section>
@@ -228,6 +226,11 @@ onBeforeUnmount(() => {
 .write-footer{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:16px 34px 20px;border-top:1px solid var(--line);flex-wrap:wrap}.write-permission{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-basis:100%}.permission-option{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line);background:white;cursor:pointer}.permission-option.selected{border-color:var(--accent);background:var(--accent-soft)}.permission-option input{margin:3px 0 0;accent-color:var(--accent)}.permission-option span{display:flex;flex-direction:column;gap:3px}.permission-option b{font-size:11px;color:var(--text-hi)}.permission-option small{font-size:10px;color:var(--text-mid);line-height:1.4}.write-footer-main{display:flex;align-items:center;gap:18px;width:100%}.write-hint{font-size:10px;color:var(--text-mid);line-height:1.5}.write-shortcut{display:block;font:11px var(--font-display);color:var(--text-low);margin-top:5px}.write-counter{margin-left:auto;white-space:nowrap;font:16px var(--font-display);color:var(--text-low)}.write-counter b{font-weight:600;color:var(--text-hi)}.write-counter.full b{color:var(--danger)}
 .write-submit{display:flex;align-items:center;justify-content:space-between;gap:26px;padding:13px 18px;min-height:46px;font-size:13px;font-weight:800;background:#dce5f3;color:#8091ad;white-space:nowrap;transition:background .15s,box-shadow .15s}.write-submit.enabled{background:var(--accent);color:white;box-shadow:4px 4px 0 var(--cyan)}.write-submit.enabled:hover{background:var(--accent-hover)}.write-submit:disabled{cursor:not-allowed}.write-submit span{font-size:19px}
 .write-footer :deep(.action-card){width:100%;max-width:none;max-height:34dvh;overflow:auto;margin:0}
+/* 有候选卡时整张纸统一滚动：避免 footer 里再套一个很矮的滚动区，滚轮落在弹窗上时像卡死 */
+.write-paper.has-action{overflow-y:auto;overscroll-behavior:contain}
+.write-paper.has-action .write-body{flex:none;overflow:visible}
+.write-paper.has-action .write-footer{flex-shrink:0}
+.write-paper.has-action .write-footer :deep(.action-card){max-height:none;overflow:visible}
 @media(min-width:900px){.write-modal.desktop{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 80px));height:min(740px,88dvh);grid-template-columns:310px minmax(0,1fr)} }
 @media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:120px;font-size:16px}.write-footer{padding:12px 22px 16px;gap:9px}.write-permission{gap:6px}.permission-option{padding:8px}.permission-option small{font-size:9px}.write-footer-main{gap:10px}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
 @media(max-height:650px) and (min-width:900px){.write-stage-copy{margin-top:40px}.write-stage h2{font-size:30px}.write-stage p{margin-top:12px}.write-body{padding-top:20px}.write-textarea{min-height:130px}.write-prompts{margin-top:14px}.write-footer{padding-top:14px;padding-bottom:16px}}

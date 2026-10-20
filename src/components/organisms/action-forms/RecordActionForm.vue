@@ -33,16 +33,29 @@ const growthSuggestions = computed(() => {
   })
 })
 const growthDefinitionChanged = computed(() => {
+  const suggestions = draft.value.growthSuggestions || draft.value.growth_suggestions || []
+  if (!Array.isArray(suggestions) || suggestions.length === 0) return false
   const candidateVersion = Number(draft.value.axesVersion ?? draft.value.axes_version ?? -1)
   const currentVersion = Number(growth.axesDefinition?.version ?? -2)
   return candidateVersion >= 0 && currentVersion >= 0 && candidateVersion !== currentVersion
 })
 
 function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
-watch(() => props.proposal, card => {
-  payload.value = clone(card?.payload)
-  payload.value.recordDraft ||= clone(card?.preview?.recordDraft)
-}, { immediate: true, deep: true })
+// 只在换卡或准备状态变化时重建本地草稿：准备轮询会用同一张卡的新对象刷新 proposal，
+// 若按对象深度监听，会把用户刚勾选的记忆开关/改过的字段重置回服务端值。
+watch(
+  () => [
+    props.proposal?.id,
+    props.proposal?.preparationStatus,
+    props.proposal?.preparation_status,
+    props.proposal?.payload?.recordDraft?.preparationStatus,
+  ],
+  () => {
+    payload.value = clone(props.proposal?.payload)
+    payload.value.recordDraft ||= clone(props.proposal?.preview?.recordDraft)
+  },
+  { immediate: true },
+)
 
 growth.fetchAxes().catch(() => {})
 
@@ -81,6 +94,10 @@ function submit() {
     next.recordDraft.growthSuggestions = growthAxes.value.map(axis => byId.get(axis.id) || { dimensionId: axis.id, points: 0, reason: '' })
     delete next.recordDraft.growth_suggestions
   }
+  // 选择 AI 整理即授权记忆；仅在记忆管理中停止，不再逐段勾选。
+  if (next.recordDraft?.mode === 'AI_ASSISTED') {
+    ;(next.recordDraft.segments || []).forEach(segment => { segment.memoryEnabled = true })
+  }
   emit('save', next)
 }
 </script>
@@ -97,7 +114,6 @@ function submit() {
       <label class="record-field">片段文字<textarea :value="segment.text" maxlength="2000" rows="3" :disabled="running" @input="updateSegment(index, 'text', $event.target.value)" /></label>
       <label class="record-field">分类<select :value="segment.contentType || 'note'" :disabled="running" @change="updateSegment(index, 'contentType', $event.target.value)"><option v-for="item in CONTENT_TYPES" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
       <label class="record-field">自由标签<input :value="tagsText(segment.tags)" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
-      <label class="record-memory"><input :checked="Boolean(segment.memoryEnabled)" type="checkbox" :disabled="running" @change="updateSegment(index, 'memoryEnabled', $event.target.checked)"><span>确认后允许这个片段进入 Mirror 记忆</span></label>
     </fieldset>
     <fieldset v-if="growthAxes.length === 5 && growth.config" class="record-growth">
       <legend>本条记录的成长贡献</legend>

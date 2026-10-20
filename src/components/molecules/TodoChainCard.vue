@@ -271,7 +271,7 @@ function fmtDate(s) {
 .chain-circle-btn { display: grid; place-items: center; width: 17px; height: 17px; flex-shrink: 0; }
 .chain-circle { width: 15px; height: 15px; }
 .chain-title {
-  flex-shrink: 1; min-width: 0; font-size: 12.5px; color: var(--text-hi); font-weight: 500;
+  flex-shrink: 1; min-width: 0; font-size: 12.5px; color: inherit; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .15s;
 }
 /* 证据芯片「·N 条后续」（mono 小字） */

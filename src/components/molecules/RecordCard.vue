@@ -15,6 +15,7 @@ const props = defineProps({
 const emit = defineEmits(['open', 'retry', 'delete'])
 
 const status = computed(() => props.record.status)
+const memoryDisabled = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? '').toUpperCase() === 'DISABLED')
 const timeText = computed(() => timeAgo(props.record.created_at))
 
 const chunks = computed(() => props.record.chunks || [])
@@ -38,7 +39,7 @@ const moodChips = computed(() => (firstChunk.value?.metadata?.mood || []).slice(
 const userTags = computed(() => {
   const values = new Set()
   for (const chunk of chunks.value) {
-    const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []
+    const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? chunk.metadata?.tags ?? []
     if (Array.isArray(tags)) tags.forEach(tag => { if (tag) values.add(String(tag)) })
   }
   return [...values]
@@ -108,6 +109,7 @@ const processingPreview = computed(() => {
       <div class="record-tags">
         <span v-for="t in types" :key="t" class="tag tag-type">{{ typeMap[t] || t }}</span>
         <span v-if="status === 'reviewing'" class="tag tag-processing">待审核</span>
+        <span v-if="memoryDisabled" class="tag tag-memory-removed">已永久移出记忆</span>
         <span v-for="m in moodChips" :key="m" class="tag">
           <span class="dot" :style="{ background: MOOD_COLOR[m] || '#999' }" />{{ moodMap[m] || m }}
         </span>
@@ -132,8 +134,7 @@ const processingPreview = computed(() => {
 
 <style scoped>
 .record-card {
-  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
-  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   position: relative; overflow: hidden;
   animation: cardIn .3s ease backwards;
 }
@@ -152,6 +153,7 @@ const processingPreview = computed(() => {
 .record-card.failed { border-color: var(--danger); }
 .record-card.record_only::before { opacity: 1; background: var(--cyan); }
 .tag-record-only { color: var(--cyan); background: #00d9ff16; }
+.tag-memory-removed { color: #ffb3c0; background: #ff4b6e1f; border: 1px solid #ff8fa366; }
 .record-raw-preview { white-space: pre-line; }
 
 .record-meta {

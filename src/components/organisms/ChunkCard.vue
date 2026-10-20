@@ -65,7 +65,7 @@ function resetFrom(chunk) {
   edit.mood = [...(chunk.metadata?.mood || [])]
   edit.taskStatus = chunk.metadata?.taskStatus || ''
   edit.keywords = (chunk.metadata?.keywords || []).join('，')
-  edit.userTags = (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []).join('，')
+  edit.userTags = (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? chunk.metadata?.tags ?? []).join('，')
 }
 
 watch(() => props.chunk.id, () => resetFrom(props.chunk), { immediate: true })
@@ -83,7 +83,7 @@ watch(() => props.chunk.metadata, (metadata) => {
   edit.mood = [...(metadata?.mood || [])]
   edit.taskStatus = metadata?.taskStatus || ''
   edit.keywords = (metadata?.keywords || []).join('，')
-  edit.userTags = (metadata?.userTags ?? metadata?.user_tags ?? []).join('，')
+  edit.userTags = (metadata?.userTags ?? metadata?.user_tags ?? metadata?.tags ?? []).join('，')
 })
 
 /** 新增空片段自动聚焦 */
@@ -262,7 +262,7 @@ async function removeChunk() {
     <div v-if="chunk.ai_memory_approved ?? chunk.aiMemoryApproved" class="chunk-embedding-status" :data-status="chunk.embedding_status ?? chunk.embeddingStatus ?? (chunk.has_embedding ?? chunk.hasEmbedding ? 'ready' : 'pending')">
       <span v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'pending' || (!(chunk.embedding_status ?? chunk.embeddingStatus) && !(chunk.has_embedding ?? chunk.hasEmbedding))">◌ 向量重建中，完成后即可用于记忆检索</span>
       <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed'">向量重建失败：{{ chunk.embedding_error ?? chunk.embeddingError ?? '暂时无法生成' }}</span>
-      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 片段向量已就绪<span v-if="props.memoryState === 'PENDING'">；整条记录全部就绪后才可检索</span><span v-else-if="props.memoryState === 'DISABLED'">；未来检索已关闭</span></span>
+      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 片段向量已就绪<span v-if="props.memoryState === 'PENDING'">；整条记录全部就绪后才可检索</span><span v-else-if="props.memoryState === 'DISABLED'">；已永久移出记忆</span></span>
       <span v-else>尚未生成向量</span>
       <button v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed' || (!(chunk.has_embedding ?? chunk.hasEmbedding) && (chunk.embedding_status ?? chunk.embeddingStatus) === 'not_requested')" type="button" :disabled="saving" @click="retryEmbedding">重试生成</button>
     </div>
@@ -346,7 +346,7 @@ async function removeChunk() {
         @blur="onUserTagsBlur"
       >
       <div v-else class="record-user-tags">
-        <span v-for="tag in (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? [])" :key="tag">{{ tag }}</span>
+        <span v-for="tag in (chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? chunk.metadata?.tags ?? [])" :key="tag">{{ tag }}</span>
       </div>
     </div>
 

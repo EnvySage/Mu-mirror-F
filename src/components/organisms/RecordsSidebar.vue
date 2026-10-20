@@ -392,6 +392,9 @@ const orphanSuggestions = computed(() => {
 .week-dot-today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--line-strong); }
 .week-label { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-low); }
 .week-label-today { color: var(--text-hi); font-weight: 600; }
+.side-card .week-label { color: #9ec6ff; }
+.side-card .week-label-today { color: var(--cyan); }
+.side-card .week-legend-item { color: #c1d6ff; }
 .week-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 12px; }
 .week-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-mid); }
 .week-legend-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }

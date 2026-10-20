@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
 import { useUIStore } from '@/stores/ui'
@@ -54,6 +54,13 @@ function openRecord(id) {
   ui.selectedRecordId = id
   ui.showDetail = true
 }
+
+onMounted(() => {
+  const today = new Date()
+  selectedDate.value = today
+  filterInfo.value = formatFullDate(today)
+  recordsStore.fetchDayRecords(dayKey(today))
+})
 </script>
 
 <template>

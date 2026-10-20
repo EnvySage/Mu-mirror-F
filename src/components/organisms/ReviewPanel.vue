@@ -38,7 +38,7 @@ const memoryStateText = computed(() => ({
   NONE: '仅保存 · 尚未加入 Mirror 记忆，可编辑并重新提交 AI 整理。',
   PENDING: '记忆建立中 · 本条内容已冻结；部分片段尚未就绪，当前不会用于检索或画像。',
   READY: '记忆已就绪 · 来源和片段只读，后续检索可用。',
-  DISABLED: '已停止未来记忆使用 · 来源保持只读，已确认的成长账本记录保留。',
+  DISABLED: '已永久移出记忆 · 来源保持只读，已确认的成长账本记录保留；不能重新启用。',
   UNKNOWN: '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。',
 }[memoryState.value] || '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。'))
 const embeddingProgress = computed(() => {
@@ -128,6 +128,22 @@ async function recheckGrowthDefinition() {
 
 const growthDefinitionChanged = computed(() => growthDraft.value.length === 5
   && Number(growth.axesDefinition?.version) !== Number(growthReviewVersion.value))
+
+const awardedGrowth = computed(() => {
+  const items = props.record.growth_suggestions ?? props.record.growthSuggestions ?? []
+  if (!Array.isArray(items) || items.length === 0) return []
+  const axes = growth.axesDefinition?.axes || []
+  return items.map(item => {
+    const dimensionId = item.dimensionId ?? item.dimension_id
+    const axis = axes.find(candidate => candidate.id === dimensionId)
+    return {
+      dimensionId,
+      name: axis?.name || item.name || dimensionId,
+      points: Number(item.points ?? 0),
+      reason: item.reason || '',
+    }
+  })
+})
 
 growth.fetchAxes().then(initializeGrowthDraft).catch(() => {})
 watch(() => props.record.id, () => initializeGrowthDraft())
@@ -375,6 +391,15 @@ function onAddChunk() {
       <p v-if="growthDraft.some(item => Number(item.points) > 0 && !String(item.reason || '').trim())" class="review-growth-warning" role="alert">有分数的维度需要填写具体依据。</p>
     </section>
 
+    <section v-else-if="awardedGrowth.length" class="review-growth" aria-label="本条记录的成长贡献">
+      <div class="review-list-label"><span>本条记录的成长贡献</span><span>{{ memoryState === 'READY' || memoryState === 'DISABLED' ? '已入账' : '入库就绪后入账' }}</span></div>
+      <p class="review-growth-note">分数按这条记录审核时的五维定义入账；永久移除记忆不会扣回已确认的成长账本。</p>
+      <div v-for="item in awardedGrowth" :key="item.dimensionId" class="review-growth-readonly-row">
+        <div><b>{{ item.name }}</b><small>{{ item.reason || '本条没有足够依据，记 0 分' }}</small></div>
+        <strong>{{ item.points }} 分</strong>
+      </div>
+    </section>
+
     <!-- 片段卡片列表 -->
     <div class="review-list-label">
       <span>{{ readonly ? '片段卡片 · CHUNKS（已入库，只读）' : '片段卡片 · CHUNKS' }}</span>
@@ -513,9 +538,9 @@ function onAddChunk() {
 </template>
 
 <style scoped>
-.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}.review-growth{margin:14px 0;padding:12px;background:var(--card);border:1px solid var(--line)}.review-growth-note,.review-growth-warning{margin:6px 0;color:var(--text-mid);font-size:11px;line-height:1.5}.review-growth-warning{color:var(--danger)}.review-growth-row{display:grid;grid-template-columns:minmax(100px,.7fr) 88px minmax(130px,1.4fr);align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.review-growth-row>div{display:grid;gap:3px}.review-growth-row b{font-size:12px}.review-growth-row small{color:var(--text-low);font-size:10px}.review-growth-row label{display:grid;gap:4px;color:var(--text-low);font-size:10px}.review-growth-row input{width:100%;min-height:34px;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text-hi);font:inherit}.growth-recheck{margin-top:8px;padding:7px 10px;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);cursor:pointer}
+.chunk-review-item{margin-bottom:12px}.chunk-consent{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px;padding:10px 12px;background:var(--card);border:1px solid var(--line)}.chunk-consent-option{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:220px;cursor:pointer}.chunk-consent-option input{margin-top:3px;accent-color:var(--accent)}.chunk-consent-option span{display:flex;flex-direction:column;gap:3px}.chunk-consent-option b{font-size:11px;color:var(--text-hi)}.chunk-consent-option small{font-size:10px;line-height:1.45;color:var(--text-mid)}.todo-consent{border-left:1px solid var(--line);padding-left:12px}.review-growth{margin:14px 0;padding:12px;background:var(--card);border:1px solid var(--line)}.review-growth-note,.review-growth-warning{margin:6px 0;color:var(--text-mid);font-size:11px;line-height:1.5}.review-growth-warning{color:var(--danger)}.review-growth-row{display:grid;grid-template-columns:minmax(100px,.7fr) 88px minmax(130px,1.4fr);align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.review-growth-row>div{display:grid;gap:3px}.review-growth-row b{font-size:12px}.review-growth-row small{color:var(--text-low);font-size:10px}.review-growth-row label{display:grid;gap:4px;color:var(--text-low);font-size:10px}.review-growth-row input{width:100%;min-height:34px;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text-hi);font:inherit}.review-growth-readonly-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:9px 0;border-top:1px solid var(--line)}.review-growth-readonly-row>div{display:grid;gap:3px}.review-growth-readonly-row b{font-size:12px}.review-growth-readonly-row small{color:var(--text-low);font-size:10px;line-height:1.5}.review-growth-readonly-row strong{white-space:nowrap;font-size:13px;color:var(--accent)}.growth-recheck{margin-top:8px;padding:7px 10px;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);cursor:pointer}
 @media(max-width:560px){.review-growth-row{grid-template-columns:minmax(80px,1fr) 72px}.review-growth-reason{grid-column:1/-1}}
-.memory-state-banner{display:grid;gap:4px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--text-low);background:var(--card);color:var(--text-mid);font-size:12px;line-height:1.5}.memory-state-banner b{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-hi)}.memory-state-banner small{font-size:11px;color:var(--text-mid)}.memory-state-banner[data-state="PENDING"]{border-left-color:var(--cyan);background:#eaf7ff}.memory-state-banner[data-state="READY"]{border-left-color:#3eb27d;background:#effaf4}.memory-state-banner[data-state="DISABLED"],.memory-state-banner[data-state="UNKNOWN"]{border-left-color:var(--warn);background:var(--warn-bg)}
+.memory-state-banner{display:grid;gap:4px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--text-low);background:var(--card);color:var(--text-mid);font-size:12px;line-height:1.5}.memory-state-banner b{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-hi)}.memory-state-banner small{font-size:11px;color:var(--text-mid)}.memory-state-banner[data-state="PENDING"]{border-left-color:var(--cyan);background:#eaf7ff}.memory-state-banner[data-state="READY"]{border-left-color:#3eb27d;background:#effaf4}.memory-state-banner[data-state="DISABLED"],.memory-state-banner[data-state="UNKNOWN"]{border-left-color:var(--danger);background:var(--danger-bg)}
 .review-panel { animation: fadeIn .3s ease; }
 
 .review-original {

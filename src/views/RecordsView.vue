@@ -54,7 +54,7 @@ const tagOptions = computed(() => {
   const values = new Set()
   for (const record of recordsStore.records) {
     for (const chunk of record.chunks || []) {
-      const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? []
+      const tags = chunk.metadata?.userTags ?? chunk.metadata?.user_tags ?? chunk.metadata?.tags ?? []
       if (Array.isArray(tags)) tags.forEach(tag => { if (tag) values.add(String(tag)) })
     }
   }

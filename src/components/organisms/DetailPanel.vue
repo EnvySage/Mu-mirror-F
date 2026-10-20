@@ -55,7 +55,6 @@ const record = computed(() => {
 const memoryState = computed(() => String(record.value?.memory_state ?? record.value?.memoryState ?? (['reviewing', 'record_only'].includes(record.value?.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
 const memoryFailureReason = computed(() => record.value?.memory_failure_reason ?? record.value?.memoryFailureReason ?? record.value?.memory_error ?? record.value?.memoryError ?? '')
 const canEditMemorySource = computed(() => memoryState.value === 'NONE')
-const canOfferCorrection = computed(() => ['READY', 'DISABLED'].includes(memoryState.value))
 
 watch([authorizationDirty, () => rawEditing.value && rawDraft.value !== (record.value?.content || '')], ([authDirty, rawDirty]) => {
   ui.detailDraftDirty = !!(authDirty || rawDirty)
@@ -92,10 +91,14 @@ function pollRecordAction(actionId, generation = requestGeneration) {
       const latest = await actionsStore.refresh(actionId)
       if (generation !== requestGeneration || preparedRecordAction.value?.id !== actionId) return
       preparedRecordAction.value = latest
+      const stillPreparing = String(latest?.preparationStatus || latest?.preparation_status
+        || latest?.payload?.recordDraft?.preparationStatus || '').toUpperCase() === 'RUNNING'
       if (latest?.state === 'SUCCEEDED') {
         await onRecordActionUpdated(latest)
-      } else if (['PENDING', 'EXECUTING'].includes(latest?.state)) {
+      } else if (latest?.state === 'EXECUTING' || (latest?.state === 'PENDING' && stillPreparing)) {
         recordActionPollTimer = setTimeout(tick, 1800)
+      } else {
+        stopRecordActionPolling()
       }
     } catch {
       if (generation === requestGeneration && preparedRecordAction.value?.id === actionId) {
@@ -287,7 +290,7 @@ const headerTitle = computed(() => {
     case 'processing': return 'AI 整理中'
     case 'review': return `片段确认 · ${(record.value?.chunks || []).length} 个片段`
     case 'failed': return '处理失败'
-    case 'view': return record.value?.status === 'record_only' ? '仅记录' : '片段记忆授权'
+    case 'view': return record.value?.status === 'record_only' ? '仅记录' : '记录详情'
     default: return '记录详情'
   }
 })
@@ -430,6 +433,7 @@ async function organizeSavedRecord() {
       return
     }
     preparedRecordAction.value = action
+    if (['PENDING', 'EXECUTING'].includes(action?.state)) pollRecordAction(action.id)
     pendingRecordPrepareKey = null
     pendingRecordPrepareFingerprint = ''
     toast.info('整理候选已准备，确认后才会更新这条记录')
@@ -469,7 +473,7 @@ async function prepareDisableMemory() {
     }, pendingMemoryDisableKey)
     pendingMemoryDisableKey = null
   } catch (err) {
-    actionError.value = err.message || '停止未来记忆使用的确认卡准备失败'
+    actionError.value = err.message || '永久移除记忆的确认卡准备失败'
   } finally {
     confirming.value = false
   }
@@ -480,7 +484,7 @@ async function onMemoryLifecycleUpdated(card) {
   if (card?.state !== 'SUCCEEDED' || !record.value) return
   await recordsStore.fetchRecord(record.value.id, { isCurrent: () => String(ui.selectedRecordId) === String(record.value?.id) })
   if (card.result?.memoryState === 'DISABLED' || card.result?.memory_state === 'DISABLED') {
-    toast.success('未来记忆使用已停止；来源保持只读，成长账本记录保留')
+    toast.success('已永久移出记忆；来源保持只读，成长账本保留，不能重新启用')
     todoStore.fetchRegistry(true)
   }
 }
@@ -532,8 +536,8 @@ async function deleteRecord() {
             :disabled="confirming || !growthReviewValid"
             @click="onConfirm"
           >{{ confirming ? '保存授权…' : record.status === 'reviewing' ? '确认所选片段' : '更新记忆授权' }}</button>
-          <button v-if="canOfferCorrection" class="detail-confirm" type="button" @click="ui.openWriteModal(record.id)">补充 / 更正</button>
-          <button v-if="memoryState === 'READY'" class="detail-confirm" type="button" :disabled="confirming" @click="prepareDisableMemory">{{ confirming ? '准备确认卡…' : '停止未来记忆使用' }}</button>
+          <button v-if="record?.status === 'done'" class="detail-confirm" type="button" :disabled="confirming" @click="ui.openWriteModal()">继续写</button>
+          <button v-if="memoryState === 'READY'" class="detail-confirm detail-danger" type="button" :disabled="confirming" @click="prepareDisableMemory">{{ confirming ? '准备确认卡…' : '永久移除记忆' }}</button>
           <button v-if="canEditMemorySource && ['record_only', 'done'].includes(record?.status)" class="detail-confirm" :disabled="confirming" @click="organizeSavedRecord">{{ confirming ? '准备候选…' : record.status === 'record_only' ? '让 Mirror 整理' : '重新提交 AI 整理' }}</button>
           <span class="detail-title" />
         </div>
@@ -600,12 +604,10 @@ async function deleteRecord() {
             </div>
           </div>
 
-          <div v-else-if="canOfferCorrection" class="record-correction-entry">
-            <p>此来源保持只读。补充或更正会另建一条与当前来源关联的记录，不覆盖原内容。</p>
-          </div>
-
-          <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
-          <ReviewPanel v-else ref="reviewPanelRef" :record="record" :authorization-busy="confirming" @open-record="openRecord" @authorization-change="onAuthorizationChange" />
+          <template v-else>
+            <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
+            <ReviewPanel ref="reviewPanelRef" :record="record" :authorization-busy="confirming" @open-record="openRecord" @authorization-change="onAuthorizationChange" />
+          </template>
           </template>
         </div>
     </div>
@@ -633,7 +635,7 @@ async function deleteRecord() {
 .slide-enter-from, .slide-leave-to { transform: translateX(102%); }
 
 .detail-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--card);
@@ -717,6 +719,8 @@ async function deleteRecord() {
 .detail-title { font-family:var(--font-display); font-size:17px; letter-spacing:.04em; }
 .detail-date { margin-left:auto; color:#9ec6ff; font:12px var(--font-display); }
 .detail-content { width:min(1440px,100%); margin:0 auto; padding:clamp(16px,3vw,38px); }
+.detail-confirm.detail-danger { margin-left:8px; background:transparent; border:1px solid #ff8fa3; color:#ffb3c0; }
+.detail-confirm.detail-danger:hover { background:#ff8fa3; border-color:#ff8fa3; color:#3a0713; }
 .detail-reader { min-height:0; border-left:3px solid var(--cyan); background:#eef4ff; box-shadow:12px 14px 0 #020c3435; }
 .detail-reader { animation:detail-reader-enter .62s .08s var(--motion-enter) both; }
 @keyframes detail-reader-enter { 0%{opacity:.35;clip-path:polygon(0 0,4% 0,4% 100%,0 100%);transform:translateX(24px)} 68%{opacity:1;clip-path:polygon(0 0,calc(100% - 32px) 0,100% 32px,100% 100%,0 100%);transform:translateX(-4px)} 100%{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);transform:none} }

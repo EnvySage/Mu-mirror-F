@@ -9,7 +9,18 @@ const props = defineProps({
 const cx = 140
 const cy = 132
 const radius = 83
-const chartMax = computed(() => Math.max(0, ...props.thresholds.map(Number).filter(value => Number.isFinite(value))))
+const scores = computed(() => props.axes.map(axis => Math.max(0, Number(axis.total_points ?? axis.totalPoints ?? 0))))
+/** 不使用固定阶段上限：按当前最高分动态取整，低分时图形也有明显形状。 */
+const chartMax = computed(() => {
+  const top = Math.max(0, ...scores.value)
+  if (top <= 0) return 6
+  const raw = top * 1.25
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  const normalized = raw / magnitude
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 3 ? 3
+    : normalized <= 5 ? 5 : normalized <= 6 ? 6 : normalized <= 9 ? 9 : 10
+  return Math.max(6, nice * magnitude)
+})
 const angleFor = index => (-Math.PI / 2) + (index * 2 * Math.PI / Math.max(props.axes.length, 1))
 const pointAt = (index, scale) => {
   const angle = angleFor(index)
@@ -19,10 +30,10 @@ const pointsFor = scale => props.axes.map((_, index) => {
   const point = pointAt(index, scale)
   return `${point.x.toFixed(1)},${point.y.toFixed(1)}`
 }).join(' ')
-const rings = computed(() => props.thresholds
-  .map(Number)
-  .filter(value => Number.isFinite(value) && value > 0)
-  .map(value => ({ value, points: pointsFor(chartMax.value > 0 ? Math.min(value / chartMax.value, 1) : 0) })))
+const rings = computed(() => [1 / 3, 2 / 3, 1].map(frac => ({
+  value: Math.round(chartMax.value * frac),
+  points: pointsFor(frac),
+})))
 const spokes = computed(() => props.axes.map((axis, index) => {
   const end = pointAt(index, 1)
   const label = pointAt(index, 1.3)
@@ -45,7 +56,7 @@ const shape = computed(() => props.axes.map((axis, index) => {
       <text v-for="(item, index) in spokes" :key="`label-${item.axis.id}`" :x="item.label.x" :y="item.label.y" text-anchor="middle" class="radar-label">{{ item.axis.name }}</text>
     </svg>
     <div v-else class="growth-radar-unavailable" role="status">五维定义暂不可用，成长分数仍保留在下方账本中。</div>
-    <p class="growth-radar-caption">图形显示阶段上限；累计明细不会封顶。</p>
+    <p class="growth-radar-caption">图形按当前最高分动态缩放；累计明细不会封顶。</p>
   </div>
 </template>
 
