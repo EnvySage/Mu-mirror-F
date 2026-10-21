@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useGlossaryStore } from '@/stores/glossary'
 import { useStatsStore } from '@/stores/stats'
 import { useTodoPolling } from '@/composables/useTodoPolling'
+import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
 import MobileHeader from '@/components/organisms/MobileHeader.vue'
@@ -87,6 +88,9 @@ function openWrite() {
     <div class="app-water" aria-hidden="true" />
     <DesktopLayout><AppSidebar /></DesktopLayout>
     <main class="main">
+      <div v-if="IS_DEMO_PREVIEW" class="preview-banner" role="note">
+        <span>PUBLIC PREVIEW</span><i />演示环境 · 虚构样例数据，不会保存
+      </div>
       <MobileLayout>
         <MobileHeader
           :title="mobileTitle"
@@ -96,7 +100,9 @@ function openWrite() {
         />
       </MobileLayout>
       <PresentationLayout :mode="presentation.mode.value">
-        <component :is="pageComponent" :key="route.name" v-bind="route.name === 'records' ? { date: route.params.date } : {}" />
+        <Transition name="page" mode="out-in">
+          <component :is="pageComponent" :key="route.name" v-bind="route.name === 'records' ? { date: route.params.date } : {}" />
+        </Transition>
       </PresentationLayout>
       <div :key="route.name" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
@@ -144,4 +150,8 @@ function openWrite() {
   .presentation-mode-desktop :deep(.nav-row span) { display:none; }
   .presentation-mode-desktop :deep(.nav-row svg) { width:22px; height:22px; }
 }
+.preview-banner { position: relative; z-index: 5; flex: 0 0 auto; min-height: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 18px; color: #ddfaff; background: #062f73e8; border-bottom: 1px solid #68e8f58c; font-size: 10px; letter-spacing: .04em; }
+.preview-banner span { color: var(--cyan); font: italic 800 11px var(--font-display); letter-spacing: .08em; }
+.preview-banner i { width: 1px; height: 12px; background: #82ddeb80; }
+@media (max-width: 640px) { .preview-banner { justify-content: center; padding: 5px 8px; font-size: 9px; } }
 </style>

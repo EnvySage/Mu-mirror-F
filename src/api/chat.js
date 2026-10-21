@@ -33,6 +33,15 @@ export function getSession(id) {
 }
 
 /**
+ * Query a chat run after a stream interruption or an uncertain write result.
+ * The shared Axios client attaches the existing user JWT and normalizes response keys.
+ * @param {string} runId - Java-owned run UUID
+ */
+export function getRun(runId) {
+  return request.get(`/mirror/runs/${encodeURIComponent(runId)}`)
+}
+
+/**
  * 删除会话（消息级联删除）
  * @param {string} id - 会话 ID（UUID）
  * @returns {Promise<{ code: number, data: null }>}

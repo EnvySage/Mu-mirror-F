@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { getStorage, setStorage, removeStorage } from '@/utils/storage'
 import { login as apiLogin, register as apiRegister } from '@/api/auth'
+import { IS_DEMO_PREVIEW } from '@/preview/mode'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -23,6 +24,14 @@ export const useAuthStore = defineStore('auth', () => {
    * 初始化：从本地存储恢复登录状态
    */
   function init() {
+    if (IS_DEMO_PREVIEW) {
+      token.value = 'demo-preview-token'
+      tokenExpires.value = ''
+      user.value = { id: 'demo-visitor', username: 'Mirror 访客', created_at: new Date().toISOString() }
+      _initialized.value = true
+      return
+    }
+
     const savedToken = getStorage('token')
     const savedUser = getStorage('user')
     const savedExpires = getStorage('token_expires')
@@ -97,6 +106,7 @@ export const useAuthStore = defineStore('auth', () => {
    * 退出登录
    */
   function logout() {
+    if (IS_DEMO_PREVIEW) return
     token.value = ''
     tokenExpires.value = ''
     user.value = null
