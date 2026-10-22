@@ -21,6 +21,10 @@ import { validateVaultFile, deriveDisplayName, formatBytes } from '@/constants/f
 import request from '@/api/request'
 import { retryDaySummary as apiRetryDaySummary } from '@/api/chat'
 import { resolveDaySummaryActions } from '@/utils/chatDaySummaryActions'
+import { useChatScroll } from '@/motion/useChatScroll'
+import { createMotionScope, duration, gsap, motionTokens, prefersReducedMotion } from '@/motion/core'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -48,6 +52,9 @@ const messagesEl = ref(null)
 const inputEl = ref(null)
 
 const showSessions = ref(false)
+const sessionsDialog = ref(null)
+const sessionsMotion = useOverlayMotion({ xPercent: -50, distance: 32 })
+useDialogFocus(() => showSessions.value, sessionsDialog, 'button', () => { showSessions.value = false })
 const showMemoryPanel = ref(false)
 
 const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
@@ -170,28 +177,37 @@ watch(() => ui.chatSessionsRequested, (v) => {
 // sending 仍为真 → 跳过重载 → 直接看到继续增长的内容。若切回时流已结束（sending 已
 // 翻假），restoreLastSession 会重新拉会话，那时后端已落库，历史里照样有完整回答。
 
+const chatScroll = useChatScroll(messagesEl,
+  () => [chat.sending, chat.messages.map(m => `${m.id}:${(m.content || '').length}:${(m.thinking || '').length}:${m.status}:${m.toolsUsed?.length}:${m.vaultRefs?.length}:${m.createdRecords?.length}`).join(','), receiptItems.value.map(i => i.id).join(','), actions.inSession(chat.activeSessionId || chat.sessionId).map(card => `${card.id}:${card.status}`).join(',')],
+)
+const followingBottom = chatScroll.following
 async function scrollToBottom() {
   await nextTick()
-  if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  chatScroll.requestBottom({ force: true })
 }
 
-watch(() => chat.messages.length, scrollToBottom)
-watch(() => chat.sending, scrollToBottom)
-// 流式逐字上屏时跟随滚动（thinking 增量同样跟随）
-watch(
-  () => chat.messages.map(m => (m.content || '').length + (m.thinking || '').length).join(','),
-  scrollToBottom,
-)
-// 回执卡出现（消化完成）也滚到底
-watch(() => vault.items.map(i => `${i.id}:${i.digest_status}`).join(','), () => {
-  if (receiptItems.value.length) scrollToBottom()
-})
+// A directive mounts once for a message key; SSE text updates never restart it.
+const bubbleScopes = new WeakMap()
+const enteredMessageIds = new Set(chat.messages.map(message => message.id))
+const vMessageEnter = {
+  mounted(el, binding) {
+    const { id, animate } = binding.value
+    if (enteredMessageIds.has(id)) return
+    enteredMessageIds.add(id)
+    if (!animate || prefersReducedMotion()) return
+    const scope = createMotionScope(el)
+    bubbleScopes.set(el, scope)
+    scope.run(() => gsap.fromTo(el, { y: 6, opacity: .65 }, { y: 0, opacity: 1, duration: duration(motionTokens.feedback), ease: 'power2.out', clearProps: 'transform,opacity' }))
+  },
+  beforeUnmount(el) { bubbleScopes.get(el)?.dispose() },
+}
 
 function autoGrow() {
   const el = inputEl.value
   if (!el) return
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 110) + 'px'
+  chatScroll.requestBottom()
 }
 
 async function send() {
@@ -199,6 +215,9 @@ async function send() {
   const text = input.value
   input.value = ''
   if (inputEl.value) inputEl.value.style.height = 'auto'
+  // Sending is an explicit request to see the new turn. Completion is not:
+  // the user may have started reading above while the response was streaming.
+  scrollToBottom()
   const sent = await chat.sendMessage(text)
   if (sent === false) {
     input.value = text
@@ -206,7 +225,6 @@ async function send() {
     autoGrow()
     return
   }
-  await scrollToBottom()
   // 发送成功后刷新会话列表（新会话首次落库）
   chat.fetchSessions()
 }
@@ -437,9 +455,10 @@ async function onOpenSession(id) {
   await scrollToBottom()
 }
 
-function onNewSession() {
+async function onNewSession() {
   showSessions.value = false
-  chat.openTodaySession()
+  await chat.openTodaySession()
+  await scrollToBottom()
 }
 
 async function onRemoveSession(id) {
@@ -454,11 +473,11 @@ async function onRemoveSession(id) {
     <ChatMemoryPanel v-if="showMemoryPanel" @close="showMemoryPanel = false" />
 
     <!-- 会话列表抽屉（<1440px 主入口；≥1440px 隐藏按钮但仍可通过 MobileHeader 打开） -->
-    <Transition name="fade">
+    <Transition :css="false" v-bind="sessionsMotion.backdropHooks">
       <div v-if="showSessions" class="sessions-overlay" @click="showSessions = false" />
     </Transition>
-    <Transition name="sessions-drawer">
-      <div v-if="showSessions" class="sessions-drawer">
+    <Transition :css="false" v-bind="sessionsMotion.panelHooks">
+      <div v-if="showSessions" ref="sessionsDialog" class="sessions-drawer" role="dialog" aria-modal="true" aria-label="历史会话" tabindex="-1">
         <ChatSessionsPanel
           variant="drawer"
           @close="showSessions = false"
@@ -499,10 +518,11 @@ async function onRemoveSession(id) {
             @retry="retrySummary"
             @open-session="onOpenSession"
           />
-          <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions">
+          <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="对话消息" @scroll.passive="chatScroll.onScroll" @wheel.passive="chatScroll.onWheel" @touchstart.passive="chatScroll.onTouchStart" @touchmove.passive="chatScroll.onTouchMove" @keydown="chatScroll.onKeydown">
             <div
               v-for="msg in chat.messages"
               :key="msg.id"
+              v-message-enter="{ id: msg.id, animate: chat.sending && !chat.historyLoading }"
               :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai']"
             >
               <div class="chat-msg-bubble">
@@ -596,6 +616,10 @@ async function onRemoveSession(id) {
                 />
               </div>
             </div>
+          </div>
+
+          <div class="chat-follow-control">
+            <button v-if="!followingBottom && chat.messages.length" type="button" class="chat-jump-bottom" @click="scrollToBottom">回到最新消息 <span aria-hidden="true">↓</span></button>
           </div>
 
           <!-- 输入条（附件按钮 + 拖拽上传区） -->
@@ -717,8 +741,12 @@ async function onRemoveSession(id) {
 .chat-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; flex: 1; width: 100%; /* 阅读限宽居中：移动端 100% 不受影响，900~1439 回退原 820 级居中，≥1440 双栏内仍限 760 */ max-width: 760px; margin: 0 auto; }
 .chat-empty { text-align: center; padding: 60px 20px; }
 
-.chat-messages { flex: 1; overflow-y: auto; padding: 14px 4px 10px; }
-.chat-msg { margin-bottom: 14px; display: flex; animation: cardIn .28s ease backwards; }
+.chat-messages { flex: 1; min-height:0; overflow-y: auto; overflow-anchor:none; scroll-behavior:auto; padding: 14px 4px 10px; }
+.chat-messages:focus-visible { outline:1px solid var(--cyan); outline-offset:-1px; }
+.chat-msg { margin-bottom: 14px; display: flex; }
+.chat-follow-control { position:relative; height:0; flex-shrink:0; z-index:2; }
+.chat-jump-bottom { position:absolute; bottom:12px; right:8px; padding:8px 12px; border:1px solid #80eafa88; background:#082850; box-shadow:0 4px 12px #010d3355; color:#d7f8ff; font-size:11px; }
+.chat-jump-bottom:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
 .chat-msg-user { justify-content: flex-end; }
 .chat-msg-bubble {
   max-width: 84%; padding: 11px 15px; border-radius: 18px;
@@ -872,9 +900,6 @@ async function onRemoveSession(id) {
 @media (min-width: 900px) {
   .sessions-drawer { border-radius: 20px; bottom: 8dvh; }
 }
-
-.sessions-drawer-enter-active, .sessions-drawer-leave-active { transition: transform .32s cubic-bezier(.32,.72,.28,1); }
-.sessions-drawer-enter-from, .sessions-drawer-leave-to { transform: translate(-50%, 110%) !important; }
 
 .chat-masthead-wrap { flex-shrink:0; padding:0 clamp(24px,3.5vw,56px); }
 .chat-page .page-content { padding-top:0; }

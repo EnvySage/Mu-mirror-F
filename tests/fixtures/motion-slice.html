@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mirror motion component verification</title>
+<div id="app"></div>
+<script type="module">
+import { createApp, h, ref } from 'vue'
+import { createPinia } from 'pinia'
+import CalendarWidget from '/src/components/molecules/CalendarWidget.vue'
+import SelectMenu from '/src/components/atoms/SelectMenu.vue'
+import MButton from '/src/components/atoms/MButton.vue'
+import ToastContainer from '/src/components/organisms/ToastContainer.vue'
+import { useRecordsStore } from '/src/stores/records.js'
+import { useToastStore } from '/src/stores/toast.js'
+import '/src/assets/styles/variables.css'
+import '/src/assets/styles/base.css'
+import '/src/assets/styles/p3r.css'
+
+const pinia = createPinia()
+const records = useRecordsStore(pinia)
+records.fetchCalendarMarks = async () => {}
+const toast = useToastStore(pinia)
+const selected = ref('a')
+window.__motionTest = { toast, selected, records, pinia }
+const suite = new URLSearchParams(location.search).get('suite') || 'calendar'
+let render
+if (suite === 'charts') {
+  const [{ default: ActivityBand }, { default: RhythmDist }, { default: KeywordBars }, { default: TodoRing }] = await Promise.all([
+    import('/src/components/charts/ActivityBand.vue'), import('/src/components/charts/RhythmDist.vue'), import('/src/components/charts/KeywordBars.vue'), import('/src/components/charts/TodoRing.vue'),
+  ])
+  const data = ref({ daily: Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-${i + 10}`, count: i + 1 })), moods: [], hours: [{ bucket: 12, count: 6 }], weekdays: [{ bucket: 2, count: 4 }], keywords: [{ keyword: '工作', count: 6 }, { keyword: '阅读', count: 3 }], todo: { total: 10, completed: 4, inProgress: 3, notStarted: 3 } })
+  Object.assign(window.__motionTest, { chartData: data })
+  const panel = (child, name) => h('section', { 'data-chart': name, style: 'padding:20px;background:var(--card);min-width:0' }, [child])
+  render = () => h('div', { style: 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;padding:24px;max-width:1000px;margin:auto' }, [
+    panel(h(ActivityBand, { daily: data.value.daily, moods: data.value.moods }), 'activity'),
+    panel(h(RhythmDist, { hours: data.value.hours, weekdays: data.value.weekdays }), 'rhythm'),
+    panel(h(KeywordBars, { data: data.value.keywords }), 'keywords'),
+    panel(h(TodoRing, { todo: data.value.todo }), 'todo'),
+  ])
+} else if (suite === 'chat') {
+  const [{ default: ChatView }, { useChatStore }, { useVaultStore }, { useUIStore }] = await Promise.all([
+    import('/src/views/ChatView.vue'), import('/src/stores/chat.js'), import('/src/stores/vault.js'), import('/src/stores/ui.js'),
+  ])
+  const chat = useChatStore(pinia), vault = useVaultStore(pinia), ui = useUIStore(pinia)
+  chat.restoreLastSession = async () => {}
+  chat.fetchSessions = async () => {}
+  vault.fetch = async () => {}
+  chat.messages = Array.from({ length: 24 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'ai' : 'user', content: `这是用于验证滚动位置的第${i}条消息。`.repeat(3) }))
+  Object.assign(window.__motionTest, { chat, vault, ui })
+  render = () => h('div', { style: 'height:100dvh;display:flex;background:#0b2b64' }, [h(ChatView)])
+} else if (suite === 'mirror') {
+  const { default: MirrorStage } = await import('/src/components/organisms/MirrorStage.vue')
+  const current = ref('two'), busy = ref(false), profile = ref({ overall_summary: '认真留下记录，回顾过去的一段时间。'.repeat(6), created_at: '2026-10-22' })
+  const nodes = ['one', 'two', 'three'].map((id, i) => ({ id, label: `${i + 8}月`, periodMonth: `2026-${String(i + 8).padStart(2, '0')}`, type: 'monthly', version: i + 1, contextStatus: 'usable', summary: '认真回顾过去的一段时间。' }))
+  Object.assign(window.__motionTest, { current, busy, profile })
+  render = () => h('div', { style: 'min-height:100dvh;background:#07142d;padding:16px' }, [h(MirrorStage, { profile: profile.value, nodes, currentId: current.value, busy: busy.value, metrics: [{ label: '记录', value: 12 }], onSelect: node => current.value = node.id })])
+} else render = () => h('main', { style: 'max-width:520px;margin:32px auto;color:white;background:#071d43;padding:24px' }, [
+  h(CalendarWidget, { mode: 'full' }),
+  h('div', { id: 'below-calendar', style: 'height:20px' }, 'Stable position'),
+  h(SelectMenu, { modelValue: selected.value, 'onUpdate:modelValue': value => selected.value = value, ariaLabel: 'Test option', options: [{value:'a',label:'第一项'},{value:'b',label:'第二项'}] }),
+  h(MButton, { onClick: () => toast.success('已保存') }, () => '通知测试'),
+  h(ToastContainer),
+])
+createApp({ render }).use(pinia).mount('#app')
+</script>
+</html>

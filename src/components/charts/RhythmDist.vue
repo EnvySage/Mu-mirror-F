@@ -8,7 +8,8 @@
  *
  * 窄屏（<900px）改为上下堆叠，避免 24 根柱被压成发丝。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useChartMotion } from '@/motion/useChartMotion'
 import ChartEmpty from './ChartEmpty.vue'
 
 const props = defineProps({
@@ -41,11 +42,13 @@ function build(list, slots, gap) {
 
 const hourBars = computed(() => build(props.hours, 24, 0.28))
 const weekBars = computed(() => build(props.weekdays, 7, 0.4))
+const chart = ref(null)
+useChartMotion(chart, () => JSON.stringify([hasData.value, hourBars.value.map(bar => bar.count), weekBars.value.map(bar => bar.count)]))
 </script>
 
 <template>
   <ChartEmpty v-if="!hasData" text="暂无节律数据" />
-  <div v-else class="rhythm">
+  <div v-else ref="chart" class="rhythm">
     <div class="rhythm-block">
       <div class="rhythm-cap">24 小时时段</div>
       <svg
@@ -60,7 +63,6 @@ const weekBars = computed(() => build(props.weekdays, 7, 0.4))
           :key="i"
           class="rhythm-bar"
           :x="b.x" :y="b.y" :width="b.w" :height="b.h"
-          :style="{ '--d': i * 18 + 'ms' }"
         >
           <title>{{ `${String(i).padStart(2, '0')}:00 时段 · ${b.count} 条记录` }}</title>
         </rect>
@@ -89,7 +91,6 @@ const weekBars = computed(() => build(props.weekdays, 7, 0.4))
           :key="i"
           class="rhythm-bar"
           :x="b.x" :y="b.y" :width="b.w" :height="b.h"
-          :style="{ '--d': i * 40 + 'ms' }"
         >
           <title>{{ `${WEEK_FULL[i]} · ${b.count} 条记录` }}</title>
         </rect>
@@ -112,20 +113,11 @@ const weekBars = computed(() => build(props.weekdays, 7, 0.4))
   color: var(--text-low); margin-bottom: 8px;
 }
 .rhythm-svg { display: block; width: 100%; height: 108px; }
-/* 入场生长：两组柱各自从底部立起；fill-mode=backwards 保证动画结束后不抢占 hover 的 transform */
 .rhythm-bar {
   fill: var(--accent); opacity: .85;
-  transition: y .4s ease, height .4s ease, opacity .15s ease;
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: rhythmGrow .45s cubic-bezier(.22, .8, .3, 1) var(--d, 0ms) backwards;
+  transition: opacity .15s ease;
 }
 .rhythm-bar:hover { opacity: 1; }
-@keyframes rhythmGrow {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
-
 .rhythm-ticks { position: relative; height: 13px; margin-top: 4px; }
 .rhythm-tick {
   font-family: var(--font-mono); font-size: 9.5px; color: var(--text-low);

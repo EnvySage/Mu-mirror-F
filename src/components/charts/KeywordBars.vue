@@ -6,7 +6,8 @@
  * 行级 title 悬浮显示「出现 N 次」；条宽 CSS transition 0.4s。>10 项截断为 10（组件职责边界）。
  * 展示层过滤单字噪音词（"开"/"她"/"杂"）：字符数 < 2 不入榜（英文单词不受影响）。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useChartMotion } from '@/motion/useChartMotion'
 import ChartEmpty from './ChartEmpty.vue'
 
 const props = defineProps({
@@ -27,11 +28,13 @@ const items = computed(() => {
     pct: max ? Math.round((d.count / max) * 100) : 0,
   }))
 })
+const chart = ref(null)
+useChartMotion(chart, () => JSON.stringify(items.value.map(item => [item.keyword, item.count, item.pct])))
 </script>
 
 <template>
   <ChartEmpty v-if="!items.length" text="暂无有效关键词" />
-  <div v-else class="kw-bars" role="img" aria-label="关键词 Top 10">
+  <div v-else ref="chart" class="kw-bars" role="img" aria-label="关键词 Top 10">
     <div v-for="it in items" :key="it.keyword" class="kw-row" :title="`「${it.keyword}」出现 ${it.count} 次`">
       <span class="kw-name">{{ it.keyword }}</span>
       <span class="kw-track">
@@ -55,7 +58,6 @@ const items = computed(() => {
 .kw-fill {
   display: block; height: 100%; border-radius: 4px;
   background: var(--accent); opacity: .85;
-  transition: width .4s ease;
 }
 .kw-row:hover .kw-fill { opacity: 1; }
 .kw-count {

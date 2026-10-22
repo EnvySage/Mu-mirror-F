@@ -11,7 +11,8 @@
  * （把本段推到上一段末尾）。占比极小的段给 MIN_ARC 视觉保底，
  * 保底导致总长溢出时整组回退真实比例，保证不绕圈。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useChartMotion } from '@/motion/useChartMotion'
 import ChartEmpty from './ChartEmpty.vue'
 
 const props = defineProps({
@@ -48,6 +49,8 @@ const segments = computed(() => {
     { key: 'doing', len: use[1], offset: -use[0], count: inProgress },
   ]
 })
+const chart = ref(null)
+useChartMotion(chart, () => JSON.stringify(norm.value))
 
 /** 单段悬浮：项数 + 占总数的百分比 */
 function segTitle(seg) {
@@ -61,6 +64,7 @@ function segTitle(seg) {
   <ChartEmpty v-if="!norm.total" text="暂无待办数据" />
   <div
     v-else
+    ref="chart"
     class="todo-ring"
     role="img"
     :aria-label="`待办完成 ${norm.completed}/${norm.total} · 进行中 ${norm.inProgress} · 未开始 ${norm.notStarted}`"
@@ -105,7 +109,6 @@ function segTitle(seg) {
 .ring-track { stroke: var(--ink-2); }
 /* 堆叠段：已完成实心、进行中淡蓝（与图例的"半蓝"呼应）
    注意：堆叠环不用 stroke-linecap: round——圆头会盖到相邻段的起点 */
-.ring-seg { transition: stroke-dasharray .4s ease, stroke-dashoffset .4s ease; }
 .seg-done { stroke: var(--accent); }
 .seg-doing { stroke: var(--accent); opacity: .45; }
 .ring-num {

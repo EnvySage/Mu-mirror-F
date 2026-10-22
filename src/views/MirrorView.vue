@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMirrorStore } from '@/stores/mirror'
 import { useRecordsStore } from '@/stores/records'
 import { useStatsStore } from '@/stores/stats'
@@ -18,6 +19,10 @@ import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import GrowthPanel from '@/components/organisms/GrowthPanel.vue'
+import MirrorStage from '@/components/organisms/MirrorStage.vue'
+import { beginMirrorShatter, warmMirrorShatter } from '@/composables/useMirrorShatter'
+import { gsap, prefersReducedMotion } from '@/motion/core'
+import { unlockGlassAudio } from '@/composables/useGlassAudio'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
@@ -26,6 +31,37 @@ const todoStore = useTodoStore()
 const ui = useUIStore()
 const toast = useToastStore()
 const auth = useAuthStore()
+const mirrorStage = ref(null)
+const switchingSnapshot = ref(false)
+const preparingGeneration = ref(false)
+const route = useRoute()
+let viewEpoch = 0
+const mirrorBusy = computed(() => preparingGeneration.value || switchingSnapshot.value || mirror.generating || mirror.generatingMonthly)
+const viewActive = epoch => !isUnmounted && route.name === 'mirror' && epoch === viewEpoch
+let snapshotGlass = null
+let focusTween = null
+
+async function focusMirrorSurface() {
+  const surface = mirrorStage.value?.surface, content = surface?.closest('.page-content')
+  if (!surface || !content) return null
+  const rect = surface.getBoundingClientRect(), view = content.getBoundingClientRect()
+  // Keep desktop framing intact. Only bring an offscreen mirror back into view.
+  if (rect.top < view.top - 2 || rect.top > view.bottom - 100) {
+    const target = content.scrollTop + rect.top - view.top
+    focusTween?.kill()
+    await new Promise(resolve => {
+      focusTween = gsap.to(content, { scrollTop: Math.max(0, target), duration: prefersReducedMotion() ? 0 : .22, ease: 'power2.out', onComplete: resolve, onInterrupt: resolve })
+    })
+  }
+  await warmMirrorShatter(surface)
+  return isUnmounted || route.name !== 'mirror' ? null : surface
+}
+watch(() => route.name, name => {
+  if (name === 'mirror') return
+  viewEpoch += 1
+  focusTween?.kill()
+  snapshotGlass?.cancel()
+}, { flush: 'sync' })
 let mirrorViewMounted = false
 
 function reloadMirrorForAccount(userId) {
@@ -65,7 +101,7 @@ const openTodoCount = computed(() => (statsStore.todo.not_started || 0) + (stats
 
 // ---- 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） ----
 // 注：原 JS rAF 数字滚动动画已移除——卸载竞态（__vnode null）反复复发，稳定性优先于装饰性动效。
-// 入场视觉由 hero 卡的 cardIn CSS 动画承担，无 JS 状态写入。
+// 页面入场由路由时间线编排，统计值保持业务数据直出。
 
 /** 三格 stats：口径 = statsStore.record_daily 30 天窗口（不随日历页日期筛选变动） */
 const stats = computed(() => {
@@ -210,15 +246,33 @@ const timelineNote = computed(() => {
 })
 
 /** 查看历史快照（hero 切换为该快照内容）；卸载后不弹 toast（组件已不在 DOM） */
+async function switchSnapshot(load) {
+  if (mirrorBusy.value) return
+  switchingSnapshot.value = true
+  const epoch = viewEpoch
+  let effect = null
+  try {
+    const surface = await focusMirrorSurface()
+    if (!viewActive(epoch)) return
+    effect = snapshotGlass = beginMirrorShatter(surface)
+    const ok = await load()
+    if (!viewActive(epoch)) return
+    if (!ok) { toast.error(mirror.error || '快照加载失败'); return }
+    await nextTick()
+    await effect?.reveal()
+  } finally {
+    effect?.cancel()
+    if (snapshotGlass === effect) snapshotGlass = null
+    if (!isUnmounted) switchingSnapshot.value = false
+  }
+}
 async function onViewSnapshot(node) {
-  const ok = await mirror.viewSnapshot(node.id)
-  if (!ok && !isUnmounted) toast.error(mirror.error || '快照加载失败')
+  if (node.id !== mirror.currentSnapshotId) await switchSnapshot(() => mirror.viewSnapshot(node.id))
 }
 
 /** 回到最新（最新节点也可点，用于从历史快照切回） */
 async function onBackToLatest() {
-  const ok = await mirror.backToLatest()
-  if (!ok && !isUnmounted) toast.error(mirror.error || '快照加载失败')
+  await switchSnapshot(() => mirror.backToLatest())
 }
 
 /** 对比模式开关 */
@@ -307,11 +361,22 @@ const compareBOptions = computed(() =>
   compareOptions.value.map(n => ({ value: n.id, label: compareLabel(n.id) })))
 
 async function onGenerate() {
-  const ok = await mirror.generate()
-  // 生成阻塞数十秒，期间用户可能已切页：卸载后只落 store 不弹 toast（无宿主 DOM）
-  if (isUnmounted) return
-  if (ok) toast.success('快照已生成')
-  else toast.error(mirror.error || '生成失败，请重试')
+  if (mirrorBusy.value || mirror.loading) return
+  preparingGeneration.value = true
+  const epoch = viewEpoch
+  try {
+    await focusMirrorSurface()
+    if (!viewActive(epoch)) return
+    const captured = mirrorStage.value?.capture()
+    const ok = await mirror.generate()
+    // A pending request may finish after navigation; its store result remains valid.
+    if (!viewActive(epoch)) return
+    if (ok) {
+      toast.success('快照已生成')
+      await nextTick()
+      if (viewActive(epoch)) await mirrorStage.value?.reveal(captured)
+    } else toast.error(mirror.error || '生成失败，请重试')
+  } finally { if (!isUnmounted) preparingGeneration.value = false }
 }
 
 // ===== 任务：按月生成镜子快照（时间线尾部"幽灵卡"入口） =====
@@ -352,7 +417,7 @@ const cancelMonthConfirmButton = ref(null)
 const monthConfirmTrigger = ref(null)
 
 async function requestMonthGeneration(month, event) {
-  if (!month || mirror.generatingMonthly) return
+  if (!month || mirrorBusy.value) return
   monthConfirmTrigger.value = event?.currentTarget || null
   confirmingMonth.value = month
   await nextTick()
@@ -376,44 +441,53 @@ async function onGenerateMonthly(event) {
 
 async function confirmMonthGeneration() {
   const month = confirmingMonth.value
-  if (!month) return
+  if (!month || mirrorBusy.value) return
+  preparingGeneration.value = true
+  const epoch = viewEpoch
   confirmingMonth.value = null
   const trigger = monthConfirmTrigger.value
-  await nextTick()
-  trigger?.focus?.()
-  if (!month || mirror.generatingMonthly) return
-  const res = await mirror.generateForMonth(month)
-  if (isUnmounted) return
-  if (res.ok) toast.success(`${monthLabel(month)}的镜子已生成`)
-  else toast.error(mirror.error || '生成失败，请重试')
+  try {
+    await nextTick()
+    trigger?.focus?.({ preventScroll: true })
+    await focusMirrorSurface()
+    if (!viewActive(epoch)) return
+    const captured = mirrorStage.value?.capture()
+    const res = await mirror.generateForMonth(month)
+    if (!viewActive(epoch)) return
+    if (res.ok) {
+      toast.success(`${monthLabel(month)}的镜子已生成`)
+      await nextTick()
+      if (viewActive(epoch)) await mirrorStage.value?.reveal(captured)
+    } else toast.error(mirror.error || '生成失败，请重试')
+  } finally { if (!isUnmounted) preparingGeneration.value = false }
 }
 
 onBeforeUnmount(() => {
+  focusTween?.kill()
+  snapshotGlass?.cancel()
   isUnmounted = true
   clearTimeout(settledTimer)
 })
 </script>
 
 <template>
-  <div class="page mirror-page">
+  <div class="page mirror-page" @pointerdown.capture="unlockGlassAudio" @keydown.capture="unlockGlassAudio">
     <div class="page-content">
       <PageMasthead title="我的镜子" english="MY REFLECTION" description="回望记录，看见这段时间的自己">
         <span class="period-caption">近 30 天</span>
-        <button class="p3-button" :disabled="mirror.generating || mirror.loading" @click="onGenerate">{{ mirror.generating ? '正在显影…' : '生成新快照' }}<span aria-hidden="true">↗</span></button>
+        <button class="p3-button" :disabled="mirrorBusy || mirror.loading" @click="onGenerate">{{ preparingGeneration || mirror.generating ? '正在显影…' : '生成新快照' }}<span aria-hidden="true">↗</span></button>
       </PageMasthead>
+      <MirrorStage
+        ref="mirrorStage" :profile="mirror.profile" :nodes="timeline" :current-id="mirror.currentSnapshotId"
+        :busy="mirrorBusy || mirror.loading"
+        :metrics="[
+          { value: statsUnavailable ? '—' : stats[0].display, label: '次记录' },
+          { value: statsUnavailable ? '—' : stats[1].display, label: '个活跃日' },
+          { value: statsUnavailable ? '—' : statsStore.todo.completed, label: '件已完成' },
+        ]"
+        @select="onViewSnapshot" @write="ui.openWriteModal()"
+      />
       <GrowthPanel />
-      <section class="reflection-stage" aria-label="近 30 天生活回顾">
-        <div class="stage-word" aria-hidden="true">REFLECT.</div>
-        <div class="stage-orbit" aria-hidden="true" />
-        <div class="stage-month" aria-hidden="true"><b>{{ monthNumber }}</b><span>{{ yearNumber }}<br>YOUR DAYS</span></div>
-        <div class="stage-copy"><span class="stage-kicker">LIFE, IN REFLECTION</span><template v-if="!statsUnavailable && !stats[0].num"><h2>你的故事，<br>从今天开始。</h2><p>记下第一件小事，<br>让镜子慢慢认识你。</p><button class="stage-first-record" @click="ui.openWriteModal()">写下第一条记录 <span aria-hidden="true">＋</span></button></template><template v-else><h2>原来，<br>你做了这么多。</h2><p>那些认真生活的瞬间，<br>正在拼成越来越清晰的你。</p></template></div>
-        <div class="stage-stats">
-          <div><strong>{{ statsUnavailable ? '—' : stats[0].display }}</strong><span>次记录<small>留下生活的痕迹</small></span></div>
-          <div><strong>{{ statsUnavailable ? '—' : stats[1].display }}</strong><span>个活跃日<small>每一天都有回响</small></span></div>
-          <div><strong>{{ statsUnavailable ? '—' : statsStore.todo.completed }}</strong><span>件已完成<small>努力已经有了答案</small></span></div>
-          <span class="stage-stats-note">近 30 天实时统计</span>
-        </div>
-      </section>
       <div class="reflection-status" aria-label="近期状态概览">
         <div><span>最近的情绪</span><strong>{{ statsFirstLoad ? '正在读取…' : statsUnavailable ? '暂不可用' : moodSegments[0]?.label || '等待记录' }}</strong><i :style="{ background: moodSegments[0]?.color || 'var(--cyan)' }" /></div>
         <div><span>经常关注</span><strong>{{ statsUnavailable ? '暂不可用' : statsStore.keyword_top[0]?.keyword || '从下一条记录开始' }}</strong></div>
@@ -472,28 +546,9 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="mirror.snapshotsError && !timeline.length" class="snapshot-history-error" role="alert"><span>快照历史暂时无法加载</span><button @click="mirror.fetchSnapshots()">重试快照历史</button></div>
           <div v-else-if="mirror.snapshotsLoading && !timeline.length" class="portrait-text">正在读取历史快照…</div>
-          <div v-else-if="timeline.length" class="snapshot-strip" role="tablist" aria-label="镜子归档时间线">
-            <button
-              v-for="node in timeline"
-              :key="node.id"
-              type="button"
-              role="tab"
-              :aria-selected="node.viewing"
-              :class="['snapshot-chip', 'snapshot-node', `state-${node.contextStatus}`, { current: node.viewing, latest: node.latest }]"
-              :aria-label="`${node.label}，${node.type === 'monthly' ? '月度镜子' : '手动镜子'}，第 ${node.version} 版，${node.contextStatus === 'usable' ? '可用于后续镜子' : '仅作归档'}${node.archiveDiscontinuity ? '，累计历史有断点' : ''}`"
-              :title="`${shortDateTime(node.full)} · ${node.type} · V${node.version} · ${node.contextStatus === 'usable' ? '可续写' : '仅归档'}${node.archiveDiscontinuity ? ' · 历史链有断点' : ''}${node.invalidatedReason ? ` · ${invalidationReasonText(node.invalidatedReason)}` : ''}${node.drift !== null && node.drift !== undefined ? ` · 漂移 ${node.drift}` : ''}`"
-              @click="onViewSnapshot(node)"
-            >
-              <span class="snapshot-node-date">{{ node.label }}</span>
-              <span class="snapshot-node-version">V{{ node.version }}</span>
-              <span :class="['snapshot-type-badge', `badge-${node.type}`]">{{ node.type === 'monthly' ? '月度' : '手动' }}</span>
-              <span :class="['snapshot-context-tag', node.contextStatus === 'usable' ? 'context-usable' : 'context-archive']">
-                {{ node.contextStatus === 'usable' ? '可续写' : '仅归档' }}
-              </span>
-              <span v-if="node.archiveDiscontinuity" class="snapshot-break-tag">历史断点</span>
-              <span v-if="node.viewing" class="snapshot-viewing-tag">查看中</span>
-              <span v-else-if="node.latest" class="snapshot-latest-tag">最新</span>
-            </button>
+          <div v-else-if="timeline.length" class="snapshot-current-note">
+            <span>正在查看</span><strong>{{ timeline.find(node => node.viewing)?.label || '最新画像' }}</strong>
+            <small>在上方卡组中挑选其他时刻</small>
           </div>
           <div v-else-if="mirror.snapshotsError" class="timeline-load-error" role="status">
             <span>{{ mirror.snapshotsError }}</span>
@@ -528,7 +583,7 @@ onBeforeUnmount(() => {
                 :block="false"
                 aria-label="选择要生成月度画像的月份"
               />
-              <button type="button" class="ghost-btn" :disabled="mirror.generatingMonthly || !ghostMonth" @click="onGenerateMonthly">
+              <button type="button" class="ghost-btn" :disabled="mirrorBusy || !ghostMonth" @click="onGenerateMonthly">
                 <svg v-if="!mirror.generatingMonthly" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
                 {{ mirror.generatingMonthly ? '照镜中…' : '新建版本' }}
               </button>
@@ -692,7 +747,7 @@ onBeforeUnmount(() => {
                 较上月漂移 Δ {{ mirror.profile.drift_distance }} · {{ mirror.drift.level }}
               </div>
               <div class="mirror-overall">{{ mirror.profile.overall_summary || '还没有总体总结，先去写几条记录吧。' }}</div>
-              <button class="mirror-generate" :disabled="mirror.generating" @click="onGenerate">
+              <button class="mirror-generate" :disabled="mirrorBusy" @click="onGenerate">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
                 {{ mirror.generating ? '生成中…' : '更新这一刻的快照' }}
               </button>
@@ -700,7 +755,7 @@ onBeforeUnmount(() => {
                 v-if="mirror.profile.snapshot_type === 'monthly' && mirror.profile.period_month && mirror.profile.context_status === 'usable' && mirror.profile.is_current"
                 type="button"
                 class="mirror-regenerate-month"
-                :disabled="mirror.generatingMonthly"
+                :disabled="mirrorBusy"
                 @click="requestMonthGeneration(mirror.profile.period_month, $event)"
               >
                 为 {{ monthLabel(mirror.profile.period_month) }} 新建版本
@@ -875,6 +930,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.snapshot-current-note { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 0 4px; color:var(--text-low); font-size:12px; }
+.snapshot-current-note strong { color:var(--accent); }
+.snapshot-current-note small { margin-left:auto; font-size:10px; }
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .page-header { display: none; padding: 26px clamp(32px, 4vw, 72px) 0; align-items: baseline; gap: 14px; }
@@ -893,19 +951,6 @@ onBeforeUnmount(() => {
 /* 分区之间 28px、组内 18px —— 间距分级后"分区"才成立，
    否则所有空隙一个尺寸，层次是平的（这也是此前"模块分界不明显"的另一半原因） */
 .page-content > .zone-start { margin-top: 28px; }
-.page-content > * { animation: cardIn .5s cubic-bezier(.22, .8, .3, 1) backwards; }
-.page-content > *:nth-child(2) { animation-delay: 55ms; }
-.page-content > *:nth-child(3) { animation-delay: 110ms; }
-.page-content > *:nth-child(4) { animation-delay: 165ms; }
-.page-content > *:nth-child(5) { animation-delay: 220ms; }
-.page-content > *:nth-child(6) { animation-delay: 275ms; }
-.page-content > *:nth-child(7) { animation-delay: 330ms; }
-.page-content > *:nth-child(n+8) { animation-delay: 380ms; }
-/* backwards 而非 both：动画结束即交还 CSS 值，不抢占 .card:hover 的 transform */
-@keyframes cardIn {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 @media (min-width: 900px) {
   /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
   .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }

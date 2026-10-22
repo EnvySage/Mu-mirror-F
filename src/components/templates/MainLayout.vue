@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, ref, shallowRef, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -16,7 +16,8 @@ import WriteModal from '@/components/organisms/WriteModal.vue'
 import SummarySheet from '@/components/organisms/SummarySheet.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
-import { cancelObjectTransitions } from '@/composables/useObjectTransition'
+import { useRouteMotion } from '@/motion/useRouteMotion'
+import { cancelMirrorShatter } from '@/composables/useMirrorShatter'
 import { usePresentationMode } from '@/composables/usePresentationMode'
 import PresentationLayout from '@/components/templates/PresentationLayout.vue'
 import DesktopLayout from '@/components/templates/DesktopLayout.vue'
@@ -32,12 +33,32 @@ const settingsStore = useSettingsStore()
 const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
 const presentation = usePresentationMode()
-const pageComponent = computed(() => resolvePresentationPage(presentation.mode.value, route.name))
+const pageComponent = shallowRef(null)
+const renderedPage = ref(route.name)
+const renderedDate = ref(route.params.date)
+let pageGeneration = 0
+// Resolve async views before passing them to Transition. An unresolved async
+// placeholder has no stable parent for an interrupted out-in DOM handoff.
+watch([() => route.name, () => presentation.mode.value], async ([name, mode]) => {
+  const generation = ++pageGeneration
+  const candidate = resolvePresentationPage(mode, name)
+  const resolved = candidate?.__asyncLoader ? await candidate.__asyncLoader() : candidate
+  if (generation !== pageGeneration) return
+  renderedPage.value = name
+  renderedDate.value = route.params.date
+  pageComponent.value = resolved
+}, { immediate: true })
+watch(() => route.params.date, date => { if (renderedPage.value === 'records') renderedDate.value = date })
+onBeforeUnmount(() => { pageGeneration += 1 })
+const routeWipe = ref(null)
+const routeMotion = useRouteMotion(routeWipe)
 
-router.beforeEach((to, from) => {
+const removeDraftGuard = router.beforeEach((to, from) => {
   if (to.fullPath !== from.fullPath && !ui.consumeNavigationApproval(to.fullPath) && !ui.confirmNavigationDrafts()) return false
   return true
 })
+
+onBeforeUnmount(removeDraftGuard)
 
 /**
  * 待办建议轮询（15s，全局）
@@ -71,16 +92,13 @@ onMounted(() => {
  * 详情层会继续压在新页面上。这里兜底：只要路由变了就收。
  */
 watch(() => route.name, () => {
-  cancelObjectTransitions()
+  cancelMirrorShatter()
   if (ui.showDetail) {
     ui.showDetail = false
     ui.selectedRecordId = null
   }
 })
 
-function openWrite() {
-  ui.openWriteModal()
-}
 </script>
 
 <template>
@@ -94,17 +112,16 @@ function openWrite() {
       <MobileLayout>
         <MobileHeader
           :title="mobileTitle"
-          @write="openWrite"
           @summary="ui.openSummarySheet()"
           @sessions="ui.requestChatSessions()"
         />
       </MobileLayout>
       <PresentationLayout :mode="presentation.mode.value">
-        <Transition name="page" mode="out-in">
-          <component :is="pageComponent" :key="route.name" v-bind="route.name === 'records' ? { date: route.params.date } : {}" />
+        <Transition :css="false" mode="out-in" v-bind="routeMotion">
+          <component :is="pageComponent" :key="renderedPage" v-bind="renderedPage === 'records' ? { date: renderedDate } : {}" />
         </Transition>
       </PresentationLayout>
-      <div :key="route.name" class="route-wipe" aria-hidden="true">
+      <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
         <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[route.name] }}</span>
       </div>
@@ -120,20 +137,25 @@ function openWrite() {
 <style scoped>
 .app { position: relative; isolation: isolate; z-index: 1; display: flex; height: 100dvh; background: #06123f; }
 .app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #03133d99, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+/* Let the mobile column shrink so each page can scroll within the viewport. */
+.main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 @media (min-width: 900px) {
   .presentation-mode-mobile { flex-direction: column; }
 }
 .presentation-mode-desktop :deep(.sidebar) { display: flex; }
 .presentation-mode-desktop :deep(.mobile-chrome) { display:none; }
-.presentation-mode-desktop :deep(.bottom-nav), .presentation-mode-desktop :deep(.write-fab) { display: none; }
+.presentation-mode-desktop :deep(.bottom-nav) { display: none; }
 .presentation-mode-desktop :deep(.mobile-header) { display: none; }
 .presentation-mode-mobile :deep(.desktop-chrome) { display:none; }
 .presentation-mode-mobile :deep(.sidebar) { display: none; }
 .presentation-mode-mobile :deep(.bottom-nav) { display: flex; }
 .presentation-mode-mobile :deep(.mobile-header) { display: flex; }
-.presentation-mode-mobile { display:flex; flex-direction:column; }
-.presentation-mode-mobile :deep(.main) { width:100%; max-width:720px; margin:0 auto; }
+.presentation-mode-mobile { display:flex; flex-direction:column; --nav-height:76px; --page-bottom-clearance:24px; }
+/* Reserve navigation space once, also when mobile mode is selected on a wide
+   screen. Scrollbars and the chat composer end above the fixed navigation. */
+.presentation-mode-mobile :deep(.main) { width:100%; max-width:720px; margin:0 auto; padding-bottom:calc(var(--nav-height) + var(--safe-bottom)); }
+.presentation-mode-mobile :deep(.page:not(.chat-page) > .page-content) { padding-bottom:var(--page-bottom-clearance); }
+.presentation-mode-mobile :deep(.chat-page > .page-content) { padding-bottom:12px; }
 @media (max-width: 600px) {
   .presentation-mode-desktop :deep(.sidebar) { flex:0 0 64px; width:64px; padding:12px 4px; }
   .presentation-mode-desktop :deep(.brand-name), .presentation-mode-desktop :deep(.sidebar-date), .presentation-mode-desktop :deep(.sidebar-write) { display:none; }

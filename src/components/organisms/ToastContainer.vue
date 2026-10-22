@@ -1,7 +1,56 @@
 <script setup>
 import { useToastStore } from '@/stores/toast'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { createMotionScope, duration, Flip, gsap, motionTokens, prefersReducedMotion } from '@/motion/core'
 
 const toast = useToastStore()
+const container = ref(null)
+const motions = new Map()
+let moveScope
+
+function cancelMotion(el) {
+  const state = motions.get(el)
+  if (!state) return
+  motions.delete(el)
+  state.scope.dispose()
+  state.done()
+}
+function animateToast(el, done, entering) {
+  cancelMotion(el)
+  const surface = el.querySelector('.toast')
+  const scope = createMotionScope(el)
+  const state = { scope, done }
+  motions.set(el, state)
+  scope.run(() => {
+    if (entering) gsap.set(surface, { opacity: 0, y: prefersReducedMotion() ? 0 : -8 })
+    else {
+      // Hold the leaving toast out of flow; Flip closes the stack underneath it.
+      el.style.width = `${el.offsetWidth}px`
+      el.style.top = `${el.offsetTop}px`
+      el.style.position = 'absolute'
+    }
+    gsap.to(surface, { opacity: entering ? 1 : 0, y: entering || prefersReducedMotion() ? 0 : -6, duration: duration(motionTokens.feedback), ease: 'power2.out', overwrite: true, onComplete: () => {
+      if (motions.get(el) !== state) return
+      motions.delete(el)
+      scope.dispose()
+      done()
+    } })
+  })
+}
+const enterToast = (el, done) => animateToast(el, done, true)
+const leaveToast = (el, done) => animateToast(el, done, false)
+watch(() => toast.toasts.map(item => item.id).join(','), async () => {
+  if (!container.value) return
+  const state = Flip.getState(container.value.querySelectorAll('.toast-shell'))
+  await nextTick()
+  if (!container.value) return
+  moveScope ||= createMotionScope(container.value)
+  moveScope.run(() => Flip.from(state, { targets: [...container.value.querySelectorAll('.toast-shell')].filter(el => el.style.position !== 'absolute'), duration: duration(motionTokens.feedback), ease: 'power2.out', scale: false }))
+})
+onBeforeUnmount(() => {
+  for (const el of [...motions.keys()]) cancelMotion(el)
+  moveScope?.dispose()
+})
 
 /** 类型 → SVG path（无 emoji，纯线性图标） */
 const icons = {
@@ -15,11 +64,10 @@ const icons = {
 
 <template>
   <Teleport to="body">
-    <div class="toast-container">
-      <TransitionGroup name="toast">
+    <div ref="container" class="toast-container" role="status" aria-live="polite" aria-atomic="false">
+      <TransitionGroup :css="false" @enter="enterToast" @leave="leaveToast" @enter-cancelled="cancelMotion" @leave-cancelled="cancelMotion">
+        <div v-for="t in toast.toasts" :key="t.id" class="toast-shell">
         <div
-          v-for="t in toast.toasts"
-          :key="t.id"
           :class="['toast', t.undoable ? 'toast-undo' : `toast-${t.type}`]"
           @click="toast.remove(t.id)"
         >
@@ -36,6 +84,7 @@ const icons = {
           <button v-if="t.undoable" class="toast-undo-btn" @click.stop="toast.undo(t.id)">撤销</button>
           <!-- 5 秒倒计时条 -->
           <span v-if="t.undoable" class="toast-timer" :style="{ animationDuration: t.duration + 'ms' }" />
+        </div>
         </div>
       </TransitionGroup>
     </div>
@@ -55,6 +104,7 @@ const icons = {
   gap: 8px;
   pointer-events: none;
 }
+.toast-shell { max-width:100%; }
 
 .toast {
   position: relative;
@@ -106,7 +156,7 @@ const icons = {
 }
 .toast-undo-btn:hover { background: #E2E9FD; }
 
-/* 撤销窗倒计时条（宽度 100% → 0，时长由行内 animationDuration 驱动） */
+/* The real undo deadline remains store-owned; the visual bar only scales. */
 .toast-timer {
   position: absolute;
   left: 0; bottom: 0;
@@ -114,40 +164,14 @@ const icons = {
   width: 100%;
   background: var(--danger);
   opacity: .5;
+  transform-origin:left;
   animation-name: toast-timer-run;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
 @keyframes toast-timer-run {
-  from { width: 100%; }
-  to { width: 0%; }
-}
-
-/* 动画 */
-.toast-enter-active {
-  animation: toast-in 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.toast-leave-active {
-  animation: toast-out 0.2s ease-in forwards;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes toast-out {
-  to {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.95);
-  }
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
 }
 
 /* 移动端适配 */
@@ -159,9 +183,10 @@ const icons = {
     transform: none;
   }
 
-  .toast {
+  .toast-shell, .toast {
     max-width: 100%;
     width: 100%;
   }
 }
+@media (prefers-reduced-motion: reduce) { .toast-timer { animation:none; } }
 </style>

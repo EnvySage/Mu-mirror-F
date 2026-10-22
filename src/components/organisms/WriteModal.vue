@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useRouter } from 'vue-router'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { useRecordsStore } from '@/stores/records'
@@ -43,18 +44,26 @@ const activePrompt = ref(0)
 const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(openedAt.value))
 const dateNumber = computed(() => String(openedAt.value.getDate()).padStart(2, '0'))
 const monthLabel = computed(() => new Intl.DateTimeFormat('en', { month: 'short' }).format(openedAt.value).toUpperCase())
-useDialogFocus(() => focusOpen.value, dialogEl, 'textarea', onClose)
-function afterModalLeave() { if (!props.show) focusOpen.value = false }
-function choosePrompt(index) { activePrompt.value = index; textareaEl.value?.focus() }
+const dialogFocus = useDialogFocus(() => focusOpen.value, dialogEl, 'textarea', onClose)
+let pendingNavigation = null
+function afterModalLeave() {
+  if (props.show) return
+  focusOpen.value = false
+  const destination = pendingNavigation
+  pendingNavigation = null
+  if (destination) router.push(destination)
+}
+function choosePrompt(index) { activePrompt.value = index; textareaEl.value?.focus({ preventScroll: true }) }
 
 const MAX = 2000
 
 const count = computed(() => content.value.length)
 const enabled = computed(() => content.value.trim().length > 0 && !loading.value)
 
-watch(() => props.show, async (val) => {
+watch(() => props.show, (val) => {
   actionPoller.stop()
   if (val) {
+    pendingNavigation = null
     focusOpen.value = true
     openedAt.value = new Date()
     activePrompt.value = 0
@@ -63,8 +72,6 @@ watch(() => props.show, async (val) => {
     preparedAction.value = null
     prepareGeneration += 1
     error.value = ''
-    await nextTick()
-    textareaEl.value?.focus()
   }
 })
 
@@ -75,8 +82,8 @@ async function handleSubmit() {
   if (requestAiProcessing && !settingsStore.isModelConfigComplete) {
     const msg = settingsStore.getModelConfigMissingMessage()
     toast.warning(msg || '请先完成 AI 模型配置后再写日记')
+    pendingNavigation = { name: 'settings' }
     emit('close')
-    setTimeout(() => router.push({ name: 'settings' }), 300)
     return
   }
 
@@ -155,6 +162,7 @@ const desktopMq = typeof window !== 'undefined' && window.matchMedia
   ? window.matchMedia('(min-width: 900px)')
   : null
 const isDesktop = ref(desktopMq ? desktopMq.matches : false)
+const overlay = useOverlayMotion(() => ({ xPercent: -50, yPercent: isDesktop.value ? -50 : 0, distance: isDesktop.value ? 20 : 42 }))
 
 function onMqChange(e) {
   isDesktop.value = e.matches
@@ -172,8 +180,8 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <Transition name="fade"><div v-if="show" class="modal-overlay" @click="onClose" /></Transition>
-    <Transition :name="isDesktop ? 'modal' : 'sheet'" @after-leave="afterModalLeave">
+    <Transition :css="false" v-bind="overlay.backdropHooks"><div v-if="show" class="modal-overlay" @click="onClose" /></Transition>
+    <Transition :css="false" v-bind="overlay.panelHooks" @after-enter="dialogFocus.focusInitial" @after-leave="afterModalLeave">
       <section v-if="show" ref="dialogEl" :class="['write-modal', { desktop: isDesktop }]" role="dialog" aria-modal="true" aria-labelledby="write-title" tabindex="-1" @keydown.ctrl.enter.prevent="handleSubmit" @keydown.meta.enter.prevent="handleSubmit">
         <aside class="write-stage">
           <span class="write-stage-word" aria-hidden="true">DEAR<br>MYSELF.</span>
@@ -234,7 +242,4 @@ onBeforeUnmount(() => {
 @media(min-width:900px){.write-modal.desktop{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 80px));height:min(740px,88dvh);grid-template-columns:310px minmax(0,1fr)} }
 @media(max-width:899px){.write-modal{height:94dvh;grid-template-rows:auto minmax(0,1fr);padding-bottom:var(--safe-bottom)}.write-stage{padding:20px 24px;display:flex;align-items:center;gap:24px}.write-date b{font-size:60px}.write-date>span{font-size:21px}.write-stage-copy{margin:0}.write-stage h2{font-size:23px;line-height:1.3;margin-top:7px}.write-stage h2 br{display:none}.write-stage p,.write-stage-bottom,.write-stage-word{display:none}.write-kicker{font-size:9px}.write-header{padding:12px 22px}.write-header>div{gap:10px}.write-header time{font-size:10px}.write-body{padding:22px}.write-address{font-size:28px;margin-bottom:18px}.write-textarea{min-height:120px;font-size:16px}.write-footer{padding:12px 22px 16px;gap:9px}.write-permission{gap:6px}.permission-option{padding:8px}.permission-option small{font-size:9px}.write-footer-main{gap:10px}.write-shortcut{display:none}.write-counter{margin-left:0;margin-right:auto}.write-prompts{margin-top:12px;gap:6px}.write-prompts>span{flex-basis:100%;margin-bottom:2px}.write-prompts button{font-size:10px}.write-submit{min-width:148px}}
 @media(max-height:650px) and (min-width:900px){.write-stage-copy{margin-top:40px}.write-stage h2{font-size:30px}.write-stage p{margin-top:12px}.write-body{padding-top:20px}.write-textarea{min-height:130px}.write-prompts{margin-top:14px}.write-footer{padding-top:14px;padding-bottom:16px}}
-.sheet-enter-active,.sheet-leave-active{transition:transform .34s cubic-bezier(.16,1,.3,1)}.sheet-enter-from,.sheet-leave-to{transform:translate(-50%,110%)}
-.modal-enter-active{transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .3s,clip-path .42s}.modal-leave-active{transition:opacity .3s,transform .3s}.modal-enter-from{opacity:0;transform:translate(-46%,-48%);clip-path:polygon(0 0,0 0,-20% 100%,0 100%)}.modal-enter-to{clip-path:polygon(0 0,120% 0,100% 100%,0 100%)}.modal-leave-to{opacity:0;transform:translate(-50%,-48%)}
-@media(prefers-reduced-motion:reduce){.modal-enter-from,.modal-leave-to{transform:translate(-50%,-50%);clip-path:none}}
 </style>

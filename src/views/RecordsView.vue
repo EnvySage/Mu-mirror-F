@@ -14,6 +14,9 @@ import ActionCard from '@/components/organisms/ActionCard.vue'
 import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
+import { stableVariant, prefersReducedMotion } from '@/motion/core'
+import { useListMotion } from '@/motion/useListMotion'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
 
 const props = defineProps({
   date: { type: String, default: null },
@@ -30,8 +33,13 @@ const deleteProposal = ref(null)
 const recordFilter = ref('all')
 const selectedTag = ref('')
 const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
-const firstLoadCascade = ref(false)
-let cascadeTimer = null
+const listRoot = ref(null)
+let viewAlive = true
+let highlightTimer = null
+function clearHighlightLater(id) {
+  clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => { if (String(ui.highlightRecordId) === String(id)) ui.highlightRecordId = null }, 1800)
+}
 const dayNumber = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',day:'2-digit' }).format(new Date())
 const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:'short' }).format(new Date())
 
@@ -49,6 +57,7 @@ const grouped = computed(() => {
     .reverse()
     .map(k => ({ dateKey: k, label: dateLabel(groups[k][0].created_at), items: groups[k] }))
 })
+useListMotion(listRoot, () => JSON.stringify(grouped.value.map(group => [group.dateKey, group.items.map(record => [record.id, record.status])])))
 
 const tagOptions = computed(() => {
   const values = new Set()
@@ -94,17 +103,19 @@ async function revealHighlightedRecord() {
   selectedTag.value = ''
   ui.sidebarSelectedDate = null
   await nextTick()
-  document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(ui.highlightRecordId))}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (!viewAlive) return
+  document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(ui.highlightRecordId))}"]`)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
   const id = ui.highlightRecordId
-  setTimeout(() => { if (String(ui.highlightRecordId) === String(id)) ui.highlightRecordId = null }, 1800)
+  clearHighlightLater(id)
 }
 
 watch(() => ui.highlightRecordId, async (id) => {
   if (!id) return
   await nextTick()
+  if (!viewAlive) return
   if (visibleRecordIds.value.has(String(id))) {
     document.querySelector(`[data-object-source="record"][data-object-id="${CSS.escape(String(id))}"]`)?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
-    setTimeout(() => { if (String(ui.highlightRecordId) === String(id)) ui.highlightRecordId = null }, 1800)
+    clearHighlightLater(id)
   }
 }, { flush: 'post' })
 
@@ -125,7 +136,8 @@ const isWide = ref(wideMql.matches)
 const showSidebarDrawer = ref(false)
 const drawerEl = ref(null)
 const drawerFocusOpen = ref(false)
-useDialogFocus(() => drawerFocusOpen.value, drawerEl, '.sidebar-drawer-close', () => { showSidebarDrawer.value = false })
+const drawerMotion = useOverlayMotion({ direction: 'right', distance: 0 })
+const drawerFocus = useDialogFocus(() => drawerFocusOpen.value, drawerEl, '.sidebar-drawer-close', () => { showSidebarDrawer.value = false })
 watch(showSidebarDrawer, open => { if (open) drawerFocusOpen.value = true })
 function afterDrawerLeave() { if (!showSidebarDrawer.value) drawerFocusOpen.value = false }
 
@@ -141,8 +153,6 @@ onMounted(async () => {
   statsStore.fetchStats()
   wideMql.addEventListener('change', onWideChange)
   await request
-  firstLoadCascade.value = true
-  cascadeTimer = setTimeout(() => { firstLoadCascade.value = false }, 1760)
 })
 
 watch(() => props.date, (d) => {
@@ -170,7 +180,7 @@ function stopListPolling() {
 
 function scheduleListPolling() {
   stopListPolling()
-  if (cascadeTimer) clearTimeout(cascadeTimer)
+  if (!viewAlive) return
   if (!recordsStore.processingRecords.length) return
   pollTimer = setTimeout(async () => {
     await recordsStore.fetchRecords(filterDate.value
@@ -198,6 +208,8 @@ watch(() => recordsStore.processingRecords.length, (n, prev) => {
 })
 
 onBeforeUnmount(() => {
+  viewAlive = false
+  clearTimeout(highlightTimer)
   stopListPolling()
   wideMql.removeEventListener('change', onWideChange)
 })
@@ -233,16 +245,6 @@ function onDrawerOpenSummaries() {
   openSummarySheet()
 }
 
-/** 瀑布入场：分组的全局序号（前序组卡片数累计），供 40ms 递增 delay */
-function groupIndex(group) {
-  let n = 0
-  for (const g of grouped.value) {
-    if (g.dateKey === group.dateKey) break
-    n += g.items.length
-  }
-  return n
-}
-
 /** 列表内软删除（REVIEWING / FAILED） */
 async function onDeleteRecord(record) {
   const proposal = await recordsStore.deleteRecord(record.id)
@@ -275,7 +277,7 @@ function onRetryRecord(record) {
     <div class="page-content">
       <PageMasthead title="日常记录" english="DAILY RECORDS" :description="subtitle"><button class="p3-button secondary" @click="openSummarySheet">每日总结</button></PageMasthead>
       <ActionCard v-if="deleteProposal" :proposal="deleteProposal" @updated="onDeleteActionUpdated" />
-      <section :class="['record-intro', { 'records-first-load': firstLoadCascade }]" aria-label="记录此刻">
+      <section class="record-intro" aria-label="记录此刻">
         <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
         <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
       </section>
@@ -283,7 +285,7 @@ function onRetryRecord(record) {
       <div v-if="highlightedRecordHidden" class="record-arrival-notice" role="status">新记录已保存，但当前筛选中看不到。<button @click="revealHighlightedRecord">查看新记录</button></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
       <div class="records-layout">
-        <div class="records-main">
+        <div ref="listRoot" class="records-main">
           <!-- 加载状态 -->
           <div v-if="recordsStore.loading && !recordsStore.records.length" class="loading-state">
             <span class="spinner" style="width:22px;height:22px" />
@@ -300,26 +302,25 @@ function onRetryRecord(record) {
           </div>
 
           <!-- 日期分组列表（≥1200px 双列网格，日期分隔条跨双列） -->
-          <TransitionGroup v-else name="record-list" tag="div" :class="['records-grid', { 'records-first-load': firstLoadCascade }]">
-              <section v-for="group in grouped" :key="group.dateKey" :class="['records-day', groupIndex(group) % 2 ? 'rail-offset-b' : 'rail-offset-a']" :aria-label="group.label">
+          <div v-else class="records-grid">
+              <section v-for="group in grouped" :key="group.dateKey" :class="['records-day', stableVariant(group.dateKey, 2) ? 'rail-offset-b' : 'rail-offset-a']" :aria-label="group.label">
                 <aside class="date-rail"><span class="date-rail-dot" /><time>{{ group.label }}</time><small>{{ group.items.length }} 条</small></aside>
-                <TransitionGroup name="record-list" tag="div" class="records-day-flow">
+                <div class="records-day-flow">
                   <RecordCard
-                    v-for="(record, i) in group.items"
+                    v-for="record in group.items"
                     :key="record.id"
                     :record="record"
                     :active="ui.selectedRecordId === record.id"
-                    :featured="groupIndex(group) + i === 0"
-                    :layout-variant="(groupIndex(group) + i) % 3"
+                    :featured="stableVariant(record.id, 7) === 0"
+                    :layout-variant="stableVariant(record.id)"
                     :arrival="String(ui.highlightRecordId) === String(record.id)"
-                    :style="{ '--stagger-index': Math.min(groupIndex(group) + i, 4) }"
                     @open="openRecord(record.id, $event)"
                     @delete="onDeleteRecord"
                     @retry="onRetryRecord"
                   />
-                </TransitionGroup>
+                </div>
               </section>
-          </TransitionGroup>
+          </div>
         </div>
 
         <!-- 宽屏（≥1440px）：侧栏常驻右栏；窄屏由下方 FAB + 抽屉承载，此处不渲染 -->
@@ -348,10 +349,10 @@ function onRetryRecord(record) {
 
     <!-- 侧栏抽屉（Teleport to body：脱离页面滚动容器；点遮罩/关闭收起） -->
     <Teleport to="body">
-      <Transition name="fade">
+      <Transition :css="false" v-bind="drawerMotion.backdropHooks">
         <div v-if="showSidebarDrawer" class="sidebar-overlay" @click="showSidebarDrawer = false" />
       </Transition>
-      <Transition name="slide-right" @after-leave="afterDrawerLeave">
+      <Transition :css="false" v-bind="drawerMotion.panelHooks" @after-enter="drawerFocus.focusInitial" @after-leave="afterDrawerLeave">
         <div v-if="showSidebarDrawer" ref="drawerEl" class="sidebar-drawer" role="dialog" aria-label="概览侧栏" aria-modal="true" tabindex="-1">
           <div class="sidebar-drawer-head">
             <span class="sidebar-drawer-title">概览</span>
@@ -428,7 +429,7 @@ function onRetryRecord(record) {
   padding: 12px 14px calc(20px + var(--safe-bottom));
 }
 
-/* 记录双列（≥1200px）：卡片走网格，日期分隔条跨双列；stagger delay 不变 */
+/* 稳定 ID 决定版式；外壳补位，卡面独立响应指针。 */
 .records-grid { position:relative; display:flex; flex-direction:column; gap:30px; }
 .records-day { display:grid; grid-template-columns:86px minmax(0,1fr); gap:20px; align-items:stretch; }
 .records-day.rail-offset-b { grid-template-columns:112px minmax(0,1fr); gap:16px; }
@@ -441,57 +442,29 @@ function onRetryRecord(record) {
 .rail-offset-b .date-rail-dot { top:60px; right:-4px; border-radius:0; transform:rotate(45deg); border-color:var(--pink); }
 .date-rail time { font:700 13px/1.3 var(--font-display); color:white; }
 .date-rail small { margin-top:5px; color:#9ebde9; font-size:10px; }
+.records-day-flow :deep(.record-layout.featured) { width:96%; align-self:flex-start; }
 .records-day-flow { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:15px; }
-.records-day-flow :deep(.record-card) { margin:0; isolation:isolate; position:relative; background:#0b255c; border:1px solid #7ba5e94a; box-shadow:none; color:#eaf1ff; animation:none; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 20px,100% 100%,13px 100%,0 calc(100% - 14px)); transition:width .38s var(--motion-enter),transform .38s var(--motion-shift),filter .3s,border-color .3s,clip-path .32s; }
-.records-first-load .records-day-flow :deep(.record-card) { animation-name:recordEnterLeft; animation-duration:.78s; animation-timing-function:var(--motion-enter); animation-fill-mode:backwards; animation-delay:calc(var(--stagger-index,0) * 170ms + 80ms); }
-.records-day-flow :deep(.record-card.featured) { width:96%; min-height:190px; padding:25px 30px; align-self:flex-start; background:linear-gradient(112deg,#f8fbff 0 83%,#d8faff 83% 100%); color:var(--text-hi); border-color:#d9e6ff; filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); }
-.records-day-flow :deep(.record-card.layout-1:not(.featured)) { width:84%; align-self:flex-end; margin-right:1.5%; padding:20px 24px; clip-path:polygon(24px 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 100%,0 24px); }
-.records-day-flow :deep(.record-card.layout-2:not(.featured)) { width:91%; align-self:flex-start; margin-left:5%; padding:18px 22px; background:#10306d; clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 34px),calc(100% - 34px) 100%,0 100%); }
-.records-day-flow :deep(.record-card.layout-0:not(.featured)) { width:78%; align-self:flex-end; margin-right:8%; padding:18px 22px; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); }
-.records-first-load .records-day-flow :deep(.record-card.layout-1:not(.featured)) { animation-name:recordEnterRight; }
-.records-first-load .records-day-flow :deep(.record-card.layout-2:not(.featured)) { animation-name:recordEnterRise; }
-.records-first-load .records-day-flow :deep(.record-card.featured) { animation-name:recordEnterLead; animation-delay:110ms; }
-.records-first-load .records-day .date-rail { animation:recordRailMark .68s var(--motion-enter) backwards; }
-.records-first-load .records-day .date-rail::after { transform:scaleY(0) skewY(-13deg); transform-origin:top; animation:recordRailDraw .7s .16s var(--motion-enter) both; }
-.records-first-load .records-day.rail-offset-b .date-rail::after { animation-name:recordRailDrawB; }
-.record-intro.records-first-load::after { animation:recordSlashSweep .82s cubic-bezier(.7,0,.2,1) both; }
-.record-intro::after { content:''; position:absolute; z-index:0; top:-40%; bottom:-40%; left:-35%; width:34%; pointer-events:none; background:linear-gradient(90deg,transparent,#50edfa30 25%,#fff8 50%,#ee246a50 72%,transparent); transform:translateX(-150%) skewX(-18deg); }
+.records-day-flow :deep(.record-card) { margin:0; isolation:isolate; position:relative; background:#0b255c; border:1px solid #7ba5e94a; box-shadow:none; color:#eaf1ff; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 20px,100% 100%,13px 100%,0 calc(100% - 14px)); transition:filter .2s,border-color .2s,box-shadow .2s; }
+.records-day-flow :deep(.record-card.featured) { min-height:190px; padding:25px 30px; background:linear-gradient(112deg,#f8fbff 0 83%,#d8faff 83% 100%); color:var(--text-hi); border-color:#d9e6ff; filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); }
+.records-day-flow :deep(.record-layout.layout-1:not(.featured)) { width:84%; align-self:flex-end; margin-right:1.5%; }
+.records-day-flow :deep(.record-card.layout-1:not(.featured)) { padding:20px 24px; clip-path:polygon(24px 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 100%,0 24px); }
+.records-day-flow :deep(.record-layout.layout-2:not(.featured)) { width:91%; align-self:flex-start; margin-left:5%; }
+.records-day-flow :deep(.record-card.layout-2:not(.featured)) { padding:18px 22px; background:#10306d; clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 34px),calc(100% - 34px) 100%,0 100%); }
+.records-day-flow :deep(.record-layout.layout-0:not(.featured)) { width:78%; align-self:flex-end; margin-right:8%; }
+.records-day-flow :deep(.record-card.layout-0:not(.featured)) { padding:18px 22px; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); }
 .records-day-flow :deep(.record-card::after) { content:''; position:absolute; right:0; top:0; width:8px; height:100%; background:linear-gradient(var(--cyan),var(--pink)); opacity:.8; clip-path:polygon(0 0,100% 0,100% 72%,0 100%); pointer-events:none; }
-.records-first-load .records-day-flow :deep(.record-card.featured::after) { animation:recordCardSlash .62s .3s var(--motion-shift) both; }
-.records-first-load .records-day-flow :deep(.record-card:not(.featured)::after) { animation:recordCardSlash .58s calc(var(--stagger-index,0) * 170ms + 360ms) var(--motion-shift) both; }
-.records-first-load .records-day { animation:recordGroupSettle .65s both; }
-.records-first-load .records-day:nth-child(even) { animation-delay:180ms; }
-@keyframes recordRailMark { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
-@keyframes recordRailDraw { to { transform:scaleY(1) skewY(-13deg); } }
-@keyframes recordRailDrawB { to { transform:scaleY(1) skewY(12deg); } }
-@keyframes recordSlashSweep { 0% { transform:translateX(-150%) skewX(-18deg); } 45%,68% { transform:translateX(80vw) skewX(-18deg); } 100% { transform:translateX(130vw) skewX(-18deg); } }
-@keyframes recordCardSlash { 0% { width:36%; opacity:.95; } 100% { width:8px; opacity:.82; } }
-@keyframes recordGroupSettle { from { opacity:.45; } to { opacity:1; } }
-@keyframes recordEnterLead { 0% { opacity:0; transform:translateX(-68px) translateY(16px) scale(.94); clip-path:polygon(0 0,0 0,0 0,0 100%,20px 100%,0 90%); } 68% { opacity:1; transform:translateX(8px) translateY(0) scale(1.01); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 90%); } 100% { opacity:1; transform:none; clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); } }
-@keyframes recordEnterLeft { 0% { opacity:0; transform:translateX(-52px) rotate(-1.2deg) scale(.96); clip-path:polygon(0 0,12% 0,12% 100%,0 100%); } 72% { opacity:1; transform:translateX(6px) rotate(0) scale(1.01); } 100% { opacity:1; transform:none; } }
-@keyframes recordEnterRight { 0% { opacity:0; transform:translateX(72px) rotate(1.3deg) scale(.94); clip-path:polygon(88% 0,100% 0,100% 100%,88% 100%); } 72% { opacity:1; transform:translateX(-6px) rotate(0) scale(1.01); } 100% { opacity:1; transform:none; } }
-@keyframes recordEnterRise { 0% { opacity:0; transform:translateY(42px) translateX(22px) scale(.94); clip-path:polygon(0 0,100% 0,100% 10%,0 10%); } 72% { opacity:1; transform:translateY(-5px) translateX(0) scale(1.01); } 100% { opacity:1; transform:none; } }
 .records-day-flow :deep(.record-card.featured) { filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); }
 .records-day-flow :deep(.record-card:not(.featured)) { filter:drop-shadow(6px 7px 0 #50edfa50) drop-shadow(-5px 3px 0 #f03c8a55); }
 .records-day-flow :deep(.record-card:not(.featured) .record-time), .records-day-flow :deep(.record-card:not(.featured) .record-summary) { color:#b7ccef; }
 .records-day-flow :deep(.record-card:not(.featured) .record-title) { color:white; }
 .records-day-flow :deep(.record-card:not(.featured) .chunk-count) { color:var(--cyan); }
-.records-day-flow :deep(.record-card:hover), .records-day-flow :deep(.record-card:focus-visible), .records-day-flow :deep(.record-card.active) { border-color:var(--cyan); transform:translateX(5px) translateY(-2px); filter:drop-shadow(8px 10px 0 #50edfa88) drop-shadow(-5px 4px 0 #f03c8a75); }
-.record-list-enter-active,.record-list-leave-active,.record-list-move{transition:opacity .38s var(--motion-shift),transform .38s var(--motion-shift),clip-path .38s var(--motion-shift),width .38s var(--motion-enter)}
-.record-list-enter-from{opacity:0;transform:translateX(42px) scale(.92);clip-path:polygon(0 0,0 0,0 100%,0 100%)}
-.record-list-leave-to{opacity:0;transform:translateX(-54px) skewX(-3deg) scale(.9);clip-path:polygon(0 0,100% 0,100% 22%,0 0)}
-.records-day-flow :deep(.record-card.layout-1.record-list-leave-to){transform:translateX(62px) skewX(3deg) scale(.92);clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)}
-.records-day-flow :deep(.record-card.layout-2.record-list-leave-to){transform:translateY(35px) scale(.92);clip-path:polygon(0 100%,100% 100%,100% 100%,0 100%)}
-.record-list-move{transition-delay:30ms}
-.record-list-leave-active{position:absolute;pointer-events:none}
-.records-day-flow :deep(.record-card.arrival){animation:recordArrivalPulse 1.4s ease both!important; border-color:var(--cyan);}
+.records-day-flow :deep(.record-card:hover), .records-day-flow :deep(.record-card:focus-visible), .records-day-flow :deep(.record-card.active) { border-color:var(--cyan); filter:drop-shadow(8px 10px 0 #50edfa88) drop-shadow(-5px 4px 0 #f03c8a75); }
 .record-arrival-notice{display:flex;align-items:center;gap:12px;margin:8px 0;padding:9px 12px;color:#d7eaff;background:#0b255c;border-left:3px solid var(--cyan);font-size:12px}
 .record-arrival-notice button{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
 .records-aside-shell :deep(.side-card) { color:#dce9ff; background:#0a245f; border:1px solid #7ba5e94a; border-bottom:1px solid #7ba5e94a; box-shadow:none; }
 .records-aside-shell :deep(.side-head-note), .records-aside-shell :deep(.side-empty), .records-aside-shell :deep(.sum-line), .records-aside-shell :deep(.sum-date), .records-aside-shell :deep(.today-unit) { color:#b7ccef; }
 .records-aside-shell :deep(.today-num), .records-aside-shell :deep(.side-more) { color:var(--cyan); }
-@media(max-width:599px){.records-day,.records-day.rail-offset-b{grid-template-columns:42px minmax(0,1fr);gap:8px}.date-rail,.rail-offset-b .date-rail{padding:16px 7px 0 0}.date-rail time{font-size:10px}.date-rail small{font-size:8px}.date-rail-dot,.rail-offset-b .date-rail-dot{top:19px;right:-4px}.records-grid{gap:20px}.records-day-flow{gap:11px}.records-day-flow :deep(.record-card.featured){width:100%;min-height:164px;padding:19px 17px;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,14px 100%,0 calc(100% - 14px))}.records-day-flow :deep(.record-card.layout-1:not(.featured)){width:96%;margin-right:0;padding:16px}.records-day-flow :deep(.record-card.layout-2:not(.featured)){width:96%;margin-left:4%;padding:16px}.records-day-flow :deep(.record-card.layout-0:not(.featured)){width:90%;margin-right:5%;padding:16px}.record-intro::after{width:46%}}
-@media(prefers-reduced-motion:reduce){.records-first-load .records-day-flow :deep(.record-card),.records-first-load .records-day .date-rail,.records-first-load .records-day,.record-intro.records-first-load::after,.records-first-load .records-day-flow :deep(.record-card::after){animation:none!important}.record-list-enter-active,.record-list-leave-active,.record-list-move{transition-duration:.01ms!important}}
+@media(max-width:599px){.records-day,.records-day.rail-offset-b{grid-template-columns:42px minmax(0,1fr);gap:8px}.date-rail,.rail-offset-b .date-rail{padding:16px 7px 0 0}.date-rail time{font-size:10px}.date-rail small{font-size:8px}.date-rail-dot,.rail-offset-b .date-rail-dot{top:19px;right:-4px}.records-grid{gap:20px}.records-day-flow{gap:11px}.records-day-flow :deep(.record-card.featured){min-height:164px;padding:19px 17px;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,14px 100%,0 calc(100% - 14px))}.records-day-flow :deep(.record-layout.layout-1:not(.featured)){width:96%;margin-right:0}.records-day-flow :deep(.record-layout.layout-2:not(.featured)){width:96%;margin-left:4%}.records-day-flow :deep(.record-layout.layout-0:not(.featured)){width:90%;margin-right:5%}.records-day-flow :deep(.record-layout.featured){width:100%}.records-day-flow :deep(.record-card:not(.featured)){padding:16px}}
 
 .loading-state { display: flex; justify-content: center; padding: 60px 0; }
 

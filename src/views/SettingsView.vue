@@ -273,7 +273,7 @@ function handleLogout() {
             icon="chat"
             icon-bg="var(--accent)"
             label="API Key"
-            :description="settingsStore.settings.ai_api_key || '未配置'"
+            :description="settingsStore.settings.ai_api_key_needs_reentry ? '无法解密，请重新输入' : (settingsStore.settings.ai_api_key || '未配置')"
             action="edit"
             @click="openEdit('ai_api_key', '', 'API Key', '输入 API Key')"
           />
@@ -305,9 +305,10 @@ function handleLogout() {
           />
           <div class="test-row">
             <button class="test-btn" :disabled="settingsStore.testLoading" @click="handleTestAi">
-              {{ settingsStore.testLoading ? '测试中…' : '测试连接' }}
+              {{ settingsStore.testLoading ? '测试中…' : '测试大模型' }}
             </button>
           </div>
+          <div class="settings-note">会用固定测试内容实际调用大模型，不读取历史记录，也不会创建记录。</div>
         </div>
       </div>
 
@@ -336,7 +337,7 @@ function handleLogout() {
             icon="lock"
             icon-bg="var(--danger)"
             label="API 模式 Key"
-            :description="settingsStore.settings.embedding_api_key || '未配置'"
+            :description="settingsStore.settings.embedding_api_key_needs_reentry ? '无法解密，请重新输入' : (settingsStore.settings.embedding_api_key || '未配置')"
             action="edit"
             @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 Embedding API Key')"
           />

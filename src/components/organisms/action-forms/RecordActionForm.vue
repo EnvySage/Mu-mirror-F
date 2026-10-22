@@ -15,6 +15,7 @@ const preparationStatus = computed(() => String(draft.value.preparationStatus ||
 const running = computed(() => preparationStatus.value === 'RUNNING')
 const fallbackReason = computed(() => draft.value.preparationError || props.proposal.error_message || props.proposal.errorMessage || props.proposal.preview?.description || 'AI 整理未能完成')
 const growthAxes = computed(() => growth.axesDefinition?.axes || draft.value.growthAxes || draft.value.growth_axes || [])
+const supportsGrowthReview = computed(() => draft.value.mode === 'AI_ASSISTED' && growthAxes.value.length === 5 && !!growth.config)
 const reviewMin = computed(() => Number(growth.config?.review_min ?? growth.config?.reviewMin ?? NaN))
 const reviewMax = computed(() => Number(growth.config?.review_max ?? growth.config?.reviewMax ?? NaN))
 const aiSuggestionMin = computed(() => Number(growth.config?.ai_suggestion_min ?? growth.config?.aiSuggestionMin ?? NaN))
@@ -33,11 +34,12 @@ const growthSuggestions = computed(() => {
   })
 })
 const growthDefinitionChanged = computed(() => {
+  if (draft.value.mode !== 'AI_ASSISTED') return false
   const suggestions = draft.value.growthSuggestions || draft.value.growth_suggestions || []
   if (!Array.isArray(suggestions) || suggestions.length === 0) return false
   const candidateVersion = Number(draft.value.axesVersion ?? draft.value.axes_version ?? -1)
   const currentVersion = Number(growth.axesDefinition?.version ?? -2)
-  return candidateVersion >= 0 && currentVersion >= 0 && candidateVersion !== currentVersion
+  return candidateVersion < 0 || currentVersion < 0 || candidateVersion !== currentVersion
 })
 
 function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
@@ -75,9 +77,16 @@ function setTags(index, value) {
   updateSegment(index, 'tags', value.split(/[,，\n]/).map(tag => tag.trim()).filter(Boolean))
 }
 function updateGrowthSuggestion(dimensionId, key, value) {
+  if (!supportsGrowthReview.value || running.value || growthDefinitionChanged.value) return
   const next = clone(payload.value)
   const draft = next.recordDraft
   const current = draft.growthSuggestions || draft.growth_suggestions || []
+  if (current.length === 0) {
+    const version = Number(growth.axesDefinition?.version)
+    if (!Number.isSafeInteger(version) || version < 0) return
+    draft.axesVersion = version
+    delete draft.axes_version
+  }
   const byId = new Map(current.map(item => [item.dimensionId ?? item.dimension_id, { ...item }]))
   const existing = byId.get(dimensionId) || { dimensionId, points: 0, reason: '' }
   existing[key] = key === 'points' ? Number(value) : value
@@ -87,11 +96,17 @@ function updateGrowthSuggestion(dimensionId, key, value) {
   payload.value = next
 }
 function submit() {
+  if (running.value || growthDefinitionChanged.value) return
   const next = clone(payload.value)
-  if (growthAxes.value.length === 5) {
+  if (next.recordDraft.mode === 'ONLY_SAVE') {
+    next.recordDraft.growthSuggestions = []
+    delete next.recordDraft.growth_suggestions
+  } else if (supportsGrowthReview.value) {
     const existing = next.recordDraft.growthSuggestions || next.recordDraft.growth_suggestions || []
     const byId = new Map(existing.map(item => [item.dimensionId ?? item.dimension_id, item]))
-    next.recordDraft.growthSuggestions = growthAxes.value.map(axis => byId.get(axis.id) || { dimensionId: axis.id, points: 0, reason: '' })
+    next.recordDraft.growthSuggestions = existing.length
+      ? growthAxes.value.map(axis => byId.get(axis.id) || { dimensionId: axis.id, points: 0, reason: '' })
+      : []
     delete next.recordDraft.growth_suggestions
   }
   // 选择 AI 整理即授权记忆；仅在记忆管理中停止，不再逐段勾选。
@@ -115,7 +130,7 @@ function submit() {
       <label class="record-field">分类<select :value="segment.contentType || 'note'" :disabled="running" @change="updateSegment(index, 'contentType', $event.target.value)"><option v-for="item in CONTENT_TYPES" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
       <label class="record-field">自由标签<input :value="tagsText(segment.tags)" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
     </fieldset>
-    <fieldset v-if="growthAxes.length === 5 && growth.config" class="record-growth">
+    <fieldset v-if="supportsGrowthReview" class="record-growth">
       <legend>本条记录的成长贡献</legend>
       <p class="record-growth-note">AI 建议 {{ aiSuggestionMin }}–{{ aiSuggestionMax }} 分；你可按本次具体进展改为 {{ reviewMin }}–{{ reviewMax }} 分。没有证据时保持 {{ aiSuggestionMin }}。分数只在记录完整就绪后入账。</p>
       <p v-if="growthDefinitionChanged" class="record-growth-stale" role="alert">五维定义已变化。请取消并重新准备候选后再确认，避免把分数记到旧定义下。</p>

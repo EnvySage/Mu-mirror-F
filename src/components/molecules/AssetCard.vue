@@ -15,6 +15,7 @@ import { ref, computed, watch } from 'vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { formatBytes, CATEGORY_LABELS } from '@/constants/fileTypes'
 import { CONTENT_TYPES } from '@/constants/tags'
+import { vCardLift } from '@/composables/useCardLift'
 
 const props = defineProps({
   /** vault item（snake_case，见 vault store typedef） */
@@ -23,17 +24,17 @@ const props = defineProps({
   shelfVariant: { type: String, default: 'cut-a' },
 })
 
-const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview', 'draft-change'])
+const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview', 'draft-change', 'layout-change'])
 
 const editing = ref(false)
 const confirmingDelete = ref(false)
 const confirmInput = ref('')
-const leaving = ref(false)
 const draft = ref({ display_name: '', description: '', category: 'document' })
 const initialDraft = ref(null)
 const draftDirty = computed(() => !!initialDraft.value && JSON.stringify(draft.value) !== JSON.stringify(initialDraft.value))
 watch(draft, () => emit('draft-change', { id: props.item.id, dirty: editing.value && draftDirty.value }), { deep: true })
 watch(editing, (value) => { if (!value) emit('draft-change', { id: props.item.id, dirty: false }) })
+watch([editing, confirmingDelete], () => emit('layout-change'), { flush: 'sync' })
 
 /** digest 五态点 + 文案（任务 1：四态改五态） */
 const digest = computed(() => {
@@ -175,7 +176,8 @@ function onPreview() {
 </script>
 
 <template>
-  <div :class="['asset-card', `shelf-${shelfVariant}`, { 'is-editing': editing || confirmingDelete, 'asset-leaving': leaving, 'asset-low': lowInfo && !editing && !confirmingDelete, 'asset-unconfirmed': dimmed }]" data-object-source="asset" :data-object-id="item.id">
+  <div :class="['asset-layout', `shelf-${shelfVariant}`, { 'is-editing': editing || confirmingDelete }]" :data-list-key="`asset-${item.id}`">
+  <div v-card-lift :class="['asset-card', `shelf-${shelfVariant}`, { 'is-editing': editing || confirmingDelete, 'asset-low': lowInfo && !editing && !confirmingDelete, 'asset-unconfirmed': dimmed }]" :data-card-motion-disabled="editing || confirmingDelete" data-object-source="asset" :data-object-id="item.id">
     <!-- 原地编辑（confirmed/skipped=保存编辑；extracted/failed=确认门禁动作） -->
     <template v-if="editing">
       <div class="as-fields">
@@ -274,18 +276,19 @@ function onPreview() {
       </div>
     </template>
   </div>
+  </div>
 </template>
 
 <style scoped>
 .asset-card {
+  position:relative; overflow:hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: #FFFFFF;
   padding: 13px 14px;
-  transition: opacity .22s ease, transform .22s ease, box-shadow .15s ease;
+  transition: opacity .22s ease, box-shadow .15s ease, border-color .15s ease;
 }
-.asset-card + .asset-card { margin-top: 8px; }
-.asset-leaving { opacity: 0; transform: translateY(-4px); }
+.asset-layout { min-width:0; }
 .asset-low { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn-bg); }
 .asset-unconfirmed { opacity: .78; }
 

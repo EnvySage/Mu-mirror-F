@@ -17,13 +17,7 @@ button:disabled { cursor: not-allowed; }
 .app .date-separator { color: #c4dcff; font: 600 16px var(--font-display); letter-spacing: .04em; }
 .app .date-separator::after { background: #87adff40; }
 .app .section-label { font-weight: 800; font-size: 15px; letter-spacing: .035em; color: var(--accent); }
-.app .bottom-nav.bottom-nav { background: #05113f; border-top: 2px solid var(--cyan); }
-.app .bottom-nav .nav-item { color: #a9c5f4; min-height: 44px; }
-.app .bottom-nav .nav-item.active { color: var(--cyan); }
-.app .bottom-nav .nav-item.active span { background: var(--cyan); color: var(--night); padding: 0 8px; transform: skew(-9deg); font-weight: 800; }
-.app .write-fab { background: var(--pink); border-radius: 5px; transform: rotate(-8deg); box-shadow: 4px 4px 0 var(--night), 0 0 0 2px white; }
-.app .write-fab svg { transform: rotate(8deg); }
-.app .mobile-header { color: white; background: #06123fbd; padding: 10px 16px; border-bottom: 1px solid #7aacf540; }
+.app .mobile-header { color: white; background: #06123fbd; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; border-bottom: 1px solid #7aacf540; }
 .app .mobile-header .page-title-sm { font-family: var(--font); font-size: 20px; font-weight: 900; }
 .app .mobile-header .header-icon-btn { border-radius: 2px; background: #ffffff0d; border-color: #81a4dc50; }
 .app .mobile-header .header-icon-btn svg { stroke: #cce6ff; }

@@ -35,11 +35,13 @@ export const useSettingsStore = defineStore('settings', () => {
     ai_provider: '',
     ai_protocol: 'anthropic',
     ai_api_key: '',
+    ai_api_key_needs_reentry: false,
     ai_base_url: '',
     ai_model: '',
     embedding_source: 'local',
     embedding_base_url: '',
     embedding_api_key: '',
+    embedding_api_key_needs_reentry: false,
     embedding_model: 'BAAI/bge-m3',
     review_mode: 'manual',
     default_record_mode: 'ONLY_SAVE',
@@ -126,7 +128,7 @@ export const useSettingsStore = defineStore('settings', () => {
     testLoading.value = true
     try {
       await apiTestAiConnection()
-      return { success: true, message: 'AI 连接测试成功' }
+      return { success: true, message: '大模型连接测试成功' }
     } catch (err) {
       return { success: false, message: err.message || 'AI 连接测试失败' }
     } finally {

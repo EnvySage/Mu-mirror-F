@@ -9,7 +9,7 @@ import { useToastStore } from '@/stores/toast'
 import ReviewPanel from '@/components/organisms/ReviewPanel.vue'
 import ActionCard from '@/components/organisms/ActionCard.vue'
 import { createPrepareKey } from '@/api/actions'
-import { findObjectSource, playObjectTransition, playElementExit, cancelObjectTransitions } from '@/composables/useObjectTransition'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { formatFullDate } from '@/utils/time'
 
@@ -21,6 +21,7 @@ const actionsStore = useActionsStore()
 const toast = useToastStore()
 const panelEl = ref(null)
 const readerEl = ref(null)
+const overlay = useOverlayMotion({ direction: 'right' })
 const reviewPanelRef = ref(null)
 const loadingRecord = ref(false)
 const detailError = ref('')
@@ -39,7 +40,7 @@ let pendingMemoryDisableKey = null
 let requestGeneration = 0
 let authorizationRequestId = 0
 useDialogFocus(() => !!ui.selectedRecordId, panelEl, '.detail-back', close)
-ui.registerNavigationGuard('record-detail', () => {
+const removeDetailGuard = ui.registerNavigationGuard('record-detail', () => {
   if (!ui.detailDraftDirty) return true
   if (!window.confirm('记录详情还有未保存修改。放弃修改并离开吗？')) return false
   authorizationDirty.value = false
@@ -47,6 +48,7 @@ ui.registerNavigationGuard('record-detail', () => {
   ui.detailDraftDirty = false
   return true
 })
+onBeforeUnmount(removeDetailGuard)
 
 const record = computed(() => {
   if (!ui.selectedRecordId) return null
@@ -225,7 +227,7 @@ watch(() => ui.selectedRecordId, async (id) => {
   if (!id) {
     stopTodoOverlayPolling()
     stopRecordActionPolling()
-    cancelObjectTransitions()
+    overlay.cancel(panelEl.value)
     ui.detailDraftDirty = false
     return
   }
@@ -243,10 +245,8 @@ watch(() => ui.selectedRecordId, async (id) => {
   loadingRecord.value = !recordsStore.getById(id)
   detailError.value = ''
   await nextTick()
-  const origin = ui.detailOrigin
-  const source = origin?.type === 'record' && origin.id === String(id) ? origin.rect : null
-  const target = readerEl.value?.getBoundingClientRect?.()
-  if (source && target) playObjectTransition(source, target, { duration: 540, title: recordsStore.getById(id)?.chunks?.[0]?.metadata?.title || '日记片段' })
+  if (generation !== requestGeneration || String(ui.selectedRecordId) !== String(id)) return
+  overlay.open(panelEl.value)
   actionError.value = null
   // 切记录 = 放弃上一张的关联待办裁决（未入库，不该带过来）
   todoStore.clearResolutions()
@@ -302,18 +302,10 @@ async function close() {
   if ((authorizationDirty.value || (rawEditing.value && rawDraft.value !== (record.value?.content || '')))
     && !window.confirm('这条记录还有未保存的修改。放弃修改并返回吗？')) return
   closing.value = true
-  cancelObjectTransitions()
   requestGeneration += 1
   const id = ui.selectedRecordId
-  const source = id ? findObjectSource('record', id) : null
-  const rect = source?.getBoundingClientRect?.()
-  const sourceVisible = rect && rect.width && rect.height && rect.bottom > 0 && rect.top < window.innerHeight
-  const exit = playElementExit(panelEl.value, { duration: 360, reduced: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches })
-  const flight = readerEl.value && sourceVisible
-    ? playObjectTransition(readerEl.value.getBoundingClientRect(), rect, { duration: 360, title: record.value?.chunks?.[0]?.metadata?.title || '日记片段', reverse: true })
-    : Promise.resolve(false)
-  await Promise.all([exit, flight])
-  if (String(ui.selectedRecordId) !== String(id)) return
+  const result = await overlay.close(panelEl.value)
+  if (result.includes('cancelled') || String(ui.selectedRecordId) !== String(id)) return
   stopPolling()
   stopTodoOverlayPolling()
   clearStepTimers()
@@ -619,10 +611,8 @@ async function deleteRecord() {
   position: fixed; inset: 0; z-index: 30;
   background: var(--ink-2);
   display: flex; flex-direction: column;
-  animation: detail-enter .58s var(--motion-enter) both;
 }
 .record-correction-entry{margin:12px 0;padding:14px;border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--card);color:var(--text-mid);font-size:13px;line-height:1.6}.record-correction-entry p{margin:0 0 10px}
-@keyframes detail-enter{0%{opacity:.65;clip-path:polygon(0 0,0 0,0 0,0 100%,0 100%)}58%{opacity:1;clip-path:polygon(0 0,calc(100% - 54px) 0,100% 54px,100% 100%,22px 100%,0 calc(100% - 22px))}100%{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
 @media (min-width: 900px) {
   .detail-page {
     left: var(--sidebar-width);
@@ -631,8 +621,6 @@ async function deleteRecord() {
   }
 }
 
-.slide-enter-active, .slide-leave-active { transition: transform .3s cubic-bezier(.32,.72,.28,1); }
-.slide-enter-from, .slide-leave-to { transform: translateX(102%); }
 
 .detail-header {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
@@ -722,17 +710,6 @@ async function deleteRecord() {
 .detail-confirm.detail-danger { margin-left:8px; background:transparent; border:1px solid #ff8fa3; color:#ffb3c0; }
 .detail-confirm.detail-danger:hover { background:#ff8fa3; border-color:#ff8fa3; color:#3a0713; }
 .detail-reader { min-height:0; border-left:3px solid var(--cyan); background:#eef4ff; box-shadow:12px 14px 0 #020c3435; }
-.detail-reader { animation:detail-reader-enter .62s .08s var(--motion-enter) both; }
-@keyframes detail-reader-enter { 0%{opacity:.35;clip-path:polygon(0 0,4% 0,4% 100%,0 100%);transform:translateX(24px)} 68%{opacity:1;clip-path:polygon(0 0,calc(100% - 32px) 0,100% 32px,100% 100%,0 100%);transform:translateX(-4px)} 100%{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);transform:none} }
-.detail-reader :deep(.review-original) { animation:detail-layer-in .52s .12s var(--motion-enter) both; }
-.detail-reader :deep(.chunk-review-item) { animation:detail-layer-in .58s .18s var(--motion-enter) both; }
-.detail-reader :deep(.chunk-top) { animation:detail-layer-in .42s .2s var(--motion-enter) both; }
-.detail-reader :deep(.chunk-segment) { animation:detail-copy-in .52s .32s var(--motion-enter) both; }
-.detail-reader :deep(.chunk-field:nth-of-type(n+2)) { animation:detail-layer-in .46s .44s var(--motion-enter) both; }
-.detail-page.closing .detail-reader { animation:detail-reader-exit .25s var(--motion-shift) both; }
-@keyframes detail-layer-in { from{opacity:0;transform:translateY(18px) scale(.985);clip-path:polygon(0 0,100% 0,100% 12%,0 12%)} to{opacity:1;transform:none;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)} }
-@keyframes detail-copy-in { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:none} }
-@keyframes detail-reader-exit { to{opacity:.7;clip-path:polygon(0 0,100% 0,100% 0,0 0);transform:translateX(12px)} }
 .detail-load-state { min-height:260px; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:14px; color:var(--text-mid); }
 .detail-load-state p { flex-basis:100%; text-align:center; }
 .review-panel { max-width:100%; }

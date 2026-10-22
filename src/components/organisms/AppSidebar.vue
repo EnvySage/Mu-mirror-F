@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useNavIndicatorMotion } from '@/motion/useNavIndicatorMotion'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -8,6 +9,8 @@ import { usePresentationMode } from '@/composables/usePresentationMode'
 const router = useRouter(), route = useRoute(), ui = useUIStore(), auth = useAuthStore(), glossary = useGlossaryStore()
 const presentation = usePresentationMode()
 const activePage = computed(() => route.name)
+const navEl = ref(null), trackEl = ref(null)
+useNavIndicatorMotion(navEl, trackEl, activePage, '.nav-row.active', { skewY: -3 })
 const today = new Date()
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit' }).format(today)
 const weekday = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', weekday: 'short' }).format(today)
@@ -31,8 +34,8 @@ function switchPage(page) {
  <aside class="sidebar" aria-label="主导航">
   <a class="brand" href="/records" @click.prevent="switchPage('records')"><span class="brand-mark">M<span> / </span></span><span class="brand-name">MIRROR<small>记录，让自己显影</small></span></a>
   <div class="sidebar-date"><strong>{{ dateLabel.replace('/', '.') }}</strong><span>{{ weekday }}<i>今天也值得被记住</i></span></div>
-  <nav class="sidebar-nav" :style="{ '--nav-index': Math.max(0, nav.findIndex(item => item.page === activePage)) }">
-   <div class="nav-track" :class="{ hidden: !nav.some(item => item.page === activePage) }" aria-hidden="true" />
+  <nav ref="navEl" class="sidebar-nav">
+   <div ref="trackEl" class="nav-track" aria-hidden="true" />
    <button v-for="item in nav" :key="item.page" :class="['nav-row',{active:activePage===item.page}]" :aria-current="activePage===item.page?'page':undefined" @click="switchPage(item.page)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path :d="item.path" /></svg>
     <span><b>{{ item.en }}</b><small>{{ item.label }}</small></span><span v-if="activePage===item.page" class="nav-arrow" aria-hidden="true">◀</span>
@@ -62,10 +65,7 @@ function switchPage(page) {
 @media(max-height:820px){.sidebar{padding-top:24px}.sidebar-date{margin:28px 6px 18px}.nav-row{min-height:56px}.sidebar-write{margin-top:22px}.sidebar-bottom{padding-top:8px}}
 .sidebar-nav { position:relative; --nav-row-height:64px; }
 .nav-row { height:var(--nav-row-height); min-height:var(--nav-row-height); z-index:1; }
-.nav-track { position:absolute; left:0; right:0; top:0; height:var(--nav-row-height); background:var(--cyan); border-left:3px solid white; box-shadow:4px 4px 0 var(--electric); transform:translateY(calc(var(--nav-index) * (var(--nav-row-height) + 9px))) skewY(-3deg); transition:transform .32s cubic-bezier(.2,.85,.2,1.12),opacity .18s; pointer-events:none; }
-.nav-track.hidden { opacity:0; }
+.nav-track { position:absolute; left:0; top:0; height:var(--nav-row-height); opacity:0; background:var(--cyan); border-left:3px solid white; box-shadow:4px 4px 0 var(--electric); pointer-events:none; }
 .nav-row.active::before { background:none; border-color:transparent; box-shadow:none; }
-.nav-row.active b { animation:nav-type-cut .32s cubic-bezier(.16,1,.3,1); }
-@keyframes nav-type-cut { from { transform:translateX(14px); clip-path:inset(0 100% 0 0); } to { transform:none; clip-path:inset(0); } }
 @media(max-height:820px){.sidebar-nav{--nav-row-height:56px}}
 </style>

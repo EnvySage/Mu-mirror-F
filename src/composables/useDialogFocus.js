@@ -3,9 +3,14 @@ import { nextTick, onBeforeUnmount, watch } from 'vue'
 const dialogStack = []
 let returnTarget = null
 let handoffPending = false
+let handoffGeneration = 0
 let previousOverflow = ''
 
-export function prepareDialogFocusHandoff() { handoffPending = true }
+export function prepareDialogFocusHandoff() {
+  const generation = ++handoffGeneration
+  handoffPending = true
+  return () => { if (generation === handoffGeneration) handoffPending = false }
+}
 
 function canFocus(element) {
   if (!element?.isConnected || !element.getClientRects?.().length || element.getAttribute?.('aria-hidden') === 'true') return false
@@ -65,6 +70,12 @@ export function useDialogFocus(isOpen, dialog, preferredSelector = 'button', onE
     }
   }
 
+  function focusInitial() {
+    if (!isOpen() || dialogStack.at(-1) !== entry || !dialog.value?.isConnected) return
+    if (dialog.value.contains(document.activeElement)) return
+    focusSafely(dialog.value.querySelector(preferredSelector) || dialog.value)
+  }
+
   watch(isOpen, async open => {
     const current = ++generation
     if (!open) { release(); return }
@@ -81,9 +92,10 @@ export function useDialogFocus(isOpen, dialog, preferredSelector = 'button', onE
     document.body.style.overflow = 'hidden'
     await nextTick()
     if (current === generation && isOpen() && dialogStack.at(-1) === entry) {
-      focusSafely(dialog.value?.querySelector(preferredSelector) || dialog.value)
+      focusInitial()
     }
   }, { immediate: !!isOpen(), flush: 'post' })
 
   onBeforeUnmount(() => { generation++; release() })
+  return { focusInitial }
 }

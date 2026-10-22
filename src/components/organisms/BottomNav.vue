@@ -1,36 +1,26 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { useNavIndicatorMotion } from '@/motion/useNavIndicatorMotion'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 
 const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
-const showMore = ref(false)
 
-/**
- * 底栏只放 5 个页面入口（等分即对称）；「写日记」移出条外成为右下悬浮 FAB。
- * 原来 6 项挤一条、凸钮占第 3 槽，中心落在 41.7% 而非 50%，整条永远向左歪——
- * 这不是间距没调好：偶数等分根本不存在正中槽，凸钮必须离开条内才可能对称。
- */
+// The middle slot is an action; the four destinations stay in a stable order.
 const NAV = [
-  { page: 'records', label: '记录', icon: 'M4 6h16M4 12h16M4 18h10' },
-  { page: 'calendar', label: '日历', icon: 'calendar' },
-  { page: 'mirror', label: '镜子', icon: 'clock' },
-  { page: 'chat', label: '对话', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  { page: 'records', label: '记录', slot: 0, icon: 'M5 6h14M5 12h14M5 18h9' },
+  { page: 'calendar', label: '日历', slot: 1, icon: 'M8 3v4M16 3v4M4 10h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z' },
+  { slot: 2 },
+  { page: 'mirror', label: '镜子', slot: 3, icon: 'M16.5 16.5 20 20M7.5 16.5 4 20M9 21h6M12 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM12 7v4l2 2' },
+  { page: 'chat', label: '对话', slot: 4, icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
 ]
-const MORE = [{ page: 'vault', label: '记忆资产' }, { page: 'settings', label: '设置' }]
+const activeSlot = computed(() => NAV.find(item => item.page === route.name)?.slot ?? -1)
+const navEl = ref(null), selectionEl = ref(null)
+useNavIndicatorMotion(navEl, selectionEl, activeSlot, '.nav-item.active .nav-icon', { skewX: -10 })
 
-const activePage = computed(() => route.name)
-/** 对话页不挂 FAB：底部是输入条，FAB 会紧贴甚至压住输入框（该页写日记走顶部 header 入口） */
-const isChat = computed(() => route.name === 'chat')
-
-/**
- * 切页：走 ui store 的 switchPage（会同时复位 showDetail / selectedRecordId）。
- * DetailPanel 是 fixed 全屏层，只 push 路由不复位的话记录详情会盖住新页面。
- */
 function handleNav(item) {
-  showMore.value = false
   if (!ui.confirmNavigationDrafts()) return
   ui.approveNavigation(router.resolve({ name: item.page }).fullPath)
   if (item.page === 'records') ui.sidebarSelectedDate = null
@@ -40,79 +30,71 @@ function handleNav(item) {
 </script>
 
 <template>
-  <nav class="bottom-nav">
-    <button
-      v-for="item in NAV"
-      :key="item.page"
-      :class="['nav-item', { active: activePage === item.page }]"
-      @click="handleNav(item)"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <template v-if="item.icon === 'calendar'">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-        </template>
-        <template v-else-if="item.icon === 'archive'">
-          <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>
-        </template>
-        <template v-else-if="item.icon === 'clock'">
-          <circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/>
-        </template>
-        <template v-else>
-          <path :d="item.icon" />
-        </template>
-      </svg>
-      <span>{{ item.label }}</span>
-    </button>
-    <button class="nav-item more-item" :aria-expanded="showMore" @click="showMore = !showMore">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
-      <span>更多</span>
-    </button>
-    <div v-if="showMore" class="more-menu" aria-label="更多入口">
-      <button v-for="item in MORE" :key="item.page" :class="{ active: activePage === item.page }" @click="handleNav(item)">{{ item.label }}</button>
+  <nav class="bottom-nav" aria-label="主导航">
+    <div ref="navEl" class="nav-items">
+      <span ref="selectionEl" class="nav-selection" aria-hidden="true" />
+      <template v-for="item in NAV" :key="item.slot">
+        <button
+          v-if="item.page"
+          :class="['nav-item', { active: route.name === item.page }]"
+          :style="{ gridColumn: item.slot + 1 }"
+          :aria-current="route.name === item.page ? 'page' : undefined"
+          @click="handleNav(item)"
+        >
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path :d="item.icon" /></svg>
+          </span>
+          <span class="nav-label">{{ item.label }}</span>
+        </button>
+        <button v-else class="nav-create" aria-label="新建记录" @click="ui.openWriteModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span>新建</span>
+        </button>
+      </template>
     </div>
   </nav>
-
-  <!-- 写日记：右下悬浮 FAB（与底栏 5 项脱钩，桌面端有侧栏入口故隐藏） -->
-  <button v-if="!isChat" class="write-fab" aria-label="写日记" @click="ui.openWriteModal()">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-  </button>
 </template>
 
 <style scoped>
 .bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
-  display: flex; justify-content: space-around; align-items: center;
-  height: calc(var(--nav-height) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
-  background: var(--card);
-  border-top: 1px solid var(--line);
+  position: fixed; bottom: 0; left: 50%; z-index: 20;
+  width: min(100%, 720px); height: calc(var(--nav-height) + var(--safe-bottom));
+  transform: translateX(-50%);
+  padding: 8px 12px calc(8px + var(--safe-bottom));
+  background: #05113f; border-top: 1px solid #70c7ed4d;
+  color: #a9c5f4;
 }
-/* 桌面隐藏底栏（write-fab 的隐藏规则必须放在其主规则之后，否则 display:grid 会反杀） */
-@media (min-width: 900px) { .bottom-nav { display: none; } }
-
+.nav-items { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; }
+.nav-selection {
+  position: absolute; top: 0; left: 0;
+  width: 44px; height: 30px; opacity: 0;
+  background: var(--cyan); pointer-events: none;
+}
 .nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--text-low); font-size: 10px; width: 56px; padding: 6px 0;
-  transition: color .18s;
+  position: relative; grid-row: 1; min-width: 0; min-height: 54px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 2px 0 0; color: #a9c5f4;
+  transition: color .18s ease, transform .18s ease;
 }
-.nav-item svg { width: 21px; height: 21px; stroke: currentColor; fill: none; }
-.nav-item:active { transform: scale(.94); }
-.nav-item.active { color: var(--accent); font-weight: 500; }
-.more-menu { position:absolute; right:10px; bottom:calc(100% + 8px); min-width:144px; padding:6px; display:grid; gap:3px; border:1px solid var(--line); border-radius:14px; background:var(--card); box-shadow:0 8px 28px #071a3b30; }
-.more-menu button { min-height:44px; padding:0 12px; border-radius:9px; text-align:left; color:var(--text-mid); }
-.more-menu button.active { color:var(--accent); background:#eef3ff; }
-
-/* 写日记 FAB：悬在底栏上方右侧；52px 直径保证 44px+ 的可点区 */
-.write-fab {
-  position: fixed; z-index: 21;
-  right: 16px; bottom: calc(var(--nav-height) + var(--safe-bottom) + 14px);
-  width: 52px; height: 52px; border-radius: 50%;
-  background: var(--accent); display: grid; place-items: center;
-  box-shadow: 0 6px 16px rgba(44, 95, 232, .35), 0 2px 4px rgba(20, 20, 15, .12);
-  transition: transform .15s;
+.nav-icon { width: 44px; height: 30px; display: grid; place-items: center; }
+.nav-icon svg { width: 21px; height: 21px; }
+.nav-label { font-size: 11px; line-height: 16px; }
+.nav-item.active { color: #f8fbff; }
+.nav-item.active .nav-icon { color: #06123f; }
+.nav-item.active .nav-label { font-weight: 700; }
+.nav-item:focus-visible { outline-color: var(--cyan); outline-offset: -2px; }
+.nav-create {
+  position: relative; grid-column: 3; grid-row: 1; justify-self: center;
+  width: 56px; height: 56px; margin-top: -1px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: var(--cyan); color: #06123f;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: background .18s ease, transform .18s ease;
 }
-.write-fab:active { transform: scale(.92); }
-.write-fab svg { width: 22px; height: 22px; stroke: #FFFFFF; }
-/* 必须置于 .write-fab 主规则之后：同特异性下靠源码顺序压过 display:grid */
-@media (min-width: 900px) { .write-fab { display: none; } }
+.nav-create svg { width: 23px; height: 23px; }
+.nav-create span { font-size: 10px; line-height: 15px; font-weight: 800; }
+.nav-create:focus-visible { outline: none; background: white; }
+@media (hover: hover) { .nav-item:hover { color: white; } .nav-create:hover { background: white; } }
+@media (min-width: 900px) { .bottom-nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { .nav-selection, .nav-item, .nav-create { transition: none; } }
 </style>

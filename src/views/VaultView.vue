@@ -11,7 +11,7 @@ import PageMasthead from '@/components/molecules/PageMasthead.vue'
  * - 上传：图片类 description 必填（任务 4/Y4），placeholder 强提示
  * - 类型筛选 chips（全部/文档/图片/音频）+ 配额可视化条
  */
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useVaultStore } from '@/stores/vault'
 import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
@@ -26,10 +26,26 @@ import {
 } from '@/constants/fileTypes'
 import request from '@/api/request'
 import { findObjectSource } from '@/composables/useObjectTransition'
+import { stableVariant, gsap, duration, createMotionScope, prefersReducedMotion } from '@/motion/core'
+import { useListMotion } from '@/motion/useListMotion'
 
 const vault = useVaultStore()
 const ui = useUIStore()
 const toast = useToastStore()
+const vaultRoot = ref(null)
+const listMotion = useListMotion(vaultRoot, () => JSON.stringify(vault.filteredItems.map(item => [item.id, item.digest_status, item.description, item.display_name])))
+let motionScope
+const taskAnimations = new Map()
+const folderEl = ref(null)
+const acceptanceEl = ref(null)
+const reducedMql = window.matchMedia('(prefers-reduced-motion: reduce)')
+function settleTaskMotion() {
+  if (!reducedMql.matches) return
+  taskAnimations.forEach(task => task.animation?.progress(1))
+  gsap.killTweensOf([folderEl.value, acceptanceEl.value])
+  gsap.set(folderEl.value, { y: dragOver.value ? -9 : 0, rotation: dragOver.value ? 0 : -9 })
+  gsap.set(acceptanceEl.value, { opacity: dragOver.value ? 1 : 0, xPercent: dragOver.value ? 0 : -100 })
+}
 
 /** 下载中的条目 id（防重复点击） */
 const downloadingId = ref(null)
@@ -89,6 +105,8 @@ function updateBusy(id, value) {
 }
 
 onMounted(() => {
+  motionScope = createMotionScope(vaultRoot.value)
+  reducedMql.addEventListener('change', settleTaskMotion)
   vault.fetch()
 })
 
@@ -96,15 +114,34 @@ onBeforeUnmount(() => {
   // 离开页面时撤销窗里的延迟删除立即执行（不丢删除意图）
   flushAllPendingDeletes()
   unregisterVaultGuard()
+  taskAnimations.forEach(task => { task.animation?.kill(); task.finish() })
+  taskAnimations.clear()
+  motionScope?.dispose()
+  window.removeEventListener('dragend', resetDrag)
+  window.removeEventListener('blur', resetDrag)
+  reducedMql.removeEventListener('change', settleTaskMotion)
 })
 
 // ==================== 上传（投放区 + 校验 + 上传卡） ====================
 
 const fileInput = ref(null)
 const dragOver = ref(false)
+let dragDepth = 0
+function resetDrag() { dragDepth = 0; dragOver.value = false }
+onMounted(() => {
+  window.addEventListener('dragend', resetDrag)
+  window.addEventListener('blur', resetDrag)
+})
+watch(dragOver, over => {
+  motionScope?.run(() => {
+    gsap.to(folderEl.value, { y: over ? -9 : 0, rotation: over ? 0 : -9, duration: duration(220), ease: 'power2.out', overwrite: 'auto' })
+    gsap.to(acceptanceEl.value, { opacity: over ? 1 : 0, xPercent: over ? 0 : -100, duration: duration(200), ease: 'power2.out', overwrite: 'auto' })
+  })
+})
 
 /** 待确认上传（上传卡挂载态） */
 const pendingUpload = ref(null)
+watch(() => !!pendingUpload.value, listMotion.capture, { flush: 'pre' })
 
 /** 图片类必须写描述（任务 4 / Y4：图片无内容可索引，描述是它可检索的唯一途径） */
 const isImagePending = computed(() => pendingUpload.value?.category === 'image')
@@ -118,6 +155,7 @@ const descPlaceholder = computed(() => (isImagePending.value
   : '以后想怎么找到它？（可不填）'))
 
 function pickFile() {
+  if (vault.uploading) return
   fileInput.value?.click()
 }
 
@@ -127,22 +165,35 @@ function onPickChange(e) {
   if (file) acceptFile(file)
 }
 
-function onDragOver(e) {
+function onDragEnter(e) {
+  if (vault.uploading) return
+  if (e.dataTransfer?.types && !Array.from(e.dataTransfer.types).includes('Files')) return
+  dragDepth += 1
   dragOver.value = true
 }
 
-function onDragLeave() {
-  dragOver.value = false
+function onDragOver(e) {
+  if (e.dataTransfer) e.dataTransfer.dropEffect = vault.uploading ? 'none' : 'copy'
+  if (vault.uploading) { resetDrag(); return }
+  if (Array.from(e.dataTransfer?.types || []).includes('Files')) dragOver.value = true
+}
+
+function onDragLeave(e) {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return
+  if (e.relatedTarget || dragDepth === 0) resetDrag()
 }
 
 function onDrop(e) {
-  dragOver.value = false
+  resetDrag()
+  if (vault.uploading) return
   const file = e.dataTransfer?.files?.[0]
   if (file) acceptFile(file)
 }
 
 /** 前端校验（20MB + 白名单 + 拒绝类专属理由）→ 通过弹上传卡 */
 function acceptFile(file) {
+  if (vault.uploading) return
   if (isUploadDirty.value && !window.confirm('当前上传说明尚未保存。放弃并替换文件吗？')) return
   const v = validateVaultFile(file)
   if (!v.ok) {
@@ -161,7 +212,7 @@ function acceptFile(file) {
 
 /** 上传卡 [就这样存]（图片空描述按钮禁用，此处防御性双保险） */
 async function confirmUpload() {
-  if (!pendingUpload.value || !canConfirmUpload.value) return
+  if (vault.uploading || !pendingUpload.value || !canConfirmUpload.value) return
   const { file, description, displayName } = pendingUpload.value
   const res = await vault.upload(file, description)
   if (!res.ok) {
@@ -178,10 +229,39 @@ async function confirmUpload() {
 }
 
 function cancelUpload() {
+  if (vault.uploading) return
   if (isUploadDirty.value && !window.confirm('上传说明尚未保存。放弃这次上传吗？')) return
   pendingUpload.value = null
   uploadBaseline = null
 }
+
+function animateTask(element, done, entering) {
+  const previous = taskAnimations.get(element)
+  previous?.animation?.kill()
+  previous?.finish()
+  let finished = false
+  const task = { finish: () => {
+    if (finished) return
+    finished = true
+    if (taskAnimations.get(element) === task) taskAnimations.delete(element)
+    if (!entering && element.classList.contains('upload-wrap')) listMotion.capture()
+    done()
+  } }
+  taskAnimations.set(element, task)
+  if (!motionScope || prefersReducedMotion()) { task.finish(); return }
+  motionScope.run(() => {
+    if (entering) gsap.set(element, { opacity: 0, y: 10 })
+    task.animation = gsap.to(element, {
+      opacity: entering ? 1 : 0, y: entering ? 0 : -8,
+      duration: duration(entering ? 220 : 160), ease: 'power2.out', overwrite: 'auto',
+      onComplete: () => { if (entering) gsap.set(element, { clearProps: 'opacity,transform' }); task.finish() },
+      onInterrupt: task.finish,
+    })
+  })
+}
+const enterTask = (element, done) => animateTask(element, done, true)
+const leaveTask = (element, done) => animateTask(element, done, false)
+function cancelTask(element) { const task = taskAnimations.get(element); task?.animation?.kill(); task?.finish() }
 
 // ==================== 卡片操作 ====================
 
@@ -296,12 +376,13 @@ async function onDownload(item) {
 }
 
 /** 置顶区"去描述"→ 直接展开对应卡补确认（同卡就地编辑，保存后归位） */
-function focusItem(item) {
+async function focusItem(item) {
   if (!confirmVaultDrafts()) return
   vault.setFilter('all')
-  const el = document.querySelector(`[data-asset-id="${item.id}"]`)
+  await nextTick()
+  const el = vaultRoot.value?.querySelector(`[data-asset-id="${CSS.escape(String(item.id))}"]`)
   if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
     el.querySelector('.as-btn-ghost')?.click()
   }
 }
@@ -319,7 +400,7 @@ const digestSummary = computed(() => {
 
 <template>
   <div class="page vault-page">
-    <div class="page-content">
+    <div ref="vaultRoot" class="page-content">
       <PageMasthead title="记忆资产" english="MEMORY ARCHIVE" description="把文件与灵感，留在自己的记忆里" />
       <!-- 配额条 -->
       <div class="card quota-card">
@@ -328,7 +409,7 @@ const digestSummary = computed(() => {
           <span v-if="digestSummary" class="quota-sub">{{ digestSummary }}</span>
         </div>
         <div class="quota-bar">
-          <div class="quota-fill" :style="{ width: vault.quotaPercent + '%' }" />
+          <div class="quota-fill" :style="{ transform: `scaleX(${vault.quotaPercent / 100})` }" />
         </div>
       </div>
 
@@ -342,10 +423,11 @@ const digestSummary = computed(() => {
         @keydown.enter="pickFile"
         @keydown.space.prevent="pickFile"
         @dragover.prevent="onDragOver"
+        @dragenter.prevent="onDragEnter"
         @dragleave="onDragLeave"
         @drop.prevent="onDrop"
       >
-        <div class="vault-folder" aria-hidden="true"><svg viewBox="0 0 120 100" fill="none"><path d="M8 18h36l12 13h54v60H8z" fill="#0b2370" stroke="#50edfa" stroke-width="3"/><path d="M18 43h97L96 91H8z" fill="#50edfa"/><path d="M28 14h47v45H28z" fill="white" transform="rotate(-9 28 14)"/><path d="M18 43h97L96 91H8z" fill="#50edfa" fill-opacity=".85"/></svg></div>
+        <span ref="acceptanceEl" class="dropzone-acceptance" aria-hidden="true" /><div ref="folderEl" class="vault-folder" aria-hidden="true"><svg viewBox="0 0 120 100" fill="none"><path d="M8 18h36l12 13h54v60H8z" fill="#0b2370" stroke="#50edfa" stroke-width="3"/><path d="M18 43h97L96 91H8z" fill="#50edfa"/><path d="M28 14h47v45H28z" fill="white" transform="rotate(-9 28 14)"/><path d="M18 43h97L96 91H8z" fill="#50edfa" fill-opacity=".85"/></svg></div>
         <div class="dropzone-text"><span class="dropzone-title">让灵感，有处可寻。</span>
           {{ dragOver ? '松开文件，交给 Mirror 整理' : '拖文件进来，或点击选择' }}
           <span class="dropzone-hint">单文件 20MB 内 · {{ VAULT_WHITELIST.join(' / ') }}</span>
@@ -355,7 +437,9 @@ const digestSummary = computed(() => {
       </div>
 
       <!-- 上传卡（选文件后弹出，确认才上传；图片必填描述） -->
-      <div v-if="pendingUpload" class="upload-wrap">
+      <div class="upload-task-slot" :class="{ occupied: pendingUpload }">
+      <Transition :css="false" @enter="enterTask" @leave="leaveTask" @enter-cancelled="cancelTask" @leave-cancelled="cancelTask">
+      <div v-if="pendingUpload" key="upload-task" class="upload-wrap" :aria-busy="vault.uploading">
         <div class="up-mini">
           <span class="up-mini-icon"><FileTypeIcon :kind="pendingUpload.category || 'file'" /></span>
           <div class="up-mini-body">
@@ -365,17 +449,22 @@ const digestSummary = computed(() => {
         </div>
         <input
           v-model="pendingUpload.description"
+          :disabled="vault.uploading"
           :class="['up-mini-input', { 'up-mini-input-required': isImagePending }]"
           :placeholder="descPlaceholder"
           maxlength="100"
         >
         <div v-if="isImagePending" class="up-mini-note">图片内容镜子读不到，一句描述是它被找到的唯一途径</div>
+        <div class="upload-task-status" role="status" aria-live="polite"><Transition :css="false" mode="out-in" @enter="enterTask" @leave="leaveTask" @enter-cancelled="cancelTask" @leave-cancelled="cancelTask"><span :key="vault.uploading ? 'uploading' : 'ready'"><span v-if="vault.uploading" class="spinner" />{{ vault.uploading ? '正在存入文件，请稍候…' : '确认信息后存入，提取完成后可补确认' }}</span></Transition></div>
         <div class="up-mini-actions">
           <button class="as-btn as-btn-ghost" :disabled="vault.uploading" @click="cancelUpload">取消</button>
           <button class="as-btn as-btn-primary" :disabled="vault.uploading || !canConfirmUpload" @click="confirmUpload">
             {{ vault.uploading ? '存入中…' : '就这样存' }}
           </button>
         </div>
+      </div>
+
+      </Transition>
       </div>
 
       <!-- 低信息/待确认置顶区（§3.3b 补确认入口） -->
@@ -426,26 +515,27 @@ const digestSummary = computed(() => {
         >{{ f.label }}</button>
       </div>
 
-      <!-- 加载中 -->
-      <div v-if="vault.loading" class="vault-empty"><span class="spinner" /> 加载中…</div>
+      <!-- 首次加载才替换卡架；消化轮询保留卡片和未保存编辑。 -->
+      <div v-if="vault.loading && !vault.items.length" class="vault-empty"><span class="spinner" /> 加载中…</div>
 
       <!-- 文件卡列表（时间倒序） -->
-      <TransitionGroup v-else-if="vault.filteredItems.length" name="asset-list" tag="div" class="assets-grid">
+      <div v-else-if="vault.filteredItems.length" class="assets-grid">
         <AssetCard
-          v-for="(item, index) in vault.filteredItems"
+          v-for="item in vault.filteredItems"
           :key="item.id"
           :data-asset-id="item.id"
           :item="item"
-          :shelf-variant="index === 0 ? 'lead' : ['cut-a', 'cut-b', 'cut-c'][(index - 1) % 3]"
+          :shelf-variant="['lead', 'cut-a', 'cut-b', 'cut-c'][stableVariant(item.id, 4)]"
           :busy="busyIds.has(String(item.id))"
           @draft-change="onAssetDraftChange"
+          @layout-change="listMotion.capture"
           @preview="openPreview"
           @save="(d, done) => onSave(item, d, done)"
           @confirm="(d, done) => onConfirm(item, d, done)"
           @remove="() => onRemove(item)"
           @download="onDownload"
         />
-      </TransitionGroup>
+      </div>
 
       <!-- 空态 / 筛选空 -->
       <div v-else-if="vault.items.length" class="vault-empty">这个分类下还没有文件</div>
@@ -494,7 +584,7 @@ const digestSummary = computed(() => {
 }
 .quota-fill {
   height: 100%; border-radius: var(--radius-full);
-  background: var(--accent); transition: width .4s ease;
+  background: var(--accent); width:100%; transform-origin:left center; transition:transform .24s ease;
 }
 
 /* 投放区 */
@@ -513,6 +603,15 @@ const digestSummary = computed(() => {
 .dropzone-text { font-size: 13px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dropzone-hint { font-family: var(--font-mono); font-size: 10px; color: var(--text-low); overflow-wrap: anywhere; }
 
+.dropzone-acceptance { position:absolute; inset:0; pointer-events:none; opacity:0; transform:translateX(-100%); background:linear-gradient(110deg,#50edfa22,#50edfa08 68%,transparent); }
+.upload-task-slot { position:relative; }
+.upload-task-slot.occupied { min-height:236px; }
+.upload-wrap { min-height:220px; }
+.upload-task-status { min-height:30px; display:flex; align-items:center; color:var(--text-mid); font-size:11px; margin-top:6px; }
+.upload-task-status > span { display:inline-flex; align-items:center; gap:7px; }
+.upload-task-status .spinner { width:12px; height:12px; }
+@media(prefers-reduced-motion:reduce){.quota-fill,.dropzone{transition:none}.vault-folder,.dropzone-acceptance{transition:none}}
+
 /* 上传卡（复用上传卡视觉，精简版挂列表顶部） */
 .upload-wrap {
   border: 1px solid var(--accent);
@@ -521,9 +620,7 @@ const digestSummary = computed(() => {
   padding: 12px;
   margin-bottom: 14px;
   clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%);
-  animation: vaultUploadEntry .48s var(--motion-enter) both;
 }
-@keyframes vaultUploadEntry { from{opacity:0;transform:translateX(46px) translateY(-15px) scale(.94);clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)} 72%{opacity:1;transform:translateX(-5px) scale(1.01)} to{opacity:1;transform:none;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%)} }
 .up-mini { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
 .up-mini-icon {
   width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
@@ -604,35 +701,33 @@ const digestSummary = computed(() => {
 .vault-page .page-content { padding:0 clamp(18px,3vw,48px) 40px; max-width:1440px; width:100%; margin:0 auto; }
 .quota-card { background:#0a245f; border:1px solid #629bdf40; box-shadow:none; color:white; padding:14px 20px; margin-bottom:18px; }
 .quota-label { color:#d0e5ff; font-family:var(--font); font-size:11px; }.quota-sub{color:#9ebde9}.quota-bar{background:#264578;height:4px;border-radius:0}.quota-fill{background:var(--cyan);border-radius:0}
-.dropzone { position:relative; min-height:112px; padding:14px 24px; gap:18px; border:1px solid #7dd8ff80; border-left:5px solid var(--cyan); border-radius:2px; color:white; background:#0a3aab; overflow:hidden; clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,0 100%); transition:min-height .36s var(--motion-enter),padding .36s var(--motion-enter),border-color .3s,background .3s,clip-path .36s var(--motion-enter),box-shadow .3s; }
-.dropzone.over { min-height:184px; padding-top:32px; padding-bottom:32px; clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); box-shadow:10px 12px 0 #50edfa55,-6px 5px 0 #f03c8a55; }
+.dropzone { position:relative; min-height:170px; padding:14px 24px; gap:18px; border:1px solid #7dd8ff80; border-left:5px solid var(--cyan); border-radius:2px; color:white; background:#0a3aab; overflow:hidden; clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,0 100%); transition:border-color .2s,background .2s,box-shadow .2s; }
+.dropzone.over { box-shadow:10px 12px 0 #50edfa55,-6px 5px 0 #f03c8a55; }
 .dropzone::before { content:''; position:absolute; inset:0; background:url('/art/water-surface.webp') center / cover; opacity:.22; pointer-events:none; }
 .dropzone:hover,.dropzone.over { background:#1049c1; border-color:var(--cyan); }
-.dropzone.over .vault-folder { animation:folderLift .52s var(--motion-enter) both; }
-@keyframes folderLift { 0%{transform:rotate(-9deg) translateY(18px) scale(.82)} 70%{transform:rotate(2deg) translateY(-7px) scale(1.08)} 100%{transform:rotate(0) translateY(0) scale(1)} }
 .vault-folder { position:relative; width:76px; flex-shrink:0; transform:rotate(-9deg); }.vault-folder svg{display:block;width:100%}
 .dropzone-text { position:relative; font-size:12px; gap:5px; }.dropzone-title{font-size:22px;font-weight:900;letter-spacing:-.035em;margin-bottom:2px}.dropzone-hint{font:10px/1.5 var(--font);color:#b5d8ff}
 .dropzone-plus{position:relative;margin-left:auto;color:var(--cyan);font:42px/1 var(--font-display);padding:10px}
 .filter-row{margin:22px 0 18px;padding-bottom:16px;border-bottom:1px solid #80b9ff45}.filter-row .chip{border-radius:2px;background:#0b275f;color:#c4dbff;box-shadow:none;border:1px solid #6893ce60;padding:7px 17px}.filter-row .chip.selected{background:var(--cyan);color:var(--night);border-color:var(--cyan);font-weight:800;transform:skew(-7deg)}
 .vault-empty { color:#bed4f5; }.confirm-zone,.lowinfo-zone{border-radius:2px}.quota-card + .dropzone{margin-top:0}
+.assets-grid :deep(.asset-layout) { min-width:0; margin:0; }
 .assets-grid { position:relative; display:grid; grid-template-columns:minmax(0,1fr); gap:18px 22px; align-items:start; }
-.assets-grid :deep(.asset-card) { min-width:0; margin:0; min-height:220px; padding:22px; position:relative; background:#f8fbff; border:1px solid #d4e2ff; border-top:4px solid #50edfa; box-shadow:7px 9px 0 #50edfa38,-5px 5px 0 #f03c8a40; transition:transform .42s var(--motion-shift),box-shadow .42s,border-color .3s,clip-path .42s var(--motion-enter); clip-path:polygon(0 0,calc(100% - 28px) 0,100% 28px,100% 100%,15px 100%,0 calc(100% - 15px)); }
+.assets-grid :deep(.asset-card) { min-width:0; margin:0; min-height:220px; padding:22px; position:relative; background:#f8fbff; border:1px solid #d4e2ff; border-top:4px solid #50edfa; box-shadow:7px 9px 0 #50edfa38,-5px 5px 0 #f03c8a40; transition:box-shadow .2s,border-color .2s,opacity .2s; clip-path:polygon(0 0,calc(100% - 28px) 0,100% 28px,100% 100%,15px 100%,0 calc(100% - 15px)); }
 .assets-grid :deep(.asset-card::before) { content:''; position:absolute; top:0; right:0; width:45px; height:42px; background:linear-gradient(135deg,#50edfa,#ee246a); clip-path:polygon(0 0,100% 0,100% 100%); opacity:.85; pointer-events:none; }
-.assets-grid :deep(.asset-card.shelf-lead) { grid-column:span 7; min-height:276px; padding:26px 30px; border-top-color:#ee246a; background:linear-gradient(118deg,#f8fbff 0 84%,#dbfaff 84% 100%); clip-path:polygon(0 0,calc(100% - 54px) 0,100% 54px,100% 100%,24px 100%,0 calc(100% - 24px)); box-shadow:10px 13px 0 #50edfa48,-7px 7px 0 #f03c8a60; }
-.assets-grid :deep(.asset-card.shelf-cut-a) { grid-column:span 5; margin-top:34px; clip-path:polygon(25px 0,100% 0,100% calc(100% - 30px),calc(100% - 30px) 100%,0 100%,0 25px); }
-.assets-grid :deep(.asset-card.shelf-cut-b) { grid-column:span 4; margin-left:8%; margin-top:12px; background:#e9f2ff; clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%); }
-.assets-grid :deep(.asset-card.shelf-cut-c) { grid-column:span 4; margin-right:8%; margin-top:38px; border-top-color:#ee246a; clip-path:polygon(0 0,100% 0,100% calc(100% - 24px),calc(100% - 24px) 100%,0 100%); }
-.assets-grid :deep(.asset-card:hover) { transform:translateY(-6px) translateX(2px); box-shadow:11px 15px 0 #50edfa75,-8px 8px 0 #f03c8a70; border-color:#50edfa; }
-.assets-grid :deep(.asset-card.is-editing) { grid-column:span 12; margin:0; min-height:unset; clip-path:none; transform:none; box-shadow:8px 10px 0 #50edfa40,-6px 5px 0 #f03c8a35; }
+.assets-grid :deep(.asset-layout.shelf-lead) { grid-column:span 7; }
+.assets-grid :deep(.asset-card.shelf-lead) { min-height:276px; padding:26px 30px; border-top-color:#ee246a; background:linear-gradient(118deg,#f8fbff 0 84%,#dbfaff 84% 100%); clip-path:polygon(0 0,calc(100% - 54px) 0,100% 54px,100% 100%,24px 100%,0 calc(100% - 24px)); box-shadow:10px 13px 0 #50edfa48,-7px 7px 0 #f03c8a60; }
+.assets-grid :deep(.asset-layout.shelf-cut-a) { grid-column:span 5; margin-top:34px; }
+.assets-grid :deep(.asset-card.shelf-cut-a) { clip-path:polygon(25px 0,100% 0,100% calc(100% - 30px),calc(100% - 30px) 100%,0 100%,0 25px); }
+.assets-grid :deep(.asset-layout.shelf-cut-b) { grid-column:span 4; margin-left:8%; margin-top:12px; }
+.assets-grid :deep(.asset-card.shelf-cut-b) { background:#e9f2ff; clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%); }
+.assets-grid :deep(.asset-layout.shelf-cut-c) { grid-column:span 4; margin-right:8%; margin-top:38px; }
+.assets-grid :deep(.asset-card.shelf-cut-c) { border-top-color:#ee246a; clip-path:polygon(0 0,100% 0,100% calc(100% - 24px),calc(100% - 24px) 100%,0 100%); }
+.assets-grid :deep(.asset-card:hover) { box-shadow:11px 15px 0 #50edfa75,-8px 8px 0 #f03c8a70; border-color:#50edfa; }
+.assets-grid :deep(.asset-layout.is-editing) { grid-column:1/-1; margin:0; }
+.assets-grid :deep(.asset-card.is-editing) { min-height:unset; clip-path:none; box-shadow:8px 10px 0 #50edfa40,-6px 5px 0 #f03c8a35; }
 .assets-grid :deep(.as-name) { white-space:normal; overflow-wrap:anywhere; line-height:1.5; }
-.asset-list-enter-active,.asset-list-leave-active,.asset-list-move{transition:opacity .48s var(--motion-shift),transform .48s var(--motion-shift),clip-path .48s var(--motion-enter),box-shadow .48s}
-.asset-list-enter-from{opacity:0;transform:translateX(52px) translateY(20px) scale(.9);clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)}
-.asset-list-leave-to{opacity:0;transform:translateX(-40px) translateY(-15px) scale(.9);clip-path:polygon(0 0,100% 0,100% 0,0 100%)}
-.asset-list-move{transition-delay:45ms}
-.asset-list-leave-active{position:absolute;pointer-events:none}
-@media(min-width:700px) and (max-width:1279px){.assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.assets-grid :deep(.asset-card.shelf-lead){grid-column:span 2;min-height:240px}.assets-grid :deep(.asset-card.shelf-cut-a){grid-column:span 1;margin-top:0}.assets-grid :deep(.asset-card.shelf-cut-b),.assets-grid :deep(.asset-card.shelf-cut-c){grid-column:span 1;margin:20px 0 0}}
+@media(min-width:700px) and (max-width:1279px){.assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.assets-grid :deep(.asset-layout.shelf-lead){grid-column:span 2}.assets-grid :deep(.asset-card.shelf-lead){min-height:240px}.assets-grid :deep(.asset-layout.shelf-cut-a){grid-column:span 1;margin-top:0}.assets-grid :deep(.asset-layout.shelf-cut-b),.assets-grid :deep(.asset-layout.shelf-cut-c){grid-column:span 1;margin:20px 0 0}.assets-grid :deep(.asset-layout.is-editing){grid-column:1/-1;margin:0}}
 @media(min-width:1280px){.assets-grid{grid-template-columns:repeat(12,minmax(0,1fr))}}
-@media(max-width:699px){.assets-grid :deep(.asset-card),.assets-grid :deep(.asset-card.shelf-lead),.assets-grid :deep(.asset-card.shelf-cut-a),.assets-grid :deep(.asset-card.shelf-cut-b),.assets-grid :deep(.asset-card.shelf-cut-c){grid-column:1/-1;margin:0;width:100%;min-height:unset;padding:18px 17px}.assets-grid :deep(.asset-card.shelf-lead){min-height:210px}}
-@media(max-width:599px){.dropzone{padding:24px 18px;gap:15px;min-height:170px}.dropzone.over{min-height:205px}.vault-folder{width:65px}.dropzone-title{font-size:20px}.dropzone-plus{display:none}.dropzone-text{font-size:11px}.filter-row .chip{padding:7px 12px}.quota-card{padding:13px 16px}.dropzone-hint{font-size:9px}}
-@media(prefers-reduced-motion:reduce){.dropzone.over .vault-folder,.upload-wrap{animation:none!important}.asset-list-enter-active,.asset-list-leave-active,.asset-list-move{transition-duration:.01ms!important}}
+@media(max-width:699px){.assets-grid :deep(.asset-layout){grid-column:1/-1!important;margin:0!important;width:100%}.assets-grid :deep(.asset-card){width:100%;min-height:unset;padding:18px 17px}.assets-grid :deep(.asset-card.shelf-lead){min-height:210px}}
+@media(max-width:599px){.dropzone{padding:24px 18px;gap:15px;min-height:170px}.vault-folder{width:65px}.dropzone-title{font-size:20px}.dropzone-plus{display:none}.dropzone-text{font-size:11px}.filter-row .chip{padding:7px 12px}.quota-card{padding:13px 16px}.dropzone-hint{font-size:9px}}
 </style>

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRecordsStore } from '@/stores/records'
-import { formatFullDate } from '@/utils/time'
+import { useCalendarMotion } from '@/motion/useCalendarMotion'
 
 const props = defineProps({
   mode: { type: String, default: 'mini' }, // mini | full
@@ -13,13 +13,17 @@ const emit = defineEmits(['selectDate', 'pickDate', 'update:modelValue'])
 const recordsStore = useRecordsStore()
 
 const calendarDate = ref(new Date())
+const displayedDate = ref(new Date(calendarDate.value))
 const selectedDate = ref(null)
-const monthDirection = ref(1)
+const calendarRoot = ref(null)
+const monthHeading = ref(null)
+const monthGrid = ref(null)
+const monthMotion = useCalendarMotion(calendarRoot, monthHeading, monthGrid)
 
 const effectiveSelected = computed(() => props.modelValue || selectedDate.value)
 
-const year = computed(() => calendarDate.value.getFullYear())
-const month = computed(() => calendarDate.value.getMonth())
+const year = computed(() => displayedDate.value.getFullYear())
+const month = computed(() => displayedDate.value.getMonth())
 
 const monthText = computed(() => year.value + ' 年 ' + (month.value + 1) + ' 月')
 
@@ -48,12 +52,9 @@ const calendarDays = computed(() => {
     days.push({ day, isToday, hasRecord, isSelected, otherMonth: false })
   }
 
-  const totalCells = firstDay + daysInMonth
-  const remaining = 7 - (totalCells % 7)
-  if (remaining < 7) {
-    for (let i = 1; i <= remaining; i++) {
-      days.push({ day: i, otherMonth: true })
-    }
+  // Six weeks keep the legend and the page below in one stable position.
+  for (let day = 1; days.length < 42; day++) {
+    days.push({ day, otherMonth: true })
   }
 
   return days
@@ -67,12 +68,14 @@ watch([year, month], loadCalendarMarks)
 onMounted(loadCalendarMarks)
 
 function changeMonth(delta) {
-  monthDirection.value = delta
   const d = new Date(calendarDate.value)
   d.setDate(1)
   d.setMonth(d.getMonth() + delta)
   calendarDate.value = d
-  selectedDate.value = null
+  monthMotion.change(() => {
+    displayedDate.value = new Date(calendarDate.value)
+    selectedDate.value = null
+  }, delta)
 }
 
 function selectDay(dayObj) {
@@ -93,18 +96,17 @@ function selectDay(dayObj) {
 </script>
 
 <template>
-  <div :class="['calendar-widget', mode]" :style="{ '--month-direction': monthDirection }">
+  <div ref="calendarRoot" :class="['calendar-widget', mode]">
     <div class="calendar-header">
       <button class="calendar-nav-btn" aria-label="上一个月" @click="changeMonth(-1)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
-      <span class="calendar-month"><template v-if="mode === 'full'"><small>{{ year }}</small><b>{{ String(month + 1).padStart(2,'0') }}</b><i>{{ ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'][month] }}</i></template><template v-else>{{ monthText }}</template></span>
+      <span ref="monthHeading" class="calendar-month" aria-live="polite"><template v-if="mode === 'full'"><small>{{ year }}</small><b>{{ String(month + 1).padStart(2,'0') }}</b><i>{{ ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'][month] }}</i></template><template v-else>{{ monthText }}</template></span>
       <button class="calendar-nav-btn" aria-label="下一个月" @click="changeMonth(1)">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <Transition name="month-cut" mode="out-in">
-      <div :key="monthText" class="calendar-grid">
+      <div ref="monthGrid" class="calendar-grid">
         <div class="calendar-weekdays">
           <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
         </div>
@@ -119,7 +121,6 @@ function selectDay(dayObj) {
           >{{ d.day }}</button>
         </div>
       </div>
-    </Transition>
     <div class="calendar-legend">
       <div class="calendar-legend-item"><div class="calendar-dot has-record" /><span>有记录</span></div>
       <div class="calendar-legend-item"><div class="calendar-dot today" /><span>今天</span></div>
@@ -147,7 +148,7 @@ function selectDay(dayObj) {
 .calendar-nav-btn:hover { background: var(--ink-2); }
 .calendar-nav-btn svg { width: 15px; height: 15px; stroke: var(--text-mid); fill: none; }
 
-.calendar-grid { animation: monthIn .25s ease; }
+.calendar-grid { min-width:0; }
 
 .calendar-weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
@@ -158,9 +159,9 @@ function selectDay(dayObj) {
   padding: 4px 0;
 }
 
-.calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .calendar-day {
-  position: relative; aspect-ratio: 1;
+  position: relative; aspect-ratio: 1; min-width:0;
   display: grid; place-items: center;
   font-size: 13.5px; border-radius: var(--radius-sm);
   color: var(--text-mid); transition: background .15s, color .15s; cursor: pointer;
@@ -174,7 +175,7 @@ function selectDay(dayObj) {
   background: var(--accent);
 }
 .calendar-day.today { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: var(--radius-sm); }
-.calendar-day.selected { background: var(--accent); color: #FFFFFF; font-weight: 600; animation: dayPop .25s cubic-bezier(.34,1.4,.5,1); }
+.calendar-day.selected { background: var(--accent); color: #FFFFFF; font-weight: 600; }
 .calendar-day.selected::after { background: #FFFFFF; }
 
 .calendar-legend {
@@ -212,10 +213,4 @@ function selectDay(dayObj) {
 .full .calendar-dot.has-record, .full .calendar-dot.selected { background:var(--cyan); }
 .full .calendar-dot.today { box-shadow:inset 0 0 0 1.5px var(--cyan); }
 @media(max-width:599px){.full .calendar-month b{font-size:112px}.full .calendar-month i{display:none}.full .calendar-header{min-height:125px}.full .calendar-day{font-size:22px}}
-.month-cut-leave-active { transition:opacity .12s,transform .12s; }
-.month-cut-enter-active { transition:opacity .24s,transform .3s cubic-bezier(.16,1,.3,1),clip-path .3s; }
-.month-cut-leave-to { opacity:0; transform:translateX(calc(var(--month-direction) * -20px)); }
-.month-cut-enter-from { opacity:0; transform:translateX(calc(var(--month-direction) * 35px)); clip-path:inset(0 100% 0 0); }
-.month-cut-enter-to { clip-path:inset(0); }
-@media(prefers-reduced-motion:reduce){.month-cut-enter-from,.month-cut-leave-to{transform:none;clip-path:none}}
 </style>

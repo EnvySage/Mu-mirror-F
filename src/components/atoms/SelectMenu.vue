@@ -13,6 +13,7 @@
  * aria-expanded / aria-selected / aria-activedescendant，键盘 ↑↓ Home End Enter Esc。
  */
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { createMotionScope, duration, gsap, motionTokens, prefersReducedMotion } from '@/motion/core'
 
 const props = defineProps({
   modelValue: { type: [String, Number], default: null },
@@ -35,6 +36,37 @@ const triggerEl = ref(null)
 const open = ref(false)
 const activeIndex = ref(-1)
 const menuStyle = ref({})
+const panelMotions = new Map()
+
+function stopPanel(el) {
+  const state = panelMotions.get(el)
+  if (!state) return
+  panelMotions.delete(el)
+  const visible = { opacity: gsap.getProperty(el, 'opacity'), y: gsap.getProperty(el, 'y') }
+  state.scope.dispose()
+  gsap.set(el, visible)
+  state.done()
+}
+function animatePanel(el, done, entering) {
+  stopPanel(el)
+  const continuing = el.style.opacity !== ''
+  const scope = createMotionScope(el)
+  const state = { scope, done }
+  panelMotions.set(el, state)
+  const finish = () => {
+    if (panelMotions.get(el) !== state) return
+    panelMotions.delete(el)
+    scope.dispose()
+    gsap.set(el, { clearProps: 'transform,opacity' })
+    done()
+  }
+  scope.run(() => {
+    if (entering && !continuing) gsap.set(el, { opacity: 0, y: prefersReducedMotion() ? 0 : -4 })
+    gsap.to(el, { opacity: entering ? 1 : 0, y: entering || prefersReducedMotion() ? 0 : -3, duration: duration(motionTokens.feedback), ease: 'power2.out', overwrite: true, onComplete: finish })
+  })
+}
+const enterPanel = (el, done) => animatePanel(el, done, true)
+const leavePanel = (el, done) => animatePanel(el, done, false)
 
 const MENU_MAX_H = 320
 const GAP = 6
@@ -90,7 +122,7 @@ function toggle() {
 
 function choose(opt) {
   closeMenu()
-  triggerEl.value?.focus()
+  triggerEl.value?.focus({ preventScroll: true })
   if (opt.value !== props.modelValue) emit('update:modelValue', opt.value)
 }
 
@@ -167,6 +199,7 @@ watch(open, (v) => {
 })
 
 onBeforeUnmount(() => {
+  for (const el of [...panelMotions.keys()]) stopPanel(el)
   document.removeEventListener('pointerdown', onDocPointerDown, true)
   window.removeEventListener('scroll', onReposition, true)
   window.removeEventListener('resize', onReposition)
@@ -194,6 +227,7 @@ onBeforeUnmount(() => {
     </button>
 
     <Teleport to="body">
+      <Transition :css="false" @enter="enterPanel" @leave="leavePanel" @enter-cancelled="stopPanel" @leave-cancelled="stopPanel">
       <div
         v-if="open"
         :id="`${uid}-list`"
@@ -224,6 +258,7 @@ onBeforeUnmount(() => {
           ><path d="M5 13l4 4L19 7"/></svg>
         </button>
       </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -263,7 +298,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   box-shadow: 0 10px 28px rgba(26, 26, 23, .16);
-  animation: selectMenuIn .14s ease;
 }
 .select-option {
   width: 100%; display: flex; align-items: center; gap: 8px;
@@ -277,6 +311,4 @@ onBeforeUnmount(() => {
 .select-option-desc { font-size: 11.5px; color: var(--text-low); line-height: 1.5; }
 .select-option-tick { width: 14px; height: 14px; flex-shrink: 0; color: var(--accent); }
 
-@keyframes selectMenuIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .select-menu-panel { animation: none; } }
 </style>

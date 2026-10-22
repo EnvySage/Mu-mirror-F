@@ -12,13 +12,14 @@
  *  - 单篇展开为卡片内联展开，互斥（同时只展开一天，避免长列表跳动）
  * 「依据：查看原文」→ 关 sheet + 打开 source_record_id 对应记录详情（复用 openRecord 交互）。
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSummariesStore } from '@/stores/summaries'
 import { useGlossaryStore } from '@/stores/glossary'
 import { useUIStore } from '@/stores/ui'
 import { useToastStore } from '@/stores/toast'
 import TermCard from '@/components/molecules/TermCard.vue'
 import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
 
 const props = defineProps({
   show: Boolean,
@@ -47,13 +48,27 @@ const busyTermId = ref(null)
 const bodyEl = ref(null)
 const dialogEl = ref(null)
 const focusOpen = ref(false)
-useDialogFocus(() => focusOpen.value, dialogEl, '.sheet-close', () => emit('close'))
-function afterSheetLeave() { if (!props.show) focusOpen.value = false }
+const dialogFocus = useDialogFocus(() => focusOpen.value, dialogEl, '.sheet-close', () => emit('close'))
+const overlay = useOverlayMotion(() => ({ xPercent: -50, yPercent: window.matchMedia('(min-width: 900px)').matches ? -50 : 0, distance: 36 }))
+let pendingHandoff = null
+let cancelFocusHandoff = null
+onBeforeUnmount(() => cancelFocusHandoff?.())
+function afterSheetLeave() {
+  if (props.show) return
+  focusOpen.value = false
+  const handoff = pendingHandoff
+  pendingHandoff = null
+  cancelFocusHandoff = null
+  handoff?.()
+}
 function retrySummaries() { summaries.fetchList({ limit: PAGE_SIZE }); summaries.fetchMissing(MISSING_LOOKBACK) }
-function startWriting() { prepareDialogFocusHandoff(); emit('close'); ui.openWriteModal() }
+function startWriting() { cancelFocusHandoff = prepareDialogFocusHandoff(); pendingHandoff = () => ui.openWriteModal(); emit('close') }
 
 watch(() => props.show, (val) => {
   if (val) {
+    cancelFocusHandoff?.()
+    cancelFocusHandoff = null
+    pendingHandoff = null
     focusOpen.value = true
     expandedDate.value = null
     summaries.fetchList({ limit: PAGE_SIZE })
@@ -212,19 +227,21 @@ async function onDismiss(term) {
  */
 function openSource(term) {
   if (term.source_record_id == null) return
-  prepareDialogFocusHandoff()
+  cancelFocusHandoff = prepareDialogFocusHandoff()
+  pendingHandoff = () => {
+    ui.selectedRecordId = term.source_record_id
+    ui.showDetail = true
+  }
   ui.closeSummarySheet()
-  ui.selectedRecordId = term.source_record_id
-  ui.showDetail = true
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="fade">
+    <Transition :css="false" v-bind="overlay.backdropHooks">
       <div v-if="show" class="modal-overlay" @click="emit('close')" />
     </Transition>
-    <Transition name="sheet" @after-leave="afterSheetLeave">
+    <Transition :css="false" v-bind="overlay.panelHooks" @after-enter="dialogFocus.focusInitial" @after-leave="afterSheetLeave">
       <section v-if="show" ref="dialogEl" class="sheet" role="dialog" aria-modal="true" aria-labelledby="summary-title" tabindex="-1">
         <header class="sheet-header">
           <div><span class="summary-edition">DAILY REFLECTION</span><h2 id="summary-title">每日总结</h2></div>
@@ -371,7 +388,4 @@ function openSource(term) {
 @keyframes summary-unfold{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media(min-width:900px){.sheet{top:50%;bottom:auto;transform:translate(-50%,-50%);height:88dvh;max-width:calc(100vw - 80px)}}
 @media(max-width:599px){.sheet{height:95dvh;max-height:none}.sheet-header{padding:17px 20px 15px}.sheet-header>div{display:block}.summary-edition{font-size:29px}.sheet-header h2{font-size:12px;margin-top:6px;padding:0;border:0}.summary-cover{padding:22px 22px 24px;gap:12px}.cover-caption{font-size:10px}.summary-cover h3{font-size:23px}.cover-index{display:block;padding:0}.cover-index strong{font-size:58px}.cover-index span{display:block;font-size:9px;margin-top:7px}.cover-index small{display:none}.cover-watermark{display:none}.sheet-body{padding:0 16px 24px}.month-head{padding-top:18px}.summary-item{padding:20px 18px}.summary-meta{gap:10px;margin-bottom:15px}.summary-date{font-size:30px;gap:7px}.summary-generated{display:none}.summary-records{padding-left:10px}.summary-text{font-size:13px;line-height:2}.summary-missing{padding:18px 15px;gap:9px}.summary-missing .summary-date{font-size:25px}.missing-note{font-size:10px}.missing-gen{padding:7px 12px}.summary-state h3{font-size:20px}}
-.sheet-enter-active{transition:transform .38s cubic-bezier(.16,1,.3,1),opacity .25s,clip-path .38s}.sheet-leave-active{transition:transform .2s,opacity .2s}.sheet-enter-from,.sheet-leave-to{transform:translate(-50%,105%);opacity:0}
-@media(min-width:900px){.sheet-enter-from{transform:translate(-46%,-48%);clip-path:polygon(0 0,0 0,-20% 100%,0 100%)}.sheet-enter-to{clip-path:polygon(0 0,120% 0,100% 100%,0 100%)}.sheet-leave-to{transform:translate(-50%,-48%)}}
-@media(prefers-reduced-motion:reduce) and (min-width:900px){.sheet-enter-from,.sheet-leave-to{transform:translate(-50%,-50%);clip-path:none}}
 </style>

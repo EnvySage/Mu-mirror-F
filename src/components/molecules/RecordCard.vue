@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { timeAgo } from '@/utils/time'
 import { typeMap, moodMap } from '@/constants/tags'
 import { MOOD_COLOR } from '@/constants/moodColor'
+import { vCardLift } from '@/composables/useCardLift'
 
 const props = defineProps({
   record: { type: Object, required: true },
@@ -53,8 +54,9 @@ const processingPreview = computed(() => {
 </script>
 
 <template>
+  <div :class="['record-layout', `layout-${layoutVariant}`, { featured }]" :data-list-key="`record-${record.id}`">
   <!-- processing：转圈 + "AI 整理中" -->
-  <div v-if="status === 'processing'" :class="['record-card', 'card', 'processing', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
+  <div v-card-lift v-if="status === 'processing'" :class="['record-card', 'card', 'processing', `layout-${layoutVariant}`, { active, featured, arrival }]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag tag-processing"><span class="spinner" />AI 整理中</span>
@@ -63,7 +65,7 @@ const processingPreview = computed(() => {
   </div>
 
   <!-- failed：红字原因 + 重试 + 删除 -->
-  <div v-else-if="status === 'failed'" :class="['record-card', 'card', 'failed', `layout-${layoutVariant}`]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" @keydown.enter.self="emit('open', $event)" @click="emit('open', $event)">
+  <div v-card-lift v-else-if="status === 'failed'" :class="['record-card', 'card', 'failed', `layout-${layoutVariant}`, { active, featured, arrival }]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">
       <span class="record-time">{{ timeText }}</span>
       <span class="tag" style="color:var(--danger);background:var(--danger-bg)">失败</span>
@@ -79,7 +81,7 @@ const processingPreview = computed(() => {
     </div>
   </div>
 
-  <div v-else-if="status === 'record_only'"
+  <div v-card-lift v-else-if="status === 'record_only'"
     :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
     data-object-source="record"
     :data-object-id="record.id"
@@ -95,7 +97,7 @@ const processingPreview = computed(() => {
   </div>
 
   <!-- reviewing / done -->
-  <div
+  <div v-card-lift
     v-else
     :class="['record-card', 'card', status, `layout-${layoutVariant}`, { active, featured, arrival }]"
     data-object-source="record"
@@ -130,13 +132,13 @@ const processingPreview = computed(() => {
       </span>
     </div>
   </div>
+  </div>
 </template>
 
 <style scoped>
 .record-card {
-  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: box-shadow .18s ease, border-color .18s ease;
   position: relative; overflow: hidden;
-  animation: cardIn .3s ease backwards;
 }
 .record-user-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.record-user-tags span{padding:2px 7px;border:1px solid #65d9ff65;border-radius:3px;color:var(--cyan,#65d9ff);font-size:10px;line-height:1.4}
 /* 左缘墨蓝条 */
@@ -145,7 +147,6 @@ const processingPreview = computed(() => {
   width: 3px; border-radius: 2px; background: var(--accent);
   opacity: 0; transition: opacity .18s;
 }
-.record-card:active { transform: scale(.985); }
 .record-card.active::before,
 .record-card.reviewing::before { opacity: 1; }
 .record-card.processing::before, .record-card.failed::before { background: none; }
@@ -181,7 +182,7 @@ const processingPreview = computed(() => {
 
 .record-card { padding:20px 22px; border-radius:2px; border:1px solid #d9e6ff; box-shadow:4px 5px 0 #020c3425; animation:none; }
 .record-card.arrival { animation:record-arrival 1.4s ease both; }
-@keyframes record-arrival { 0%,100%{box-shadow:4px 5px 0 #020c3425} 25%,65%{box-shadow:0 0 0 3px var(--cyan),0 0 30px #50edfa70;transform:translateX(5px)} }
+@keyframes record-arrival { 0%,100%{box-shadow:4px 5px 0 #020c3425} 25%,65%{box-shadow:0 0 0 3px var(--cyan),0 0 24px #50edfa60} }
 .record-card::before { top:0; bottom:0; width:4px; border-radius:0; }
 .record-card:hover, .record-card:focus-visible { border-color:var(--cyan); box-shadow:5px 6px 0 #020c3445; }
 .record-title { font-family:var(--font); font-size:16px; font-weight:800; line-height:1.6; }
@@ -189,4 +190,12 @@ const processingPreview = computed(() => {
 .record-time { font-family:var(--font); font-size:10px; }
 .record-card :deep(.tag) { border-radius:2px; font-size:10px; padding:2px 6px; }
 @media(max-width:599px){.record-card{padding:17px 18px}.record-meta{flex-wrap:wrap;gap:7px}.record-title{font-size:15px}}
+/* Picking a record feels like lifting it off the stack. */
+.record-layout { min-width:0; width:100%; }
+.record-card { width:100%; transform-origin:50% 75%; transition:box-shadow .2s,border-color .2s; }
+.record-card.active { border-color:var(--cyan); box-shadow:0 0 0 1px #50edfa50,8px 14px 0 #020c3440; }
+@media(hover:hover) {
+ .record-card:hover { z-index:3; box-shadow:0 13px 28px #01092340,0 0 0 1px #50edfa70; }
+}
+@media(prefers-reduced-motion:reduce) { .record-card { transition:none; } .record-card.arrival { animation:none; border-color:var(--cyan); } }
 </style>

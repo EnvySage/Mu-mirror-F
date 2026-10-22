@@ -18,7 +18,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '@/api/request'
 import { renderMarkdown } from '@/utils/mdPreview'
-import { findObjectSource, playObjectTransition, playElementExit, cancelObjectTransitions } from '@/composables/useObjectTransition'
+import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 
 const props = defineProps({
@@ -39,6 +39,7 @@ const dialogEl = ref(null)
 const maskEl = ref(null)
 const active = ref(false)
 const closing = ref(false)
+const overlay = useOverlayMotion({ distance: 26, scale: .985 })
 let requestGeneration = 0
 useDialogFocus(() => active.value, dialogEl, '.fpm-close', closeWithMotion)
 
@@ -90,31 +91,23 @@ onMounted(async () => {
   active.value = true
   load()
   await nextTick()
-    const target = dialogEl.value?.getBoundingClientRect?.()
-  if (props.origin && target) playObjectTransition(props.origin, target, { duration: 440, title: displayName.value })
+  if (active.value && !closing.value) overlay.open(dialogEl.value, maskEl.value)
 })
 
 onBeforeUnmount(() => {
   active.value = false
   requestGeneration += 1
   revoke()
-  cancelObjectTransitions()
 })
 
 async function closeWithMotion() {
   if (closing.value) return
   closing.value = true
-  cancelObjectTransitions()
   requestGeneration += 1
   loading.value = false
-  const source = findObjectSource('asset', props.item.id)
-  const rect = source?.getBoundingClientRect?.()
-  const visible = rect && rect.width && rect.height && rect.bottom > 0 && rect.top < window.innerHeight
-  const from = dialogEl.value?.getBoundingClientRect?.()
-  const exit = playElementExit(dialogEl.value, { duration: 300, reduced: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches })
-  const maskExit = playElementExit(maskEl.value, { duration: 220, reduced: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches })
-  const flight = from && visible ? playObjectTransition(from, rect, { duration: 300, title: displayName.value, reverse: true }) : Promise.resolve(false)
-  await Promise.all([exit, maskExit, flight])
+  const result = await overlay.close(dialogEl.value, maskEl.value)
+  if (result.includes('cancelled')) return
+  active.value = false
   emit('close')
 }
 
@@ -273,9 +266,7 @@ function saveBlob(blob, name) {
   background: rgba(26, 26, 23, .4);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
-  animation: fpmIn .44s cubic-bezier(.16,1,.3,1);
 }
-@keyframes fpmIn { from { opacity: 0; } to { opacity: 1; } }
 
 .fpm-card {
   width: 100%; max-width: 720px;
@@ -286,12 +277,9 @@ function saveBlob(blob, name) {
   box-shadow: var(--shadow-float);
   display: flex; flex-direction: column;
   overflow: hidden;
-  animation: fpmCardIn .48s cubic-bezier(.16,1,.3,1);
   clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%);
-  transition:clip-path .3s var(--motion-enter),border-color .3s;
+  transition:border-color .3s;
 }
-@keyframes fpmCardIn { 0% { opacity: 0; transform: translateY(38px) translateX(24px) scale(.92); clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%); } 72% { opacity:1; transform:translateY(-5px) translateX(-3px) scale(1.01); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,0 100%); } 100% { opacity:1; transform:none; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); } }
-.fpm-card.closing { clip-path:polygon(0 0,100% 0,100% 0,0 100%); border-color:var(--pink); }
 
 .fpm-head {
   display: flex; align-items: center; gap: 9px;

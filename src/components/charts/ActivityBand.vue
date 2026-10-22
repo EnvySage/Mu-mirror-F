@@ -13,7 +13,8 @@
  *
  * 高度：移动端 96px、≥900px 150px —— 全宽单卡按内容定高，不做拉伸。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useChartMotion } from '@/motion/useChartMotion'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap } from '@/constants/tags'
 import ChartEmpty from './ChartEmpty.vue'
@@ -69,6 +70,8 @@ const bars = computed(() => {
     return { x: i + GAP / 2, w: 1 - GAP, y: top, h, segs, count, date: d.date, empty: !count }
   })
 })
+const chart = ref(null)
+useChartMotion(chart, () => JSON.stringify(bars.value.map(bar => [bar.date, bar.count, bar.segs.map(seg => [seg.color, seg.h, seg.mood, seg.count])])))
 
 /** "2026-09-05" → "09-05" */
 function shortDate(date) {
@@ -113,13 +116,14 @@ function barTitle(bar) {
   <ChartEmpty v-if="!daily.length" text="暂无活动数据" />
   <template v-else>
     <svg
+      ref="chart"
       class="act-band"
       :viewBox="`0 0 ${daily.length} ${VIEW_H}`"
       preserveAspectRatio="none"
       role="img"
       aria-label="近 30 天活动分布：柱高为当日记录数，柱内颜色为情绪占比"
     >
-      <g v-for="(bar, i) in bars" :key="i" :style="{ '--d': i * 12 + 'ms' }">
+      <g v-for="(bar, i) in bars" :key="i">
         <rect
           v-if="bar.empty"
           class="act-base"
@@ -153,20 +157,7 @@ function barTitle(bar) {
 
 <style scoped>
 .act-band { display: block; width: 100%; height: 96px; }
-.act-seg { transition: y .4s ease, height .4s ease; }
 .act-base { fill: var(--line-strong); opacity: .45; }
-
-/* 入场生长：每根柱自底部立起；--d 由模板按索引注入做错峰（30 根约 350ms 铺开）。
-   fill-mode 用 backwards 而非 both——动画结束后交还 CSS 值，不抢占其它 transform 声明 */
-.act-seg, .act-base {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: actGrow .5s cubic-bezier(.22, .8, .3, 1) var(--d, 0ms) backwards;
-}
-@keyframes actGrow {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
 
 .act-axis { position: relative; height: 13px; margin-top: 5px; }
 .act-tick {

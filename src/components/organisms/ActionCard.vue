@@ -26,6 +26,7 @@ const hasGrowthSuggestions = computed(() => {
 })
 const candidateNeedsRecheck = computed(() => {
   if (!props.proposal.kind?.startsWith('record.') || !hasGrowthSuggestions.value) return false
+  if (recordDraft.value?.mode === 'ONLY_SAVE') return false
   if (!growth.axesDefinition) return true
   const candidateVersion = Number(recordDraft.value?.axesVersion ?? recordDraft.value?.axes_version ?? -1)
   const currentVersion = Number(growth.axesDefinition.version ?? -2)

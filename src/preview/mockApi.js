@@ -92,6 +92,7 @@ const summaries = [
 const profile = {
   id: 9902,
   snapshotType: 'monthly',
+  periodMonth: demoDate(0).slice(0, 7),
   createdAt: demoTime(0, 22, 30),
   driftDistance: 0.18,
   overallSummary: '最近的你正在练习把目标拆小，也更愿意留意自己的节奏。遇到卡住的时候，你开始尝试先找到方向，而不是要求自己立刻完成。',
@@ -103,8 +104,8 @@ const profile = {
 }
 
 const snapshots = [
-  { id: 9902, snapshotType: 'monthly', createdAt: demoTime(0, 22, 30), driftDistance: 0.18, overallSummary: profile.overallSummary },
-  { id: 9901, snapshotType: 'monthly', createdAt: demoTime(28, 21, 40), driftDistance: 0.11, overallSummary: '你持续投入学习，也在尝试为工作留出更稳定的节奏。' },
+  { id: 9902, snapshotType: 'monthly', periodMonth: demoDate(0).slice(0, 7), createdAt: demoTime(0, 22, 30), driftDistance: 0.18, overallSummary: profile.overallSummary },
+  { id: 9901, snapshotType: 'monthly', periodMonth: demoDate(28).slice(0, 7), createdAt: demoTime(28, 21, 40), driftDistance: 0.11, overallSummary: '你持续投入学习，也在尝试为工作留出更稳定的节奏。' },
   { id: 9900, snapshotType: 'manual', createdAt: demoTime(18, 20, 15), driftDistance: null, overallSummary: '你正在寻找更适合自己的工作和休息节奏。' },
 ]
 
@@ -112,6 +113,14 @@ const todos = [
   { todoId: 602, title: '补完状态管理章节练习', currentStatus: 'in_progress', createdAt: demoTime(1, 21, 10), origin: { chunkId: 1402, recordId: 801, excerpt: '明天把小练习补完。', date: demoDate(1) }, evidence: [], pendingSuggestionCount: 0 },
   { todoId: 601, title: '整理作品集首页文案', currentStatus: 'not_started', createdAt: demoTime(3, 10, 10), origin: { chunkId: 1398, recordId: 798, excerpt: '周末先把项目介绍的文案列出来。', date: demoDate(3) }, evidence: [], pendingSuggestionCount: 0 },
 ]
+
+// Synthetic fixture for the public UI preview; production keeps its API path.
+const growthAxes = [
+  ['knowledge', '学识', '学习与理解', 18], ['courage', '勇气', '面对困难', 9],
+  ['action', '行动', '落实计划', 14], ['care', '体贴', '关怀自己与他人', 11],
+  ['expression', '表达', '清晰表达', 7],
+].map(([id, name, description, totalPoints]) => ({ id, name, description, totalPoints, stageIndex: 2 }))
+const growthConfig = { thresholds: [0, 6, 18, 36, 60], manualMin: 1, manualMax: 6 }
 
 const settings = {
   aiProvider: 'demo', aiProtocol: 'openai', aiApiKey: '', aiBaseUrl: '', aiModel: '预览模式',
@@ -275,13 +284,16 @@ function route(config) {
   if (path === '/api/mirror/stats') return result(config, makeStats())
   if (path === '/api/mirror/snapshots') return result(config, clone(snapshots))
   const snapshot = path.match(/^\/api\/mirror\/snapshots\/(\d+)$/)
-  if (snapshot) return result(config, { ...clone(profile), id: Number(snapshot[1]), snapshotType: Number(snapshot[1]) === 9901 ? 'monthly' : 'manual' })
+  if (snapshot) return result(config, { ...clone(profile), ...clone(snapshots.find(item => item.id === Number(snapshot[1])) || { id: Number(snapshot[1]) }) })
   if (path === '/api/mirror/generate' || path === '/api/mirror/generate-monthly') return result(config, clone(profile))
   if (path === '/api/settings' && method === 'GET') return result(config, clone(settings))
   if (path === '/api/settings' && method === 'PUT') { Object.assign(settings, body); return result(config, clone(settings)) }
   if (path === '/api/settings/test-ai') return result(config, '演示环境不连接 AI 服务')
   if (path === '/api/settings/test-db') return result(config, '演示环境未连接数据库')
   if (path === '/api/glossary') return result(config, clone(glossary))
+  if (path === '/api/growth') return result(config, { axes: clone(growthAxes), totalPoints: 59, config: clone(growthConfig), stage: { label: '正在积累' } })
+  if (path === '/api/growth/axes') return result(config, { axes: clone(growthAxes), version: 1, locked: true, config: clone(growthConfig) })
+  if (path === '/api/growth/entries') return result(config, [])
   if (path === '/api/todos/pending-suggestions') return result(config, { suggestions: [] })
   if (path === '/api/todos/open-chain') return result(config, { chains: clone(todos) })
   if (path === '/api/todos') return result(config, { todos: clone(todos) })
