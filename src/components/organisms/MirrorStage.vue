@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { captureMirrorFace, beginMirrorShatter, scheduleMirrorWarm } from '@/composables/useMirrorShatter'
+import { captureMirrorCut as captureMirrorFace, beginMirrorCut as beginMirrorShatter } from '@/composables/useMirrorCut'
 import { useMirrorCardMotion } from '@/motion/useMirrorCardMotion'
+import { gsap, prefersReducedMotion } from '@/motion/core'
 
 const props = defineProps({
   profile: { type: Object, default: null },
@@ -16,7 +17,17 @@ const deck = ref(null)
 const cardMotion = useMirrorCardMotion(deck, () => props.currentId, () => props.nodes.map(node => node.id).join(','))
 const shattering = ref(false)
 let revealEffect = null
-let cancelWarm
+const mirrorArt = ref(null)
+const inView = ref(false)
+let artTween, observer, motionPreference
+function onMotionPreference(event) { if (event.matches) resetArt() }
+function moveArt(event) {
+  if (prefersReducedMotion() || event.pointerType !== 'mouse' || props.busy) return
+  const bounds = surface.value.getBoundingClientRect()
+  artTween?.kill()
+  artTween = gsap.to(mirrorArt.value, { x: (event.clientX - bounds.x - bounds.width / 2) * .025, y: (event.clientY - bounds.y - bounds.height / 2) * .025, rotation: (event.clientX - bounds.x - bounds.width / 2) * .008, duration: .6, ease: 'power3.out' })
+}
+function resetArt() { artTween?.kill(); artTween = gsap.to(mirrorArt.value, { x: 0, y: 0, rotation: 0, duration: prefersReducedMotion() ? 0 : .65, ease: 'power3.out' }) }
 const activeNode = computed(() => props.nodes.find(n => n.id === props.currentId))
 const month = computed(() => (activeNode.value?.periodMonth || props.profile?.created_at || '').slice(5, 7))
 const summary = computed(() => props.profile?.overall_summary || '每一条认真留下的记录，都会让这一面更清晰。')
@@ -43,24 +54,49 @@ function moveFocus(event, index) {
   cards[next]?.focus({ preventScroll: true })
   cards[next]?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
 }
-onBeforeUnmount(() => { cancelWarm?.(); revealEffect?.cancel() })
-onMounted(() => { cancelWarm = scheduleMirrorWarm(surface.value) })
+onBeforeUnmount(() => { artTween?.kill(); observer?.disconnect(); revealEffect?.cancel(); motionPreference?.removeEventListener('change', onMotionPreference) })
+onMounted(() => {
+  observer = new IntersectionObserver(([entry]) => { inView.value = entry.isIntersecting }); observer.observe(surface.value)
+  motionPreference = matchMedia('(prefers-reduced-motion: reduce)'); motionPreference.addEventListener('change', onMotionPreference)
+})
 defineExpose({ surface, capture, reveal })
 </script>
 
 <template>
   <section class="mirror-composition" aria-label="镜面与历史画像">
-    <div ref="surface" class="mirror-surface" :class="{ 'is-shattering': shattering }">
+    <div ref="surface" class="mirror-surface" :class="{ 'is-shattering': shattering, 'in-view': inView }" @pointermove="moveArt" @pointerleave="resetArt">
       <div class="surface-art" aria-hidden="true" />
+      <span class="surface-watermark" aria-hidden="true">REFLECT<br>YOURSELF.</span>
+      <div ref="mirrorArt" class="kinetic-mirror" aria-hidden="true">
+        <svg class="mirror-facets" viewBox="0 0 380 420" fill="none">
+          <path class="mirror-orbit" d="M42 240C-40 54 294-34 342 127S154 443 55 324" stroke="#6ddcff" stroke-dasharray="80 12 3 12"/>
+          <path d="M96 73L266 25L342 276L149 385L42 231Z" fill="#6af2ff"/>
+          <path d="M107 83L260 41L325 268L154 367L56 231Z" fill="#051731" stroke="#eaffff" stroke-width="2"/>
+          <path d="M120 96L250 61L307 260L161 344L75 228Z" fill="#2362d8"/>
+          <path d="M120 96L250 61L198 204L75 228Z" fill="#69ddfa"/>
+          <path d="M250 61L307 260L198 204Z" fill="#1448a7"/>
+          <path d="M75 228L198 204L161 344Z" fill="#0e347d"/>
+          <path d="M198 204L307 260L161 344Z" fill="#4ac6ee"/>
+          <path d="M120 96L198 204L161 344M250 61L198 204L75 228M198 204L307 260" stroke="#c4faff" stroke-opacity=".7"/>
+          <path class="mirror-glint" d="M111 116L244 80L253 113L100 155Z" fill="#e4ffff" fill-opacity=".6"/>
+          <path d="M96 278L290 198L296 220L111 300Z" fill="#a9ffff" fill-opacity=".8"/>
+          <path class="mirror-float mirror-float-a" d="M51 78L80 90L46 126Z" fill="#e1ffff"/>
+          <path class="mirror-float mirror-float-b" d="M303 328L351 301L337 359Z" fill="#ef4b92"/>
+          <path class="mirror-float mirror-float-c" d="M82 344L107 374L62 388Z" fill="#61edff"/>
+          <path d="M332 100V121M322 110H343M36 285V304M27 295H46" stroke="#a4eaff" stroke-width="2"/>
+        </svg>
+        <span class="mirror-sticker">BE / YOU</span>
+      </div>
       <div class="surface-copy">
         <span class="surface-date">{{ activeNode?.label || '属于你的生活切面' }}<i />{{ activeNode?.type === 'monthly' ? '月度画像' : '我的镜子' }}</span>
-        <h2 v-if="profile">这一面，<br>是此刻的你。</h2>
+        <h2 v-if="profile"><span>这一面，</span><br><em>是此刻的你。</em></h2>
         <h2 v-else>从一条记录，<br>看见自己。</h2>
         <p :key="currentId" class="surface-summary">{{ summary }}</p>
         <button v-if="!profile" class="surface-write" @click="emit('write')">留下第一条记录 <span aria-hidden="true">＋</span></button>
         <div v-else class="surface-signature"><span />每个阶段，都有自己的光。</div>
       </div>
       <div class="surface-edition" aria-hidden="true"><b>{{ month || 'M' }}</b><span>{{ activeNode?.type === 'monthly' ? '月的镜子' : '生活的切面' }}</span></div>
+      <button type="button" class="surface-replay" :disabled="busy || shattering" @click="reveal()" aria-label="重播镜面动效">↗ <span>重播动效</span></button>
       <div class="surface-metrics" aria-label="近 30 天统计">
         <div v-for="metric in metrics" :key="metric.label"><b>{{ metric.value }}</b><span>{{ metric.label }}</span></div>
         <small>近 30 天</small>
@@ -171,4 +207,31 @@ defineExpose({ surface, capture, reveal })
  .memory-card { transition:none; }
  .card-sheen { display:none; }
 }
+/* A live, faceted mirror rather than a flat illustration. */
+.mirror-composition{border-color:#6acbfa66;background:#05132c}
+.mirror-surface{height:430px;background:#082653;container-type:inline-size}
+.surface-art{background:linear-gradient(118deg,#031733 8%,#0b397d 57%,#1355c2 100%)}
+.surface-art::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent 0 56px,#79c4ff16 57px 58px)}
+.surface-watermark{position:absolute;top:21px;right:-8px;font:italic 900 clamp(64px,11cqw,140px)/.79 var(--font-display);letter-spacing:-.04em;color:#5c9ded25;pointer-events:none;transform:rotate(-8deg)}
+.kinetic-mirror{position:absolute;right:0;top:12px;width:50%;height:calc(100% - 80px);pointer-events:none;will-change:transform}
+.mirror-facets{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(12px 18px 0 #020d2d66)}
+.mirror-orbit{transform-origin:190px 210px;animation:mirror-orbit 24s linear infinite;animation-play-state:paused}
+.mirror-float{animation:mirror-drift 5s ease-in-out infinite alternate;animation-play-state:paused}.mirror-float-b{animation-delay:-2s}.mirror-float-c{animation-delay:-3s}
+.mirror-glint{animation:mirror-light 6s ease-in-out infinite;animation-play-state:paused}.in-view .mirror-orbit,.in-view .mirror-float,.in-view .mirror-glint{animation-play-state:running}
+.mirror-sticker{position:absolute;bottom:17%;right:14%;font:italic 900 25px/1 var(--font-display);background:#f2fcff;color:#071c3b;padding:5px 12px;transform:rotate(-12deg);box-shadow:4px 4px 0 #ed4082}
+.surface-copy{width:58%;padding:35px 0 0 clamp(20px,3.2vw,40px)}
+.surface-date{gap:8px;font-size:10px;flex-wrap:wrap;color:#b5e9ff}.surface-date i{width:15px}
+.surface-copy h2{font-size:clamp(26px,4.6cqw,47px);line-height:1.55;margin:25px 0 18px;letter-spacing:-.045em;transform:rotate(-4deg);transform-origin:left center}
+.surface-copy h2 span{display:inline-block;background:#eefdff;color:#071832;padding:0 10px;box-shadow:5px 5px 0 #02132c}
+.surface-copy h2 em{display:inline-block;background:#68edff;color:#041a35;font-style:normal;padding:0 10px;margin-top:8px;white-space:nowrap;box-shadow:5px 5px 0 #02132c}
+.surface-summary{font-size:12px;max-width:36ch;line-height:1.8;margin-top:25px;-webkit-line-clamp:3;color:#d3e8ff}
+.surface-signature{margin-top:14px;font-size:10px}.surface-edition{top:23px;right:22px}.surface-edition b{font-size:45px}.surface-edition span{font-size:9px}
+.surface-metrics{min-height:72px;background:#03132df2;padding:14px clamp(20px,3.2vw,40px);gap:24px}.surface-metrics b{font:italic 800 32px/1 var(--font-display);color:#6defff}.surface-metrics>div{gap:8px}.surface-metrics span{font-size:10px}
+.surface-replay{position:absolute;bottom:90px;right:22px;z-index:2;display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid #8fd8ff88;background:#041c42bd;color:#cdf6ff;font-size:14px;cursor:pointer}.surface-replay span{font-size:10px}.surface-replay:hover{background:#76edff;color:#03172e}.surface-replay:focus-visible{outline:3px solid #ff8abb;outline-offset:3px}.surface-replay:disabled{opacity:.5;cursor:wait}
+.deck-heading h3{font-weight:800}.deck-heading h3::before{content:'REWIND / ';font:italic 800 19px var(--font-display);color:#72eaff;margin-right:6px}.deck-heading{padding-top:22px}.deck-section{background:#06162f}.memory-card.selected{border-color:#c0faff;box-shadow:4px 5px 0 #49dcec,0 15px 24px #01081c99}.memory-card.selected .card-topline{color:#b8f8ff}.memory-card.selected .card-bottomline b{background:#70efff;color:#051632;padding:3px 6px}
+@keyframes mirror-orbit{to{transform:rotate(360deg)}}@keyframes mirror-drift{to{transform:translate(5px,-10px) rotate(4deg)}}@keyframes mirror-light{0%,100%{opacity:.25;transform:translateY(-6px)}50%{opacity:.85;transform:translateY(8px)}}
+@container(max-width:500px){.surface-copy{width:76%;padding-top:25px}.surface-copy h2{font-size:clamp(23px,7cqw,33px);margin-top:28px}.surface-summary{max-width:27ch;font-size:11px}.kinetic-mirror{width:65%;right:-21%;top:45px;opacity:.75}.surface-edition{top:20px;right:15px}.surface-edition b{font-size:34px}.surface-signature{max-width:200px}.surface-replay{right:12px;bottom:88px;padding:8px}.surface-watermark{top:54px;font-size:75px}.mirror-sticker{display:none}.surface-metrics{gap:22px}.surface-metrics>div{flex-direction:column;gap:5px}.surface-metrics small{display:none}.surface-metrics b{font-size:27px}}
+@container(max-width:350px){.surface-summary{max-width:75%}.surface-signature{max-width:78%;line-height:1.6}.kinetic-mirror{right:-24%}}
+@media(max-width:699px){.mirror-surface{height:430px}.surface-art{opacity:1}.deck-heading{flex-wrap:wrap}.deck-heading h3::before{font-size:17px}}
+@media(prefers-reduced-motion:reduce){.mirror-orbit,.mirror-float,.mirror-glint{animation:none}.kinetic-mirror{will-change:auto}}
 </style>

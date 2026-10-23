@@ -121,6 +121,10 @@ const growthAxes = [
   ['expression', '表达', '清晰表达', 7],
 ].map(([id, name, description, totalPoints]) => ({ id, name, description, totalPoints, stageIndex: 2 }))
 const growthConfig = { thresholds: [0, 6, 18, 36, 60], manualMin: 1, manualMax: 6 }
+growthAxes.forEach(axis => { axis.stageIndex = Math.max(0, growthConfig.thresholds.filter(limit => axis.totalPoints >= limit).length - 1) })
+const growthEntries = []
+const growthRequests = new Set()
+const growthOverview = () => ({ axes: clone(growthAxes), totalPoints: growthAxes.reduce((sum, axis) => sum + axis.totalPoints, 0), config: clone(growthConfig), stage: { label: '正在积累' } })
 
 const settings = {
   aiProvider: 'demo', aiProtocol: 'openai', aiApiKey: '', aiBaseUrl: '', aiModel: '预览模式',
@@ -140,7 +144,7 @@ function makeStats() {
   }))
   const moodDaily = recordDaily.map((day, index) => ({
     date: day.date,
-    moods: day.count ? [{ mood: ['focused', 'curious', 'calm', 'determined'][index % 4], count: Math.min(day.count, 2) }] : [],
+    moods: day.count ? [{ mood: ['happy', 'excited', 'calm', 'satisfied', 'grateful'][index % 5], count: Math.min(day.count, 2) }] : [],
   }))
   return {
     days: 30,
@@ -291,9 +295,21 @@ function route(config) {
   if (path === '/api/settings/test-ai') return result(config, '演示环境不连接 AI 服务')
   if (path === '/api/settings/test-db') return result(config, '演示环境未连接数据库')
   if (path === '/api/glossary') return result(config, clone(glossary))
-  if (path === '/api/growth') return result(config, { axes: clone(growthAxes), totalPoints: 59, config: clone(growthConfig), stage: { label: '正在积累' } })
+  if (path === '/api/growth') return result(config, growthOverview())
   if (path === '/api/growth/axes') return result(config, { axes: clone(growthAxes), version: 1, locked: true, config: clone(growthConfig) })
-  if (path === '/api/growth/entries') return result(config, [])
+  if (path === '/api/growth/entries') return result(config, clone(growthEntries))
+  if (path === '/api/growth/manual' && method === 'POST') {
+    const axis = growthAxes.find(item => item.id === body.dimensionId)
+    const points = Number(body.points)
+    if (!axis || !Number.isInteger(points) || points < growthConfig.manualMin || points > growthConfig.manualMax || !body.reason?.trim() || !body.requestId) throw new Error('请填写有效的维度、分值和原因。')
+    if (!growthRequests.has(body.requestId)) {
+      growthRequests.add(body.requestId)
+      axis.totalPoints += points
+      axis.stageIndex = Math.max(0, growthConfig.thresholds.filter(limit => axis.totalPoints >= limit).length - 1)
+      growthEntries.unshift({ id: body.requestId, dimensionId: axis.id, dimensionName: axis.name, points, reason: body.reason, sourceType: 'manual', definitionVersion: 1, createdAt: new Date().toISOString() })
+    }
+    return result(config, growthOverview())
+  }
   if (path === '/api/todos/pending-suggestions') return result(config, { suggestions: [] })
   if (path === '/api/todos/open-chain') return result(config, { chains: clone(todos) })
   if (path === '/api/todos') return result(config, { todos: clone(todos) })

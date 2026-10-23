@@ -25,7 +25,9 @@
 .wipe-band { position:absolute; inset:0 -40%; transform:translateX(-120%) skewX(-18deg); }
 .wipe-band-back { background:var(--cyan); }
 .wipe-band-front { background:#1557ed; }
-.route-wipe > span { position:absolute; top:40%; left:9%; opacity:0; color:white; font:italic 900 clamp(60px,12vw,170px)/.8 var(--font-display); letter-spacing:-.035em; }
+.wipe-band-front::before{content:'';position:absolute;inset:8% 0;background:repeating-linear-gradient(-25deg,transparent 0 90px,#61e9ff22 90px 93px);clip-path:polygon(0 20%,100% 0,100% 80%,0 100%)}
+.wipe-band-front::after{content:'MAKE IT YOURS. / MIRROR';position:absolute;left:25%;top:68%;font:italic 900 clamp(30px,5vw,75px)/1 var(--font-display);letter-spacing:.04em;color:#b0feff50;transform:rotate(-10deg)}
+.route-wipe > span { position:absolute; top:40%; left:9%; opacity:0; color:white; font:italic 900 clamp(60px,12vw,170px)/.8 var(--font-display); letter-spacing:-.035em; text-shadow:7px 8px #042762; }
 @media(prefers-reduced-motion:reduce) {
  *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
  .route-wipe { display:none; }

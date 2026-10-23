@@ -11,6 +11,7 @@ import { useTodoPolling } from '@/composables/useTodoPolling'
 import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
+import PersonaBackdrop from '@/components/atoms/PersonaBackdrop.vue'
 import MobileHeader from '@/components/organisms/MobileHeader.vue'
 import WriteModal from '@/components/organisms/WriteModal.vue'
 import SummarySheet from '@/components/organisms/SummarySheet.vue'
@@ -104,6 +105,7 @@ watch(() => route.name, () => {
 <template>
   <div class="app" :class="`presentation-mode-${presentation.mode.value}`">
     <div class="app-water" aria-hidden="true" />
+    <PersonaBackdrop />
     <DesktopLayout><AppSidebar /></DesktopLayout>
     <main class="main">
       <div v-if="IS_DEMO_PREVIEW" class="preview-banner" role="note">
@@ -176,4 +178,13 @@ watch(() => route.name, () => {
 .preview-banner span { color: var(--cyan); font: italic 800 11px var(--font-display); letter-spacing: .08em; }
 .preview-banner i { width: 1px; height: 12px; background: #82ddeb80; }
 @media (max-width: 640px) { .preview-banner { justify-content: center; padding: 5px 8px; font-size: 9px; } }
+@media (max-height:480px) and (max-width:899px) {
+  .presentation-mode-mobile{--nav-height:52px}
+  .presentation-mode-mobile :deep(.mobile-header){min-height:44px;padding-top:0;padding-bottom:0}
+  .presentation-mode-mobile :deep(.bottom-nav){padding-top:4px;padding-bottom:4px}
+  .presentation-mode-mobile :deep(.nav-item){min-height:44px;flex-direction:row;justify-content:center;gap:3px}
+  .presentation-mode-mobile :deep(.nav-icon){width:34px;height:36px}
+  .presentation-mode-mobile :deep(.nav-create){width:50px;height:44px;flex-direction:row;gap:2px}
+  .presentation-mode-mobile :deep(.chat-page > .page-content){padding-bottom:8px}
+}
 </style>

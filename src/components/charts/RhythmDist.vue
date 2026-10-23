@@ -1,138 +1,110 @@
 <script setup>
-/**
- * RhythmDist —— 活跃节律分布（24 小时 + 一周，纯 SVG，两组共用同一高度基准）
- *
- * 左 24 根（小时桶）、右 7 根（周一=0），同一张卡内并排。
- * 关键点：两组共用 max 归一化 —— 柱高可跨组直接比较，
- * "最活跃的时段"与"最活跃的一天"放在一起才有意义（原先是两张各自归一化的独立卡）。
- *
- * 窄屏（<900px）改为上下堆叠，避免 24 根柱被压成发丝。
- */
 import { computed, ref } from 'vue'
 import { useChartMotion } from '@/motion/useChartMotion'
+import { useSceneActivity } from '@/motion/useSceneActivity'
 import ChartEmpty from './ChartEmpty.vue'
-
-const props = defineProps({
-  /** [{ bucket: 0~23, count }]，后端已补零全量 */
-  hours: { type: Array, default: () => [] },
-  /** [{ bucket: 0~6（周一=0）, count }]，后端已补零全量 */
-  weekdays: { type: Array, default: () => [] },
-})
-
-const VIEW_H = 100
-/** 无记录桶的最小底座高度（保持"刻度尺"感） */
-const MIN_H = 3
-const HOUR_TICKS = [0, 6, 12, 18, 23]
-const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-const WEEK_FULL = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-
-const hasData = computed(() => props.hours.length > 0 || props.weekdays.length > 0)
-
-/** 跨组共用峰值 */
-const max = computed(() => Math.max(0, ...[...props.hours, ...props.weekdays].map(d => d.count || 0)))
-
-/** 通用柱几何：按 bucket 补位，高度按共用 max 归一 */
-function build(list, slots, gap) {
-  return Array.from({ length: slots }, (_, i) => {
-    const count = list.find(x => x.bucket === i)?.count || 0
-    const h = count && max.value ? Math.max((count / max.value) * (VIEW_H - MIN_H), MIN_H) : MIN_H
-    return { x: i + gap / 2, w: 1 - gap, y: VIEW_H - h, h, count }
-  })
+const props = defineProps({ hours: { type: Array, default: () => [] }, weekdays: { type: Array, default: () => [] } })
+const chart = ref(null), selectedHour = ref(null), selectedWeek = ref(null)
+const active = useSceneActivity(chart)
+const weekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+const max = computed(() => Math.max(1, ...[...props.hours, ...props.weekdays].map(item => item.count || 0)))
+const hours = computed(() => Array.from({ length: 24 }, (_, i) => ({ hour: i, count: props.hours.find(item => item.bucket === i)?.count || 0 })))
+const weeks = computed(() => weekLabels.map((label, i) => ({ label, count: props.weekdays.find(item => item.bucket === i)?.count || 0 })))
+const peakHour = computed(() => hours.value.reduce((best, item) => item.count > best.count ? item : best, hours.value[0]))
+const chosen = computed(() => hours.value[selectedHour.value ?? peakHour.value.hour])
+const hasRecords = computed(() => hours.value.some(item => item.count > 0))
+const { replay } = useChartMotion(chart, () => JSON.stringify([props.hours, props.weekdays]))
+defineExpose({ replay })
+function point(hour, radius) {
+  const angle = (hour * 15 - 90) * Math.PI / 180
+  return { x: 140 + radius * Math.cos(angle), y: 140 + radius * Math.sin(angle) }
 }
-
-const hourBars = computed(() => build(props.hours, 24, 0.28))
-const weekBars = computed(() => build(props.weekdays, 7, 0.4))
-const chart = ref(null)
-useChartMotion(chart, () => JSON.stringify([hasData.value, hourBars.value.map(bar => bar.count), weekBars.value.map(bar => bar.count)]))
+function moveHour(event, index) {
+  const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+  if (!step) return
+  event.preventDefault()
+  selectedHour.value = (index + step + 24) % 24
+  chart.value.querySelectorAll('.clock-slot')[selectedHour.value]?.focus()
+}
 </script>
 
 <template>
-  <ChartEmpty v-if="!hasData" text="暂无节律数据" />
-  <div v-else ref="chart" class="rhythm">
-    <div class="rhythm-block">
-      <div class="rhythm-cap">24 小时时段</div>
-      <svg
-        class="rhythm-svg"
-        :viewBox="`0 0 24 ${VIEW_H}`"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="24 小时活跃分布"
-      >
-        <rect
-          v-for="(b, i) in hourBars"
-          :key="i"
-          class="rhythm-bar"
-          :x="b.x" :y="b.y" :width="b.w" :height="b.h"
-        >
-          <title>{{ `${String(i).padStart(2, '0')}:00 时段 · ${b.count} 条记录` }}</title>
-        </rect>
-      </svg>
-      <div class="rhythm-ticks" aria-hidden="true">
-        <span
-          v-for="t in HOUR_TICKS"
-          :key="t"
-          class="rhythm-tick"
-          :style="{ left: ((t + 0.5) / 24) * 100 + '%' }"
-        >{{ t }}</span>
+  <div ref="chart" class="rhythm-mix" :class="{ 'is-active': active }">
+    <ChartEmpty v-if="!props.hours.length && !props.weekdays.length" text="暂无节律数据 · 记录会慢慢形成你的节奏" />
+    <template v-else>
+      <div class="clock-wrap">
+        <span class="clock-tag" data-chart-reveal>24H / ON AIR</span>
+        <svg class="rhythm-clock" viewBox="0 0 280 280" role="group" aria-label="24 小时记录分布，射线长度代表记录数">
+          <circle cx="140" cy="140" r="127" class="clock-orbit" />
+          <circle cx="140" cy="140" r="63" class="clock-inner" />
+          <g v-for="(item, i) in hours" :key="i" class="clock-slot" :class="{ selected: chosen.hour === i }" role="button"
+            :tabindex="chosen.hour === i ? 0 : -1" :aria-label="String(i).padStart(2, '0') + ':00，' + item.count + ' 条记录'" :aria-pressed="chosen.hour === i"
+            @pointerenter="selectedHour = i" @focus="selectedHour = i" @click="selectedHour = i" @keydown.enter="selectedHour = i" @keydown.space.prevent="selectedHour = i" @keydown="moveHour($event, i)">
+            <line :x1="point(i, 68).x" :y1="point(i, 68).y" :x2="point(i, 121).x" :y2="point(i, 121).y" class="clock-hit" />
+            <line :x1="point(i, 69).x" :y1="point(i, 69).y" :x2="point(i, 69 + item.count / max * 49).x" :y2="point(i, 69 + item.count / max * 49).y" class="clock-spoke" :class="{ zero: !item.count }" data-chart-reveal />
+            <circle v-if="!item.count" :cx="point(i, 69).x" :cy="point(i, 69).y" r="2" class="clock-zero" />
+          </g>
+          <g class="clock-needle" :style="{ transform: 'rotate(' + chosen.hour * 15 + 'deg)' }" aria-hidden="true"><path d="M136 84 L140 72 L144 84 Z" /></g>
+          <g class="clock-copy" aria-hidden="true">
+            <text x="140" y="125" class="clock-caption">{{ selectedHour === null ? (hasRecords ? 'PEAK HOUR' : 'NO RECORDS') : 'SELECTED' }}</text>
+            <text x="140" y="153" class="clock-time">{{ String(chosen.hour).padStart(2, '0') }}:00</text>
+            <text x="140" y="174" class="clock-count">{{ chosen.count }} 条记录</text>
+          </g>
+          <g class="clock-hours" aria-hidden="true"><text x="140" y="12">00</text><text x="269" y="144">06</text><text x="140" y="278">12</text><text x="11" y="144">18</text></g>
+        </svg>
       </div>
-    </div>
-
-    <div class="rhythm-block narrow">
-      <div class="rhythm-cap">一周节奏</div>
-      <svg
-        class="rhythm-svg"
-        :viewBox="`0 0 7 ${VIEW_H}`"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="一周记录节奏"
-      >
-        <rect
-          v-for="(b, i) in weekBars"
-          :key="i"
-          class="rhythm-bar"
-          :x="b.x" :y="b.y" :width="b.w" :height="b.h"
-        >
-          <title>{{ `${WEEK_FULL[i]} · ${b.count} 条记录` }}</title>
-        </rect>
-      </svg>
-      <div class="rhythm-week" aria-hidden="true">
-        <span v-for="l in WEEK_LABELS" :key="l" class="rhythm-tick">{{ l }}</span>
+      <div class="week-mix">
+        <div class="week-caption" data-chart-reveal><strong>WEEK<br>BY WEEK.</strong><span>一周节奏</span></div>
+        <div class="week-bars" role="group" aria-label="一周记录分布">
+          <button v-for="(item, i) in weeks" :key="item.label" type="button" class="week-day" :class="{ selected: selectedWeek === i }" :aria-pressed="selectedWeek === i" :aria-label="item.label + '，' + item.count + ' 条记录'" @click="selectedWeek = i" @pointerenter="selectedWeek = i">
+            <span>{{ item.label }}</span>
+            <span class="week-rail"><i data-chart-mark :style="{ width: item.count / max * 100 + '%' }" /></span>
+            <b>{{ item.count }}</b>
+          </button>
+        </div>
       </div>
-    </div>
+      <p class="rhythm-foot" aria-live="polite">{{ String(chosen.hour).padStart(2, '0') }}:00 · {{ chosen.count }} 条<span v-if="selectedWeek !== null"> / {{ weeks[selectedWeek].label }} · {{ weeks[selectedWeek].count }} 条</span><small>射线与横条使用同一计数刻度</small></p>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.rhythm { display: flex; gap: 26px; align-items: flex-start; }
-.rhythm-block { flex: 1 1 auto; min-width: 0; }
-/* 24 槽 : 7 槽 ≈ 3.4 : 1，按槽数量分配宽度，柱宽观感一致 */
-.rhythm-block.narrow { flex: 0 0 24%; }
-
-.rhythm-cap {
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em;
-  color: var(--text-low); margin-bottom: 8px;
-}
-.rhythm-svg { display: block; width: 100%; height: 108px; }
-.rhythm-bar {
-  fill: var(--accent); opacity: .85;
-  transition: opacity .15s ease;
-}
-.rhythm-bar:hover { opacity: 1; }
-.rhythm-ticks { position: relative; height: 13px; margin-top: 4px; }
-.rhythm-tick {
-  font-family: var(--font-mono); font-size: 9.5px; color: var(--text-low);
-}
-.rhythm-ticks .rhythm-tick { position: absolute; transform: translateX(-50%); }
-.rhythm-week { display: grid; grid-template-columns: repeat(7, 1fr); height: 13px; margin-top: 4px; }
-.rhythm-week .rhythm-tick { text-align: center; }
-
-@media (min-width: 900px) { .rhythm-svg { height: 132px; } }
-/* 窄屏上下堆叠：24 根柱挤在一行会变成发丝。
-   注意 column 方向下 align-items 管的是横向——flex-start 会让子块收缩成内容宽
-   （桌面 row 方向它只管纵向，所以这个坑只在移动端炸），必须显式恢复横向拉伸 */
-@media (max-width: 899px) {
-  .rhythm { flex-direction: column; gap: 16px; }
-  .rhythm-block { align-self: stretch; }
-  .rhythm-block.narrow { flex: 1 1 auto; }
-}
+.rhythm-mix { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(105px,.8fr); gap:0 16px; color:#0b1c39; align-items:center; }
+.clock-wrap { position:relative; min-width:0; padding-top:13px; }
+.clock-tag { position:absolute; top:0; left:14px; z-index:1; padding:5px 9px; background:#ed3784; color:white; font:900 10px var(--font-display); letter-spacing:.1em; transform:rotate(-8deg); }
+.rhythm-clock { width:100%; display:block; overflow:visible; }
+.clock-orbit { fill:none; stroke:#0a275d; stroke-width:1; stroke-dasharray:23 8 3 8; transform-origin:140px 140px; animation:clock-orbit 32s linear infinite paused; }
+.is-active .clock-orbit { animation-play-state:running; }
+.clock-inner { fill:#101c35; stroke:#07bfcf; stroke-width:3; }
+.clock-hit { stroke:transparent; stroke-width:17; }
+.clock-spoke { stroke:#0b68e7; stroke-width:8; transition:stroke .2s; pointer-events:none; }
+.clock-spoke.zero { stroke:none; }
+.clock-zero { fill:#9fadb5; pointer-events:none; }
+.clock-slot { cursor:pointer; outline:none; }
+.clock-slot.selected .clock-spoke { stroke:#ed3784; }
+.clock-slot:focus-visible .clock-hit { stroke:#d2b20a; stroke-opacity:.4; }
+.clock-slot:focus-visible .clock-spoke { stroke:#96154e; }
+.clock-needle { transform-origin:140px 140px; transition:transform .55s cubic-bezier(.2,.9,.2,1.2); fill:#dfff00; }
+.clock-copy,.clock-hours { text-anchor:middle; pointer-events:none; }
+.clock-caption { font:800 8px var(--font-display); fill:#99bcd1; letter-spacing:1px; }
+.clock-time { font:italic 900 25px var(--font-display); fill:#efff53; }
+.clock-count { font:700 10px var(--font); fill:#fff; }
+.clock-hours { font:800 9px var(--font-mono); fill:#445366; }
+.week-caption { margin:0 0 15px; transform:rotate(-5deg); }
+.week-caption strong { display:block; font:italic 950 25px/.85 var(--font-display); letter-spacing:-.04em; color:#073fab; text-shadow:2px 2px #99efef; }
+.week-caption span { display:block; margin-top:8px; font-size:10px; }
+.week-day { width:100%; display:flex; align-items:center; gap:6px; min-height:30px; color:#162d4f; font-size:10px; text-align:left; }
+.week-day > span:first-child { flex:none; }
+.week-day b { font:900 13px var(--font-display); min-width:16px; text-align:right; }
+.week-rail { flex:1; background:#d3dde3; height:11px; transform:skew(-18deg); }
+.week-rail i { display:block; height:100%; background:#065be4; transition:background .2s; }
+.week-day:nth-child(even) .week-rail i { background:#039caa; }
+.week-day.selected .week-rail i { background:#e22578; }
+.week-day.selected { color:#a51959; }
+.week-day:focus-visible { outline:2px solid #bc2665; outline-offset:2px; }
+.rhythm-foot { grid-column:1/-1; margin:12px 0 0; font:800 11px var(--font-mono); border-top:1px dashed #668392; padding-top:10px; }
+.rhythm-foot small { display:block; margin-top:5px; color:#536778; font:10px var(--font); }
+@keyframes clock-orbit { to { transform:rotate(360deg); } }
+@media(max-width:599px) { .rhythm-mix { grid-template-columns:minmax(0,1fr); } .clock-wrap { max-width:280px; width:100%; margin:auto; } .week-mix { display:flex; align-items:center; gap:14px; margin-top:8px; } .week-caption { min-width:78px; } .week-caption strong { font-size:22px; } .week-bars { flex:1; } .week-day { min-height:28px; } }
+@media(prefers-reduced-motion:reduce) { .clock-orbit { animation:none; } .clock-needle,.clock-spoke,.week-rail i { transition:none; } }
 </style>

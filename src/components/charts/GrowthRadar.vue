@@ -1,65 +1,93 @@
 <script setup>
-import { computed } from 'vue'
-
-const props = defineProps({
-  axes: { type: Array, default: () => [] },
-  thresholds: { type: Array, default: () => [] },
-})
-
-const cx = 140
-const cy = 132
-const radius = 83
-const scores = computed(() => props.axes.map(axis => Math.max(0, Number(axis.total_points ?? axis.totalPoints ?? 0))))
-/** 不使用固定阶段上限：按当前最高分动态取整，低分时图形也有明显形状。 */
+import { computed, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
+import { gsap, prefersReducedMotion } from '@/motion/core'
+import { starPoint, growthStarPoints, pointsAttribute } from '@/utils/growthStar'
+import { useSceneActivity } from '@/motion/useSceneActivity'
+const props = defineProps({ axes: { type: Array, default: () => [] }, selectedId: { type: String, default: '' } })
+const root = ref(null), visible = ref(false), changing = ref(false), previousShape = ref('')
+const sceneActive = useSceneActivity(root)
+const selectionBeat = ref(0)
+const uid = useId().replace(/:/g, '')
+const motion = reactive({ v0: 0, v1: 0, v2: 0, v3: 0, v4: 0, max: 30 })
+let tween, observer, preference, entered = false
+const cx = 210, cy = 185, radius = 122
+const scoreOf = axis => Math.max(0, Number(axis?.total_points ?? axis?.totalPoints ?? 0) || 0)
+const scores = computed(() => props.axes.map(scoreOf))
 const chartMax = computed(() => {
-  const top = Math.max(0, ...scores.value)
-  if (top <= 0) return 6
-  const raw = top * 1.25
-  const magnitude = 10 ** Math.floor(Math.log10(raw))
-  const normalized = raw / magnitude
-  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 3 ? 3
-    : normalized <= 5 ? 5 : normalized <= 6 ? 6 : normalized <= 9 ? 9 : 10
-  return Math.max(6, nice * magnitude)
+  const top = Math.max(6, ...scores.value) * 1.2
+  const magnitude = 10 ** Math.floor(Math.log10(top))
+  return ([1, 2, 3, 5, 6, 9, 10].find(n => n * magnitude >= top) || 10) * magnitude
 })
-const angleFor = index => (-Math.PI / 2) + (index * 2 * Math.PI / Math.max(props.axes.length, 1))
-const pointAt = (index, scale) => {
-  const angle = angleFor(index)
-  return { x: cx + Math.cos(angle) * radius * scale, y: cy + Math.sin(angle) * radius * scale }
+const point = (index, scale = 1) => starPoint(index, scale, { cx, cy, radius })
+const polygon = scale => pointsAttribute(growthStarPoints(Array(5).fill(1), 1, { cx, cy, radius: radius * scale }))
+const vertices = computed(() => props.axes.map((_, i) => point(i, Math.min(1, motion[`v${i}`] / motion.max))))
+const shape = computed(() => pointsAttribute(growthStarPoints(Array.from({ length: 5 }, (_, i) => motion[`v${i}`]), motion.max, { cx, cy, radius })))
+const selectedIndex = computed(() => props.axes.findIndex(a => a.id === props.selectedId))
+const activePoint = computed(() => vertices.value[selectedIndex.value])
+const wedge = computed(() => {
+  if (selectedIndex.value < 0) return ''
+  const p = point(selectedIndex.value, 1.07), a = point(selectedIndex.value - .5, .38), b = point(selectedIndex.value + .5, .38)
+  return `M${cx},${cy} L${a.x},${a.y} L${p.x},${p.y} L${b.x},${b.y} Z`
+})
+function animate() {
+  if (props.axes.length !== 5) return
+  tween?.kill()
+  previousShape.value = entered ? shape.value : ''
+  const target = { max: chartMax.value }
+  scores.value.forEach((value, index) => { target[`v${index}`] = value })
+  if (prefersReducedMotion() || !visible.value) { Object.assign(motion, target); changing.value = false; return }
+  changing.value = true
+  tween = gsap.timeline({ onComplete: () => { changing.value = false } })
+  tween.to(motion, { max: target.max, duration: .9, ease: 'power3.out' }, 0)
+  scores.value.forEach((value, index) => { tween.to(motion, { [`v${index}`]: value, duration: 1.05, ease: 'elastic.out(1,.65)' }, index * .065) })
 }
-const pointsFor = scale => props.axes.map((_, index) => {
-  const point = pointAt(index, scale)
-  return `${point.x.toFixed(1)},${point.y.toFixed(1)}`
-}).join(' ')
-const rings = computed(() => [1 / 3, 2 / 3, 1].map(frac => ({
-  value: Math.round(chartMax.value * frac),
-  points: pointsFor(frac),
-})))
-const spokes = computed(() => props.axes.map((axis, index) => {
-  const end = pointAt(index, 1)
-  const label = pointAt(index, 1.3)
-  const score = Math.max(0, Number(axis.total_points ?? axis.totalPoints ?? 0))
-  return { axis, end, label, value: chartMax.value > 0 ? Math.min(score, chartMax.value) : 0, score }
-}))
-const shape = computed(() => props.axes.map((axis, index) => {
-  const score = Math.max(0, Number(axis.total_points ?? axis.totalPoints ?? 0))
-  return pointAt(index, chartMax.value > 0 ? Math.min(score / chartMax.value, 1) : 0)
-}).map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' '))
+watch(() => props.selectedId, () => { selectionBeat.value += 1 })
+function replay() { entered = false; for (let i = 0; i < 5; i++) motion[`v${i}`] = 0; animate(); entered = true }
+watch(() => JSON.stringify(props.axes.map(a => [a.id, scoreOf(a)])), () => { if (entered) animate() })
+onMounted(() => {
+  preference = matchMedia('(prefers-reduced-motion: reduce)')
+  preference.addEventListener('change', animate)
+  observer = new IntersectionObserver(([entry]) => {
+    visible.value = entry.isIntersecting
+    if (entry.isIntersecting && !entered) { animate(); entered = true }
+    else if (!entry.isIntersecting && entered) animate()
+  }, { threshold: .15 })
+  observer.observe(root.value)
+})
+onBeforeUnmount(() => { tween?.kill(); observer?.disconnect(); preference?.removeEventListener('change', animate) })
 </script>
 
 <template>
-  <div class="growth-radar-wrap">
-    <svg v-if="axes.length === 5" class="growth-radar" viewBox="0 0 280 264" role="img" :aria-label="`五维成长雷达：${axes.map(axis => `${axis.name} ${axis.total_points ?? axis.totalPoints ?? 0} 分`).join('，')}`">
-      <polygon v-for="ring in rings" :key="ring.value" :points="ring.points" class="radar-ring" />
-      <line v-for="(item, index) in spokes" :key="`spoke-${item.axis.id}`" :x1="cx" :y1="cy" :x2="item.end.x" :y2="item.end.y" class="radar-spoke" />
-      <polygon :points="shape" class="radar-area" />
-      <circle v-for="(item, index) in spokes" :key="`dot-${item.axis.id}`" :cx="pointAt(index, chartMax > 0 ? Math.min(item.score / chartMax, 1) : 0).x" :cy="pointAt(index, chartMax > 0 ? Math.min(item.score / chartMax, 1) : 0).y" r="3.5" class="radar-point" />
-      <text v-for="(item, index) in spokes" :key="`label-${item.axis.id}`" :x="item.label.x" :y="item.label.y" text-anchor="middle" class="radar-label">{{ item.axis.name }}</text>
+  <div ref="root" class="growth-radar-wrap" :class="{ 'is-visible': visible, 'is-changing': changing, 'motion-active': sceneActive }">
+    <div class="radar-index"><span aria-hidden="true">THE SHAPE OF YOU.</span><button type="button" class="radar-replay" aria-label="重播星图动效" @click="replay">↻ <span>REPLAY</span></button></div>
+    <span class="radar-ghost-word" aria-hidden="true">UNFOLD!</span>
+    <svg v-if="axes.length === 5" class="growth-radar" viewBox="0 0 420 370" role="img" :aria-label="`五维成长星图：${axes.map(axis => `${axis.name} ${scoreOf(axis)} 分`).join('，')}`">
+      <defs><linearGradient :id="`${uid}-fill`" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#1766ff"/><stop offset=".6" stop-color="#62f4ff"/><stop offset="1" stop-color="#e4ff9b"/></linearGradient></defs>
+      <g class="radar-orbit" aria-hidden="true"><circle :cx="cx" :cy="cy" r="135"/><circle :cx="cx" :cy="cy" r="145"/></g>
+      <g class="radar-debris" aria-hidden="true"><path d="M55 75l20 14-23 5Z M341 63l9 24 12-31Z M89 296l-25 20 32-5Z M339 287l27 7-17 18Z"/><path d="M113 43h16m-8-8v16 M315 321h18m-9-9v18" class="radar-sparks"/></g>
+      <polygon :points="polygon(1.07)" class="radar-shadow" transform="translate(8 10) rotate(-4 210 185)" />
+      <polygon :points="polygon(1.07)" class="radar-outline" transform="rotate(-4 210 185)" />
+      <polygon :points="polygon(1)" class="radar-field" />
+      <polygon v-for="scale in [.25, .5, .75, 1]" :key="scale" :points="polygon(scale)" class="radar-ring" />
+      <path :key="`wedge-${selectionBeat}`" :d="wedge" class="radar-wedge" />
+      <line v-for="(_, i) in axes" :key="`line-${i}`" :x1="cx" :y1="cy" :x2="point(i).x" :y2="point(i).y" class="radar-spoke" :class="{ active: i === selectedIndex }" />
+      <polygon v-if="changing && previousShape" :points="previousShape" class="radar-previous" />
+      <polygon :points="shape" class="radar-area" :fill="`url(#${uid}-fill)`" />
+      <g v-for="(p, i) in vertices" :key="axes[i].id" :class="{ active: i === selectedIndex }">
+        <path :d="`M${p.x},${p.y-5}l4 5-4 5-4-5Z`" class="radar-point" />
+        <g :transform="`translate(${point(i, 1.37).x},${point(i, 1.29).y}) rotate(${[-7,8,-6,6,-9][i]})`">
+          <path d="M-37-17L40-12 34 15-40 10Z" class="radar-label-plate" />
+          <text text-anchor="middle" y="4" class="radar-label" :font-size="axes[i].name.length > 4 ? 10 : 15">{{ axes[i].name.length > 8 ? axes[i].name.slice(0, 7) + '…' : axes[i].name }}</text>
+          <text text-anchor="middle" y="39" class="radar-score">{{ Math.round(motion[`v${i}`]) }}<tspan class="radar-unit"> PT</tspan></text>
+        </g>
+      </g>
+      <g v-if="activePoint" :key="`target-${selectionBeat}`" class="radar-target-group"><circle :cx="activePoint.x" :cy="activePoint.y" r="13" class="radar-target" /><circle :cx="activePoint.x" :cy="activePoint.y" r="27" class="radar-shockwave" /></g>
+      <path :d="`M${cx-5},${cy}h10 M${cx},${cy-5}v10`" class="radar-center" />
     </svg>
-    <div v-else class="growth-radar-unavailable" role="status">五维定义暂不可用，成长分数仍保留在下方账本中。</div>
-    <p class="growth-radar-caption">图形按当前最高分动态缩放；累计明细不会封顶。</p>
+    <p v-else class="growth-radar-unavailable" role="status">五维定义暂不可用，成长分数仍保留在账本中。</p>
+    <div class="radar-footer"><span><i /> 已确认的成长</span><span>刻度上限 {{ chartMax }}</span></div>
+    <p class="growth-radar-caption">尖端对应真实分数 · 刻度自适应 · 分数不封顶</p>
   </div>
 </template>
 
-<style scoped>
-.growth-radar-wrap{width:min(100%,320px);margin:0 auto}.growth-radar{display:block;width:100%;height:auto;overflow:visible}.radar-ring{fill:none;stroke:color-mix(in srgb,var(--on-dark,#d8e6ff) 28%,transparent);stroke-width:1}.radar-spoke{stroke:color-mix(in srgb,var(--on-dark,#d8e6ff) 24%,transparent);stroke-width:1}.radar-area{fill:color-mix(in srgb,var(--cyan,#64d8ff) 24%,transparent);stroke:var(--cyan,#64d8ff);stroke-width:2}.radar-point{fill:var(--cyan,#64d8ff);stroke:var(--night,#071a43);stroke-width:2}.radar-label{fill:var(--on-dark,#eef4ff);font-size:11px;font-weight:700}.growth-radar-caption{margin:2px 0 0;text-align:center;color:var(--on-dark,#c8d9f2);font-size:11px;line-height:1.5}.growth-radar-unavailable{padding:32px 8px;color:var(--on-dark,#c8d9f2);font-size:12px;text-align:center}
-</style>
+<style scoped src="@/assets/styles/growth-star.css"></style>

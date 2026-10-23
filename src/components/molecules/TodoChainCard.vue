@@ -127,7 +127,8 @@ function fmtDate(s) {
         tabindex="0"
         :title="originRecordId ? '打开创建这条待办的记录' : (expanded ? '收起证据链' : '展开证据链')"
         @click="onOpenOrigin"
-        @keydown.enter="onOpenOrigin"
+        @keydown.enter.self="onOpenOrigin"
+        @keydown.space.self.prevent="onOpenOrigin"
       >
         <!-- 状态圈：只读指示（状态变更唯一入口 = 记录审核页，随「确认入库」生效） -->
         <span class="chain-circle-btn" :title="`当前状态 · ${taskStatusMap[status] || '未开始'}`">
@@ -159,6 +160,7 @@ function fmtDate(s) {
           class="chain-caret-btn"
           type="button"
           :title="expanded ? '收起证据链' : '展开证据链'"
+          :aria-expanded="expanded"
           @click.stop="toggleExpand"
         >
           <svg :class="['chain-caret', { open: expanded }]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

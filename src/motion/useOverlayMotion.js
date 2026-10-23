@@ -31,6 +31,7 @@ export function useOverlayMotion(options = {}) {
       x: config.direction === 'right' ? 34 : 0,
       y: config.direction === 'right' ? 0 : (config.distance || 30),
       scale: config.scale ?? 1,
+      rotation: config.rotation ?? 0,
     })
   }
 
@@ -53,11 +54,12 @@ export function useOverlayMotion(options = {}) {
       x: entering || config.direction !== 'right' ? 0 : 22,
       y: entering || config.direction === 'right' ? 0 : (config.distance || 30),
       scale: entering ? 1 : (config.scale ?? 1),
+      rotation: entering ? 0 : (config.rotation ?? 0),
     }
     gsap.set(element, { willChange: kind === 'backdrop' ? 'opacity' : 'transform,opacity' })
     operation.animation = gsap.to(element, {
-      ...destination, duration: duration(entering ? (kind === 'backdrop' ? 240 : 320) : 220),
-      ease: entering ? 'power3.out' : 'power2.inOut', overwrite: 'auto',
+      ...destination, duration: duration(entering ? (kind === 'backdrop' ? 240 : (config.enterDuration ?? 320)) : (config.leaveDuration ?? 220)),
+      ease: entering ? (config.ease ?? 'power3.out') : 'power2.inOut', overwrite: 'auto',
       onComplete() {
         if (operations.get(element) !== operation) return
         operations.delete(element)

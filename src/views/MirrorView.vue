@@ -11,18 +11,14 @@ import { useAuthStore } from '@/stores/auth'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap } from '@/constants/tags'
 import { timeAgo } from '@/utils/time'
-import ActivityBand from '@/components/charts/ActivityBand.vue'
-import RhythmDist from '@/components/charts/RhythmDist.vue'
-import KeywordBars from '@/components/charts/KeywordBars.vue'
-import TodoRing from '@/components/charts/TodoRing.vue'
-import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
+import StatisticsDeck from '@/components/organisms/StatisticsDeck.vue'
+import PortraitCollage from '@/components/organisms/PortraitCollage.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import GrowthPanel from '@/components/organisms/GrowthPanel.vue'
 import MirrorStage from '@/components/organisms/MirrorStage.vue'
-import { beginMirrorShatter, warmMirrorShatter } from '@/composables/useMirrorShatter'
+import { beginMirrorCut as beginMirrorShatter } from '@/composables/useMirrorCut'
 import { gsap, prefersReducedMotion } from '@/motion/core'
-import { unlockGlassAudio } from '@/composables/useGlassAudio'
 
 const mirror = useMirrorStore()
 const recordsStore = useRecordsStore()
@@ -53,7 +49,6 @@ async function focusMirrorSurface() {
       focusTween = gsap.to(content, { scrollTop: Math.max(0, target), duration: prefersReducedMotion() ? 0 : .22, ease: 'power2.out', onComplete: resolve, onInterrupt: resolve })
     })
   }
-  await warmMirrorShatter(surface)
   return isUnmounted || route.name !== 'mirror' ? null : surface
 }
 watch(() => route.name, name => {
@@ -471,7 +466,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="page mirror-page" @pointerdown.capture="unlockGlassAudio" @keydown.capture="unlockGlassAudio">
+  <div class="page mirror-page">
     <div class="page-content">
       <PageMasthead title="我的镜子" english="MY REFLECTION" description="回望记录，看见这段时间的自己">
         <span class="period-caption">近 30 天</span>
@@ -765,142 +760,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- ===== 统计图区（R6 重排：色带全宽 → 三小卡 → 两卡 → portrait → 快照） ===== -->
+        <StatisticsDeck
+          :stats="statsStore" :loading="statsFirstLoad"
+          :legend="moodLegend" :summary="freqSummary" :mood-note="mirror.profile.mood_analysis"
+        />
 
-        <!-- 30 天活动带（全宽）：情绪与记录数融合在同一根时间轴上 -->
-        <div class="portrait-section card chart-card zone-start">
-          <div class="chart-head">
-            <span class="section-label">生活留下的轨迹</span>
-            <span class="chart-head-note">柱高 = 当日记录数 · 柱内按情绪占比分色</span>
-          </div>
-          <ActivityBand v-if="!statsFirstLoad" :daily="statsStore.record_daily" :moods="statsStore.mood_daily" />
-          <div v-else class="sk-block sk-activity" aria-busy="true" />
-          <div class="chart-legend">
-            <span v-for="item in moodLegend" :key="item.key" class="chart-legend-item">
-              <i class="legend-dot" :style="{ background: item.color }" />{{ item.label }}
-            </span>
-            <span v-if="freqSummary" class="chart-legend-item mono">{{ freqSummary }}</span>
-          </div>
-        </div>
-
-        <!-- 节律 + 待办完成度（桌面并排，窄屏堆叠） -->
-        <div class="chart-row-2">
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">你的生活节奏</span>
-              <span class="chart-head-note">实时统计 · 哪个时段 / 哪一天在记录</span>
-            </div>
-            <RhythmDist v-if="!statsFirstLoad" :hours="statsStore.hour_dist" :weekdays="statsStore.weekday_dist" />
-            <div v-else class="sk-block sk-rhythm" aria-busy="true" />
-          </div>
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">那些完成的事</span>
-              <span class="chart-head-note">近 30 天完成度</span>
-            </div>
-            <!-- 口径注释由 TodoRing 自带（.ring-note），此处不再重复渲染 -->
-            <div class="chart-body">
-              <TodoRing v-if="!statsFirstLoad" :todo="statsStore.todo" />
-              <div v-else class="sk-block sk-ring" aria-busy="true" />
-            </div>
-          </div>
-        </div>
-
-        <!-- 关键词 + 情绪构成（桌面并排，窄屏堆叠） -->
-        <div class="chart-row-2">
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">反复出现的关注</span>
-              <span class="chart-head-note">实时统计 · Top 10</span>
-            </div>
-            <div class="chart-body">
-              <KeywordBars v-if="!statsFirstLoad" :data="statsStore.keyword_top" />
-              <div v-else class="sk-block sk-keywords" aria-busy="true" />
-            </div>
-            <div class="chart-legend">
-              <span class="chart-legend-item">条长 = 出现次数（右侧数值，悬浮可见「出现 N 次」）</span>
-            </div>
-          </div>
-          <div class="portrait-section card chart-card">
-            <div class="chart-head">
-              <span class="section-label">最近的情绪底色</span>
-              <span class="chart-head-note">近 30 天 · 按出现次数</span>
-            </div>
-            <div class="chart-body">
-              <div v-if="moodSegments.length" class="mood-bar">
-                <div
-                  v-for="seg in moodSegments"
-                  :key="seg.key"
-                  class="mood-bar-seg"
-                  :style="{ width: seg.pct + '%', background: seg.color }"
-                />
-              </div>
-              <div v-if="moodSegments.length" class="mood-legend">
-                <div v-for="seg in moodSegments" :key="seg.key" class="mood-legend-item">
-                  <div class="mood-legend-dot" :style="{ background: seg.color }" />{{ seg.label }} {{ seg.pct }}%
-                </div>
-              </div>
-              <!-- 空态：虚线占位条 -->
-              <div v-else class="mood-empty">近 30 天无情绪数据 · 写几条带情绪的记录后自动统计</div>
-            </div>
-            <div v-if="mirror.profile.mood_analysis" class="portrait-text mood-note mood-note-card">{{ mirror.profile.mood_analysis }}</div>
-          </div>
-        </div>
-
-        <!-- AI 分析三卡 -->
-        <div class="portrait-grid zone-start">
-
-          <div class="portrait-section card">
-            <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:var(--success)">
-                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-              </div>
-              <div class="portrait-section-title">学习进展</div>
-            </div>
-            <div class="portrait-text">{{ mirror.profile.learning_analysis || '暂无学习维度分析。' }}</div>
-            <div v-if="learningEvidence.length" class="portrait-evidence">
-              <div class="portrait-evidence-label">来源 SOURCES</div>
-              <div v-for="(ev, i) in learningEvidence" :key="i" class="portrait-evidence-item">
-                <div class="evidence-dot" />
-                <span class="evidence-date">{{ ev.date }}</span>
-                <span>{{ ev.text }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="portrait-section card">
-            <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:var(--warn)">
-                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              </div>
-              <div class="portrait-section-title">未完成的事 · {{ chains.length }}</div>
-            </div>
-            <template v-if="chains.length">
-              <TodoChainCard
-                v-for="c in chains"
-                :key="`m-chain-${c.todo_id ?? c.todoId ?? c.title}`"
-                :chain="c"
-                @open-record="openTodoRecord"
-              />
-            </template>
-            <div v-else-if="todoStore.chainsLoading" class="portrait-text">加载中…</div>
-            <div v-else class="portrait-text">没有挂起的待办，干得漂亮。</div>
-          </div>
-
-          <div class="portrait-section card">
-            <div class="portrait-section-header">
-              <div class="portrait-section-icon" style="background:var(--violet)">
-                <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-              </div>
-              <div class="portrait-section-title">个人标签</div>
-            </div>
-            <div v-if="(mirror.profile.user_tags || []).length" class="user-tags">
-              <span v-for="tag in mirror.profile.user_tags" :key="tag" class="user-tag">{{ tag }}</span>
-            </div>
-            <div v-else class="portrait-text">标签将在画像生成后出现。</div>
-            <div v-if="mirror.profile.rhythm_analysis" class="portrait-text" style="margin-top:10px">{{ mirror.profile.rhythm_analysis }}</div>
-          </div>
-        </div>
+        <PortraitCollage
+          :profile="mirror.profile" :evidence="learningEvidence" :chains="chains"
+          :loading="todoStore.chainsLoading" @open-record="openTodoRecord"
+        />
       </template>
     </div>
   <Teleport to="body">
@@ -1275,51 +1143,6 @@ onBeforeUnmount(() => {
   .snapshot-node:nth-child(n), .snapshot-node.current, .snapshot-node:hover { transform: none; }
 }
 
-/* ===== 统计图区布局 ===== */
-/* 图表卡统一 flex 列：图例贴底、图表主体吃掉剩余高度（等高栅格下不再"内容堆顶、底部一片白"） */
-.chart-card { min-width: 0; display: flex; flex-direction: column; }
-.chart-body {
-  flex: 1 1 auto; min-height: 0;
-  display: flex; flex-direction: column; justify-content: center;
-}
-
-/* 首次加载骨架：高度贴近各图表实际渲染高度，加载完不跳版 */
-.sk-block {
-  border-radius: var(--radius-sm);
-  background: var(--ink-2);
-  animation: skPulse 1.3s ease-in-out infinite;
-}
-.sk-activity { height: 110px; }
-.sk-rhythm { height: 140px; }
-.sk-keywords { height: 190px; }
-.sk-ring { height: 150px; }
-@keyframes skPulse {
-  0%, 100% { opacity: .5; }
-  50% { opacity: .85; }
-}
-@media (min-width: 900px) {
-  .sk-activity { height: 168px; }   /* 图高 150 + 日期轴 18 */
-  .sk-rhythm { height: 168px; }
-}
-.chart-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  margin-bottom: 14px;
-}
-.chart-head-note { font-size: 11px; color: var(--text-low); }
-
-/* 图例行（任务 B）：小字低重，色点 6px，不抢图表 */
-.chart-legend {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px;
-  margin-top: 10px; font-size: 11px; color: var(--text-low);
-}
-.chart-legend.center { justify-content: center; }
-.chart-legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.chart-legend-item.mono { font-family: var(--font-mono); font-size: 10px; }
-.legend-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-
-/* 两卡：≥900px 一行两列（关键词列稍宽），窄屏堆叠 */
-.chart-row-2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
-@media (min-width: 900px) { .chart-row-2 { grid-template-columns: 1.4fr 1fr; } }
 
 /* portrait grid */
 .portrait-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -1346,21 +1169,6 @@ onBeforeUnmount(() => {
 .evidence-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; align-self: center; }
 .evidence-date { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); flex-shrink: 0; }
 
-/* mood-bar */
-.mood-bar { display: flex; height: 9px; border-radius: 6px; overflow: hidden; gap: 2px; }
-.mood-bar-seg { transition: width .6s ease; }
-.mood-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 11px; }
-.mood-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-mid); }
-.mood-legend-dot { width: 7px; height: 7px; border-radius: 50%; }
-/* 空态占位（虚线小条，不留整块空白卡） */
-.mood-empty {
-  padding: 7px 10px; border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-sm);
-  font-size: 11.5px; color: var(--text-low);
-}
-.mood-note { margin-top: 8px; font-size: 12.5px; }
-/* 情绪构成卡改用 chart-card 结构后，说明文字补卡内边距 */
-.mood-note-card { margin-top: 0; padding: 0 16px 14px; }
 
 /* user tags（未完成的事已升级为 TodoChainCard 证据链，.todo-row 旧样式移除） */
 .user-tags { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1430,9 +1238,6 @@ onBeforeUnmount(() => {
 .snapshot-node.current .snapshot-node-date { color: white; }
 .snapshot-viewing-tag { color: var(--cyan); }
 .snapshot-node-date { font: 700 23px var(--font-display); }
-.chart-card { border-top: 3px solid var(--electric); }
-.chart-head { align-items: center; gap: 12px; flex-wrap: wrap; }
-.chart-head .section-label { font-family: var(--font); font-size: 14px; font-weight: 800; letter-spacing: 0; }
 .portrait-section-title { font-family: var(--font); font-size: 15px; font-weight: 800; }
 .portrait-section-icon { border-radius: 2px; transform: skew(-7deg); }
 .portrait-text { line-height: 1.9; }

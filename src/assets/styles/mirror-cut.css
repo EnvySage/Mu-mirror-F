@@ -1,0 +1,7 @@
+.mirror-cut-layer{position:absolute;inset:0;z-index:8;overflow:hidden;pointer-events:none;contain:layout paint}
+.mirror-cut-shutter{position:absolute;inset:0 -12%;display:grid;place-items:center;background:#08132e;transform:skewX(-12deg);border-inline:14px solid #75eeff;box-shadow:12px 0 0 #ef3b82}
+.mirror-cut-shutter::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,transparent 0 36px,#4079d424 37px 38px)}
+.mirror-cut-word{color:#eeffff;font:italic 900 clamp(34px,5vw,74px)/1 var(--font-display);letter-spacing:-.025em;transform:rotate(-9deg);border-bottom:6px solid #f04c91}
+.mirror-cut-slash{position:absolute;inset:-20%;background:#adffff;clip-path:polygon(43% 0,48% 0,65% 100%,60% 100%);opacity:0}
+.mirror-cut-fragment{position:absolute;left:52%;top:45%;width:calc(40px + var(--shard)*11px);height:calc(70px + var(--shard)*9px);background:#88eefa;clip-path:polygon(0 28%,100% 0,76% 100%);opacity:0}
+.mirror-cut-fragment:nth-child(3n){background:#ee4c94}.mirror-cut-fragment:nth-child(3n + 1){background:#2868e7}

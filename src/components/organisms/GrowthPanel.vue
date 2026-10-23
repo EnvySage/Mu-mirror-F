@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import GrowthRadar from '@/components/charts/GrowthRadar.vue'
 import { createPrepareKey } from '@/api/actions'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 
 const growth = useGrowthStore()
 const ui = useUIStore()
@@ -17,6 +18,11 @@ const manualReason = ref('')
 const requestId = ref(makeRequestId())
 const ledgerOpen = ref(false)
 const onboardingOpen = ref(false)
+const ledgerDialog = ref(null)
+const onboardingDialog = ref(null)
+const receipt = ref(null)
+useDialogFocus(() => ledgerOpen.value, ledgerDialog, 'button', () => { ledgerOpen.value = false })
+useDialogFocus(() => onboardingOpen.value, onboardingDialog, 'button', () => { onboardingOpen.value = false })
 const axesLocked = computed(() => !!growth.axesDefinition?.locked || entries.value.length > 0)
 const presets = [
   {
@@ -59,6 +65,18 @@ const presets = [
 const thresholds = computed(() => growth.config?.thresholds || growth.config?.growth_thresholds || [])
 const manualMin = computed(() => Number(growth.config?.manual_min ?? growth.config?.manualMin ?? NaN))
 const manualMax = computed(() => Number(growth.config?.manual_max ?? growth.config?.manualMax ?? NaN))
+const pointChoices = computed(() => Number.isInteger(manualMin.value) && Number.isInteger(manualMax.value)
+  ? Array.from({ length: Math.max(0, Math.min(8, manualMax.value - manualMin.value + 1)) }, (_, i) => manualMin.value + i) : [])
+const selectedAxis = computed(() => growth.axes.find(axis => axis.id === manualDimensionId.value))
+const axisPoints = axis => Number(axis.total_points ?? axis.totalPoints ?? 0)
+function stageProgress(axis) {
+  const score = axisPoints(axis)
+  const limits = thresholds.value.map(Number).filter(Number.isFinite).sort((a, b) => a - b)
+  const next = limits.find(n => n > score)
+  const previous = [...limits].reverse().find(n => n <= score) ?? 0
+  return next ? Math.min(100, Math.max(0, (score - previous) / (next - previous) * 100)) : 100
+}
+function selectAxis(axis) { if (!growth.saving) manualDimensionId.value = axis.id }
 const entries = computed(() => growth.entries || [])
 const ready = computed(() => !!growth.overview && !!growth.config && Array.isArray(growth.axes) && growth.axes.length === 5)
 const canAddManual = computed(() => growth.axes.some(axis => axis.id === manualDimensionId.value)
@@ -85,6 +103,8 @@ async function saveAxes() {
 }
 async function addManualContribution() {
   if (!canAddManual.value || growth.saving) return
+  const confirmed = { name: selectedAxis.value?.name, points: Number(manualPoints.value), id: requestId.value }
+  receipt.value = null
   const ok = await growth.addContribution({
     dimensionId: manualDimensionId.value,
     points: Number(manualPoints.value),
@@ -92,6 +112,7 @@ async function addManualContribution() {
     requestId: requestId.value,
   })
   if (ok) {
+    receipt.value = confirmed
     manualPoints.value = ''
     manualReason.value = ''
     requestId.value = makeRequestId()
@@ -161,6 +182,7 @@ onMounted(() => {
   <section class="growth-panel" aria-labelledby="growth-panel-title">
     <header class="growth-heading">
       <div>
+        <span class="growth-kicker" aria-hidden="true">BUILD YOURSELF / 05</span>
         <h2 id="growth-panel-title">五维成长</h2>
         <p>只记录你确认过的进展；不因停更扣分。</p>
       </div>
@@ -178,12 +200,15 @@ onMounted(() => {
     <div v-else-if="!ready" class="growth-status" role="status">成长分值配置暂不可用；当前不会展示或提交分数。<button type="button" class="growth-secondary" @click="growth.refresh">重新加载</button></div>
     <template v-else-if="ready">
       <div class="growth-overview">
-        <GrowthRadar :axes="growth.axes" :thresholds="thresholds" />
+        <GrowthRadar :axes="growth.axes" :selected-id="manualDimensionId" />
         <div class="growth-axis-list" aria-label="各维度累计分数">
-          <div v-for="axis in growth.axes" :key="axis.id" class="growth-axis-row">
+          <p class="growth-select-hint">选择一个维度 <span aria-hidden="true">SELECT YOUR NEXT MOVE ↙</span></p>
+          <button v-for="(axis, index) in growth.axes" :key="axis.id" type="button" class="growth-axis-row" :style="{ '--axis': index }" :class="{ 'is-selected': manualDimensionId === axis.id }" :aria-pressed="manualDimensionId === axis.id" :disabled="growth.saving" @click="selectAxis(axis)">
+            <span class="growth-axis-index" aria-hidden="true">0{{ index + 1 }}</span>
             <div class="growth-axis-name"><strong>{{ axis.name }}</strong><small>{{ axis.description }}</small></div>
-            <div class="growth-axis-score"><b>{{ Number(axis.total_points ?? axis.totalPoints ?? 0) }}</b><span>分</span><small>阶段 {{ axis.stage_index ?? axis.stageIndex ?? '—' }}</small></div>
-          </div>
+            <div class="growth-axis-score"><b :key="axisPoints(axis)">{{ axisPoints(axis) }}</b><span>PT</span><small>阶段 {{ axis.stage_index ?? axis.stageIndex ?? '—' }}</small></div>
+            <span class="growth-axis-track" aria-hidden="true"><i :style="{ width: `${stageProgress(axis)}%` }" /></span>
+          </button>
           <p v-if="growth.stage?.label" class="growth-stage">当前阶段：{{ growth.stage.label }}</p>
         </div>
       </div>
@@ -199,11 +224,12 @@ onMounted(() => {
       </div>
 
       <form v-else class="growth-manual-form" @submit.prevent="addManualContribution">
-        <div class="growth-form-title"><h3>记下一笔进展</h3><span>手动记录 · {{ manualMin }}–{{ manualMax }} 分</span></div>
-        <label>维度<select v-model="manualDimensionId" required><option v-for="axis in growth.axes" :key="axis.id" :value="axis.id">{{ axis.name }}</option></select></label>
-        <label>分值<input v-model="manualPoints" type="number" :min="manualMin" :max="manualMax" step="1" required></label>
-        <label class="growth-reason">进展原因<textarea v-model.trim="manualReason" maxlength="500" rows="2" placeholder="记下这次具体做了什么" required /></label>
-        <div class="growth-actions"><span v-if="growth.error" class="growth-inline-error" role="alert">{{ growth.error }}</span><button type="submit" class="growth-primary" :disabled="growth.saving || !canAddManual">{{ growth.saving ? '正在保存…' : '记下这笔贡献' }}</button></div>
+        <div class="growth-form-title"><div><span class="growth-form-kicker" aria-hidden="true">MAKE A MOVE.</span><h3>给「{{ selectedAxis?.name || '成长' }}」记一笔</h3></div><span>{{ manualMin }}–{{ manualMax }} 分 · 每一步都算数</span></div>
+        <fieldset class="growth-point-picker" :disabled="growth.saving"><legend>选择分值</legend><div class="growth-point-options"><button v-for="points in pointChoices" :key="points" type="button" :class="{ active: Number(manualPoints) === points && manualPoints !== '' }" :aria-pressed="Number(manualPoints) === points && manualPoints !== ''" :aria-label="`增加 ${points} 分`" @click="manualPoints = points">+{{ points }}</button></div></fieldset>
+        <label v-if="manualMax - manualMin >= 8">自定义分值<input v-model="manualPoints" type="number" :min="manualMin" :max="manualMax" step="1" required :disabled="growth.saving"></label>
+        <label class="growth-reason">进展原因<textarea v-model.trim="manualReason" maxlength="500" rows="2" placeholder="记下这次具体做了什么" required :disabled="growth.saving" /></label>
+        <div class="growth-actions"><span v-if="growth.error" class="growth-inline-error" role="alert">{{ growth.error }}</span><span class="growth-confirm-note">确认后计入成长账本</span><button type="submit" class="growth-primary" :disabled="growth.saving || !canAddManual">{{ growth.saving ? '正在确认…' : '确认这一步' }} <span aria-hidden="true">↗</span></button></div>
+        <div class="growth-receipt-slot" aria-live="polite" aria-atomic="true"><div v-if="receipt" :key="receipt.id" class="growth-receipt"><b>+{{ receipt.points }}</b><span><strong>{{ receipt.name }} · 进展已记下</strong><small>已确认，继续走自己的节奏。</small></span><i aria-hidden="true">STEP UP!</i></div></div>
       </form>
 
     </template>
@@ -211,7 +237,7 @@ onMounted(() => {
     <Teleport to="body">
       <Transition name="ledger-drawer">
         <div v-if="ledgerOpen" class="ledger-scrim" @click.self="ledgerOpen = false">
-          <aside class="ledger-drawer" role="dialog" aria-modal="true" aria-labelledby="growth-ledger-title">
+          <aside ref="ledgerDialog" class="ledger-drawer" role="dialog" aria-modal="true" aria-labelledby="growth-ledger-title">
             <header class="ledger-head">
               <div><h3 id="growth-ledger-title">成长账本</h3><span>累计记录 · 不按近期窗口扣减</span></div>
               <button type="button" class="ledger-close" aria-label="关闭成长账本" @click="ledgerOpen = false">×</button>
@@ -236,7 +262,7 @@ onMounted(() => {
 
     <Teleport to="body">
       <div v-if="onboardingOpen" class="onboarding-scrim" @click.self="dismissOnboarding">
-        <section class="onboarding-panel" role="dialog" aria-modal="true" aria-labelledby="growth-onboarding-title">
+        <section ref="onboardingDialog" class="onboarding-panel" role="dialog" aria-modal="true" aria-labelledby="growth-onboarding-title">
           <header>
             <h3 id="growth-onboarding-title">先定义你的五维</h3>
             <p>选一套现成的，或者自己定义。开始记下第一笔成长后，五维定义会锁定。</p>
@@ -279,4 +305,38 @@ onMounted(() => {
 .preset-card b{font-size:14px}.preset-card span{color:#c7d9f5;font-size:12px}.preset-card small{color:#8fb2df;font-size:11px}
 .onboarding-panel footer{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 @media(max-width:700px){.growth-overview{grid-template-columns:1fr;gap:10px}.growth-manual-form{grid-template-columns:1fr 100px}.growth-form-title,.growth-reason,.growth-actions{grid-column:1/-1}.growth-axis-edit{grid-template-columns:1fr}.growth-entry{gap:8px}.growth-entry-points{min-width:56px}.growth-entry-points b{font-size:17px}}
+
+
+/* Ability menu: a quiet field, sharp selection, and a single confirmation beat. */
+.growth-panel{position:relative;isolation:isolate;overflow:hidden;margin-top:24px;padding:28px clamp(16px,3vw,32px) 10px;background:#06142e;border:1px solid #6ca1db66;border-top:4px solid #68f2ff}
+.growth-panel::before{content:'GROWTH';position:absolute;right:-8px;top:90px;z-index:-1;color:#10284c;font:italic 900 clamp(90px,12vw,170px)/1 var(--font-display);letter-spacing:-.04em;transform:rotate(-90deg);transform-origin:70% 80%;pointer-events:none}
+.growth-kicker{color:#70edff;font:700 12px var(--font-display);letter-spacing:.16em}.growth-heading{align-items:flex-end;flex-wrap:wrap;gap:12px}.growth-heading h2{font-size:30px;font-weight:900;letter-spacing:-.05em;margin-top:5px}.growth-heading p{font-size:11px}.growth-heading-actions{margin-bottom:4px}.growth-secondary{border-radius:0;min-height:40px}.growth-overview{grid-template-columns:minmax(220px,1fr) minmax(230px,1fr);gap:28px;padding:30px 0}
+.growth-select-hint{display:flex;justify-content:space-between;gap:8px;margin:0 0 13px;font-size:11px;color:#cae1f4}.growth-select-hint span{font:600 10px var(--font-display);letter-spacing:.06em;color:#8dabd0}
+.growth-axis-list{min-width:0;gap:7px}.growth-axis-row{position:relative;isolation:isolate;width:100%;min-height:65px;padding:10px 15px 12px 12px;gap:12px;border:0;background:transparent;color:#dfebff;text-align:left;cursor:pointer;transition:transform .24s cubic-bezier(.2,.9,.2,1),color .15s}
+.growth-axis-row::before{content:'';position:absolute;inset:0;z-index:-1;background:#11294e;clip-path:polygon(3% 0,100% 0,97% 100%,0 100%);transition:background .16s}
+.growth-axis-row.is-selected{transform:translateX(-7px);color:#04182d}.growth-axis-row.is-selected::before{background:#78efff}.growth-axis-row:not(.is-selected):hover{transform:translateX(-4px)}.growth-axis-row:not(.is-selected):hover::before{background:#1b3f6b}
+.growth-axis-index{font:italic 800 20px var(--font-display);color:#81a0c5}.is-selected .growth-axis-index{color:#156783}.growth-axis-name{flex:1;min-width:0}.growth-axis-name strong{font-size:16px;font-weight:850;overflow-wrap:anywhere}.growth-axis-name small{font-size:10px;overflow-wrap:anywhere}.is-selected .growth-axis-name small,.is-selected .growth-axis-score small,.is-selected .growth-axis-score span{color:#154a67}
+.growth-axis-score b{font:italic 800 32px/.95 var(--font-display);animation:score-arrive .45s cubic-bezier(.16,1,.3,1)}.is-selected .growth-axis-score b{color:#031a36}.growth-axis-score span{font:600 10px var(--font-display)}.growth-axis-score small{font-size:9px;margin-top:3px}.growth-axis-track{position:absolute;bottom:0;height:2px;left:14px;right:15px;background:#6a96cb30}.growth-axis-track i{display:block;height:100%;background:#5de7ff;transition:width .65s cubic-bezier(.16,1,.3,1)}.is-selected .growth-axis-track i{background:#ef4187}.growth-stage{margin:7px 0 0;text-align:right;font-size:10px}
+.growth-manual-form{grid-template-columns:1fr;gap:16px;border-top:1px solid #5588c866;padding:24px 0 0}.growth-form-title{justify-content:space-between;align-items:center;gap:12px}.growth-form-title h3{font-size:17px;margin-top:3px}.growth-form-kicker{font:italic 800 23px var(--font-display)!important;color:#76edff!important}.growth-form-title>span{font-size:10px;text-align:right}.growth-point-picker{border:0;margin:0;padding:0;min-width:0}.growth-point-picker legend{font-size:11px;color:#bcd4f0;margin-bottom:9px}.growth-point-options{display:flex;gap:8px;flex-wrap:wrap}.growth-point-options button{min-width:48px;min-height:44px;padding:5px 12px;background:#132c50;border:1px solid #4c709d;color:#dbecff;font:italic 700 24px var(--font-display);cursor:pointer;transition:transform .17s,background .17s}.growth-point-options button:hover{transform:translateY(-3px);border-color:#75efff}.growth-point-options button.active{transform:rotate(-4deg) translateY(-3px);background:#f04489;border-color:#ffa6c9;color:white;box-shadow:3px 4px 0 #021023}.growth-panel textarea,.growth-panel input{border-radius:0;background:#0c2140}.growth-panel textarea{min-height:65px}.growth-actions{flex-wrap:wrap}.growth-confirm-note{margin-right:auto;font-size:10px;color:#adc8e9}.growth-primary{min-height:44px;border-radius:0;box-shadow:4px 4px 0 #020a1b;padding:10px 18px}.growth-primary>span{margin-left:18px}.growth-primary:disabled{cursor:not-allowed}.growth-primary:not(:disabled):hover{background:#b2f7ff;transform:translateY(-2px)}
+.growth-receipt-slot{min-height:62px;grid-column:1/-1}.growth-receipt{display:flex;align-items:center;gap:12px;min-height:58px;background:#64e9ff;color:#03172e;padding:8px 15px;animation:receipt-arrive .6s cubic-bezier(.16,1,.3,1)}.growth-receipt>b{font:italic 900 39px/1 var(--font-display)}.growth-receipt strong,.growth-receipt small{display:block}.growth-receipt strong{font-size:12px}.growth-receipt small{font-size:10px;margin-top:4px}.growth-receipt i{margin-left:auto;font:italic 800 23px var(--font-display);transform:rotate(-5deg);color:#0b4364}
+.growth-panel button:focus-visible{outline:3px solid #ff9fc9;outline-offset:4px}.growth-panel textarea:focus-visible,.growth-panel input:focus-visible{outline:2px solid #78efff;outline-offset:2px}
+@keyframes score-arrive{from{transform:translateY(7px);opacity:.3}to{transform:none;opacity:1}}@keyframes receipt-arrive{0%{transform:translateX(-35px) skewX(-12deg);opacity:0}60%{transform:translateX(4px) skewX(2deg);opacity:1}100%{transform:none}}
+@media(max-width:800px){.growth-overview{grid-template-columns:1fr;gap:26px}.growth-axis-list{width:100%}.growth-panel::before{display:none}}
+@media(max-width:420px){.growth-heading h2{font-size:26px}.growth-point-options{gap:6px}.growth-point-options button{min-width:36px;padding:5px 7px;flex:1}.growth-form-title{align-items:flex-start}.growth-form-title>span{max-width:100px}.growth-receipt i{display:none}.growth-axis-row{gap:8px}.growth-axis-name strong{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.growth-axis-row,.growth-axis-row::before,.growth-axis-track i,.growth-point-options button{transition:none}.growth-axis-score b,.growth-receipt{animation:none}}
+
+</style>
+<style scoped>
+.growth-panel{border:0;border-top:0;background:transparent;padding-top:38px;overflow:hidden}
+.growth-panel::after{content:'';position:absolute;inset:8px 0 0;z-index:-2;background:linear-gradient(145deg,#102e56,#071425 60%);clip-path:polygon(0 2%,95% 0,100% 8%,100% 98%,4% 100%,0 94%)}
+.growth-panel::before{content:'ABILITY /';top:120px;right:-12px;font-size:130px;color:#3079c214;transform:rotate(-16deg);z-index:-1}
+.growth-heading{padding:0 10px 15px;border-bottom:1px solid #62badc33;transform:rotate(-1.5deg)}.growth-heading h2{display:inline-block;padding:5px 18px 7px 5px;background:#eff8e9;color:#10243e;clip-path:polygon(3% 0,100% 5%,93% 100%,0 92%);font-size:33px;text-shadow:2px 2px #71dcec}.growth-kicker{display:block;font-style:italic;color:#eaff9c;letter-spacing:.1em}.growth-heading p{margin-top:10px}
+.growth-overview{gap:25px;padding-top:27px}.growth-select-hint span{color:#d7e9a8}
+.growth-axis-row{transform:translateX(calc(var(--axis)*-3px)) rotate(-2deg);min-height:69px;padding-inline:22px 18px;transition:transform .4s cubic-bezier(.34,1.56,.64,1),color .2s}.growth-axis-row::before{background:#203853;clip-path:polygon(6% 3%,100% 0,94% 93%,0 100%)}.growth-axis-row.is-selected{transform:translateX(-14px) rotate(-4deg) scale(1.025);color:#10243a}.growth-axis-row.is-selected::before{background:#e7ff9f}.growth-axis-row:not(.is-selected):hover{transform:translateX(-10px) rotate(1deg)}.growth-axis-row.is-selected .growth-axis-index{color:#456e52}.growth-axis-row.is-selected .growth-axis-name small,.growth-axis-row.is-selected .growth-axis-score small{color:#3a5d48}.growth-axis-row.is-selected .growth-axis-track i{background:#f34885}.growth-axis-index{font-size:25px}.growth-axis-track{left:26px;right:27px;bottom:5px}
+.growth-point-options button{border:0;clip-path:polygon(8% 0,100% 8%,89% 100%,0 92%);transform:rotate(-4deg);transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .2s}.growth-point-options button:nth-child(2n){transform:rotate(3deg)}.growth-point-options button:hover{transform:translateY(-6px) rotate(8deg)}.growth-point-options button.active{background:#eaff9c;color:#172c49;transform:translateY(-5px) rotate(-11deg) scale(1.12)}
+.growth-primary{clip-path:polygon(5% 0,100% 5%,94% 100%,0 94%);padding-inline:24px;background:#ddfc98;transform:rotate(-2deg);transition:transform .25s}.growth-primary:not(:disabled):hover{transform:rotate(3deg) translateY(-4px);background:#6ff0ff}.growth-form-kicker{display:inline-block;transform:rotate(-4deg);font-size:29px!important}.growth-receipt{position:relative;isolation:isolate;background:transparent;color:#06162e;min-height:78px;padding:14px 25px;transform:rotate(-2deg);animation:point-up .85s cubic-bezier(.16,1,.3,1)}.growth-receipt::before{content:'';position:absolute;inset:0;z-index:-1;background:#eafd9b;clip-path:polygon(0 35%,20px 12%,45px 0,60px 10%,calc(100% - 25px) 0,calc(100% - 45px) 19%,100% 81%,calc(100% - 60px) 89%,calc(100% - 70px) 100%,12px 94%,20px 72%)}.growth-receipt i{font-size:35px;color:#e83479;transform:rotate(-8deg);text-shadow:2px 2px #fff}.growth-receipt>b{font-size:48px}.growth-receipt-slot{min-height:90px}
+@keyframes point-up{0%{transform:translateX(-90px) rotate(-12deg) scale(.55);opacity:0}50%{transform:translateX(12px) rotate(4deg) scale(1.08);opacity:1}75%{transform:translateX(-4px) rotate(-4deg) scale(.98)}100%{transform:rotate(-2deg)}}
+.growth-point-options button:focus-visible,.growth-primary:focus-visible{outline-offset:-4px;box-shadow:inset 0 0 0 3px #ff6bac;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:800px){.growth-axis-list{padding-left:12px}.growth-panel{padding-top:32px}.growth-overview{padding-top:13px;gap:28px}.growth-panel::after{clip-path:polygon(0 1%,91% 0,100% 4%,100% 99%,6% 100%,0 97%)}.growth-heading h2{font-size:29px}.growth-heading{padding-inline:0}.growth-axis-row.is-selected{transform:translateX(-9px) rotate(-3deg)}.growth-receipt i{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.growth-panel *{animation:none!important;transition:none!important}}
 </style>

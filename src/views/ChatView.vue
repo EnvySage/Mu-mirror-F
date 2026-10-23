@@ -22,9 +22,10 @@ import request from '@/api/request'
 import { retryDaySummary as apiRetryDaySummary } from '@/api/chat'
 import { resolveDaySummaryActions } from '@/utils/chatDaySummaryActions'
 import { useChatScroll } from '@/motion/useChatScroll'
-import { createMotionScope, duration, gsap, motionTokens, prefersReducedMotion } from '@/motion/core'
+import { createMotionScope, duration, gsap, prefersReducedMotion } from '@/motion/core'
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
+import { useSceneActivity } from '@/motion/useSceneActivity'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -50,6 +51,9 @@ const toast = useToastStore()
 const input = computed({ get: () => chat.draft, set: value => { chat.draft = value } })
 const messagesEl = ref(null)
 const inputEl = ref(null)
+const sceneEl = ref(null)
+const sceneActive = useSceneActivity(sceneEl)
+const mailDate = new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date())
 
 const showSessions = ref(false)
 const sessionsDialog = ref(null)
@@ -197,7 +201,11 @@ const vMessageEnter = {
     if (!animate || prefersReducedMotion()) return
     const scope = createMotionScope(el)
     bubbleScopes.set(el, scope)
-    scope.run(() => gsap.fromTo(el, { y: 6, opacity: .65 }, { y: 0, opacity: 1, duration: duration(motionTokens.feedback), ease: 'power2.out', clearProps: 'transform,opacity' }))
+    const user = el.classList.contains('chat-msg-user')
+    scope.run(() => gsap.fromTo(el,
+      // Horizontal distortion keeps scrollHeight stable while the bubble springs in.
+      { x: user ? 100 : -100, skewX: user ? -9 : 9, scaleX: .72, opacity: 0, transformOrigin: user ? 'right bottom' : 'left bottom' },
+      { x: 0, skewX: 0, scaleX: 1, opacity: 1, duration: duration(650), ease: 'back.out(1.65)', clearProps: 'transform,opacity,transformOrigin' }))
   },
   beforeUnmount(el) { bubbleScopes.get(el)?.dispose() },
 }
@@ -468,7 +476,7 @@ async function onRemoveSession(id) {
 </script>
 
 <template>
-  <div class="page chat-page">
+  <div ref="sceneEl" class="page chat-page" :class="{ 'motion-active': sceneActive }">
     <div class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button></PageMasthead></div>
     <ChatMemoryPanel v-if="showMemoryPanel" @close="showMemoryPanel = false" />
 
@@ -491,6 +499,13 @@ async function onRemoveSession(id) {
     <div class="page-content">
       <div class="chat-layout">
         <div class="chat-wrap">
+          <div class="phone-watermark" aria-hidden="true">TALK<br>TO ME.</div>
+          <header class="phone-header">
+            <div class="phone-brand" aria-hidden="true"><span>MAIL</span><small>MIRROR MESSENGER</small></div>
+            <div class="phone-contact"><span class="phone-avatar" aria-hidden="true">M<span>✦</span></span><div><b>另一个我</b><small>{{ chat.sending ? '正在回复…' : '你的日常，有了回响。' }}</small></div></div>
+            <span class="phone-date">{{ mailDate }}<small>TODAY'S</small></span>
+          </header>
+          <div class="phone-divider" aria-hidden="true"><span>YOU / ME / EVERY LITTLE THING</span><i /><b>↙</b></div>
           <!-- 空态（含加载中 / 失败兜底 + vault 演示入口） -->
           <div v-if="chat.messages.length === 0" class="chat-empty">
 
@@ -525,7 +540,9 @@ async function onRemoveSession(id) {
               v-message-enter="{ id: msg.id, animate: chat.sending && !chat.historyLoading }"
               :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai']"
             >
+              <span class="message-avatar" aria-hidden="true">{{ msg.role === 'user' ? 'YOU' : 'M' }}<i>✦</i></span>
               <div class="chat-msg-bubble">
+                <span class="message-sender">{{ msg.role === 'user' ? '我 / YOU' : 'MIRROR / 另一个我' }}</span>
                 <ToolTrail v-if="msg.role === 'ai'" :tools="msg.toolsUsed" />
                 <span v-if="msg.typing" class="typing-dots"><i /><i /><i /></span>
                 <template v-else-if="!msg.typing">
@@ -629,7 +646,7 @@ async function onRemoveSession(id) {
             @dragleave="onDragLeave"
             @drop.prevent="onDrop"
           >
-            <button class="chat-attach" title="添加文件" :disabled="chat.sending" @click="pickFile">
+            <button class="chat-attach" title="添加文件" aria-label="添加文件" :disabled="chat.sending" @click="pickFile">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <input ref="fileInput" type="file" hidden @change="onPickChange">
@@ -645,6 +662,7 @@ async function onRemoveSession(id) {
               @keydown="onKeydown"
             />
             <button aria-label="发送消息" :class="['chat-send', { enabled: canSend }]" :disabled="!canSend" @click="send">
+              <span class="send-word" aria-hidden="true">SEND</span>
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
@@ -924,3 +942,4 @@ async function onRemoveSession(id) {
 @media(max-width:899px){.chat-masthead-wrap{padding:0 16px}.history-btn{display:none}.chat-masthead-wrap :deep(.masthead){padding:18px 0}.chat-masthead-wrap :deep(.masthead-en){font-size:39px}.chat-empty-en{font-size:45px}.chat-empty h2{font-size:18px}.chat-prompts{margin-top:18px;gap:7px}.chat-prompts button{font-size:10px;padding:7px 11px}.chat-input-bar{padding:7px}.chat-msg-bubble{max-width:93%;font-size:13px;padding:13px 15px}}
 @media(max-height:720px){.chat-empty-en{font-size:40px}.chat-empty h2{margin-top:10px}.chat-prompts{margin-top:14px}}
 </style>
+<style scoped src="@/assets/styles/persona-chat.css"></style>
