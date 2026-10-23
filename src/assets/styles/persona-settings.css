@@ -1,0 +1,48 @@
+.settings-page .settings-identity{position:relative;isolation:isolate;overflow:hidden;max-width:1260px;margin:8px auto 36px;padding:32px 5%;min-height:210px;display:flex;gap:26px;align-items:center;border:0;background:none;transform:rotate(-1deg)}
+.settings-identity::before{content:"";position:absolute;inset:8px 0;z-index:-1;background:#23dce7;clip-path:polygon(3% 0,100% 7%,97% 90%,0 100%)}
+.settings-page .settings-emblem{font:italic 900 clamp(76px,10vw,138px)/1 var(--font-display);background:none;color:#082459;transform:rotate(-12deg);width:auto;height:auto;flex-shrink:0}
+.settings-page .settings-identity h2{position:relative;color:#092450;font:900 clamp(24px,3vw,38px)/1.15 var(--font);letter-spacing:-.04em;margin:8px 0}
+.settings-page .settings-identity p{color:#123970;margin:10px 0 0;font-size:13px;font-weight:700}
+.settings-kicker{display:inline-block;background:#0a2152;color:#e2ff53;padding:4px 12px;font:italic 900 12px var(--font-display);transform:rotate(-3deg)}
+.settings-config{position:absolute;z-index:-1;right:-12px;bottom:8px;color:#c0ffff99;font:italic 900 clamp(90px,14vw,210px)/.8 var(--font-display);letter-spacing:-.07em;transform:rotate(-10deg)}
+.settings-page .settings-console{display:grid;grid-template-columns:210px minmax(0,1fr);align-items:start;gap:36px;max-width:1260px;margin:auto;padding-bottom:28px}
+.settings-page .settings-index{position:sticky;top:24px;display:flex;flex-direction:column;gap:12px;margin:0;padding:0;min-width:0}
+.settings-index-caption{color:#8aeaff;font:italic 800 13px var(--font-display);letter-spacing:.1em;margin-bottom:8px}
+.settings-page .settings-index a{position:relative;isolation:isolate;display:flex;align-items:center;gap:10px;min-height:62px;padding:8px 12px;color:#e0f4ff;border:0;background:none;transform:rotate(-3deg);transition:transform .25s,color .25s}
+.settings-index a::before{content:"";position:absolute;z-index:-1;inset:0;background:#0a215ba6;border-left:3px solid #4ae3ff;clip-path:polygon(2% 0,100% 0,94% 100%,0 91%);transition:background .25s}
+.settings-page .settings-index a:nth-of-type(even){transform:rotate(1deg);margin-left:9px}
+.settings-page .settings-index a:hover,.settings-page .settings-index a[aria-current]{color:#071c4e;transform:translateX(8px) rotate(-4deg)}
+.settings-index a:hover::before{background:#baf8ff}.settings-index a[aria-current]::before{background:#dfff4e;border-left-color:#ff398b}
+.settings-index a small{font:italic 800 26px var(--font-display);opacity:.65}.settings-index a span{min-width:0;flex:1}.settings-index a b{display:block;font:italic 900 15px/1.1 var(--font-display)}.settings-index a em{display:block;font-style:normal;font-size:12px;margin-top:5px;font-weight:750}.settings-index a i{font-size:23px;font-style:normal}
+.settings-page .settings-wrap{width:100%;max-width:none;min-width:0;counter-reset:system-group}
+.settings-page .settings-wrap>.settings-group{position:relative;counter-increment:system-group;margin:0 0 42px;scroll-margin-top:28px;min-width:0}
+.settings-page .settings-group-title{display:inline-flex;align-items:center;gap:12px;position:relative;z-index:1;margin:0 0 -2px -5px;padding:9px 24px 9px 14px;background:#defd54;color:#0a2458;transform:rotate(-2deg);font:900 19px var(--font);letter-spacing:0;clip-path:polygon(4% 0,100% 0,94% 100%,0 90%)}
+.settings-page .settings-group-title::before{content:"0" counter(system-group);font:italic 900 30px/.9 var(--font-display);width:auto;height:auto;background:none;transform:none;flex-shrink:0}
+.settings-page .settings-group:nth-child(3n+2) .settings-group-title{background:#ff68a0}.settings-page .settings-group:nth-child(3n) .settings-group-title{background:#3ee3ee}
+.settings-page .settings-card{position:relative;isolation:isolate;padding:16px 14px 20px;background:none;border:0;border-radius:0;overflow:visible;box-shadow:none}
+.settings-card::before{content:"";position:absolute;inset:0;z-index:-1;background:#f4f7ef;clip-path:polygon(0 0,96% 0,100% 17px,99% calc(100% - 15px),96% 100%,1% calc(100% - 8px));box-shadow:inset 6px 0 #36e3ee}
+.settings-group:nth-child(even) .settings-card::before{clip-path:polygon(2% 0,100% 10px,98% 100%,0 calc(100% - 14px),0 22px)}
+.settings-page :deep(.settings-item){padding:15px 16px;border-bottom:1px dashed #a9bdd3;min-height:70px;transition:background .2s,transform .2s}
+.settings-page :deep(.settings-item[role="button"]:hover){background:#d4f5f0;transform:translateX(3px)}
+.settings-page :deep(.settings-item-icon){transform:rotate(-8deg);border-radius:0}
+.settings-page :deep(.settings-item-label){white-space:normal;font-weight:800;color:#102956}
+.settings-page :deep(.settings-item-desc){white-space:normal;max-width:none;overflow-wrap:anywhere;line-height:1.6;color:#52667e}
+.settings-page .settings-note{color:#bce3f7;font-size:12px;line-height:1.8;padding:12px 16px 0;overflow-wrap:anywhere}
+.settings-page .settings-card .settings-note{color:#536580}
+.settings-page .presentation-setting,.settings-page .record-mode-setting{gap:14px;flex-wrap:wrap;padding:16px}
+.settings-page .presentation-setting select{border:2px solid #12346b;border-radius:0;max-width:100%;background:#e6f1ff}
+.settings-page .presentation-buttons button,.settings-page .protocol-chips .chip,.settings-page .test-btn{border-radius:0;border:0;min-height:40px;padding:9px 15px;background:#dce8fa;color:#12356e;box-shadow:3px 3px 0 #b4c5df;transform:skew(-5deg);font-weight:800;transition:transform .2s,background .2s}
+.settings-page .presentation-buttons button[aria-pressed="true"],.settings-page .protocol-chips .chip.selected{background:#124cfa;color:#fff;box-shadow:4px 4px 0 #ff5794}
+.settings-page .test-btn:hover{background:#cfff54;transform:translateY(-2px) skew(-5deg)}
+.settings-page .protocol-chips{flex-wrap:wrap;gap:10px}.settings-page .test-row{padding:10px 16px}
+.settings-page :deep(.toggle){border-radius:2px;transform:skew(-8deg);box-shadow:3px 3px 0 #172e5a30}.settings-page :deep(.toggle::after){border-radius:0}
+.settings-page .settings-load-error{max-width:1260px;margin:0 auto 20px;padding:16px;background:#ffdae6;color:#842947;clip-path:polygon(1% 0,100% 0,99% 100%,0 100%)}
+.settings-page :deep(:focus-visible){outline:3px solid #ff3886;outline-offset:4px}
+.system-edit{position:relative;isolation:isolate;border:0!important;border-radius:0!important;background:#f5f6ed!important;box-shadow:12px 12px 0 #ff478b!important;transform:rotate(-1deg);animation:system-pop .35s cubic-bezier(.2,.9,.2,1.2)}
+.system-edit::before{content:"EDIT / CONFIG";display:block;padding:10px 24px;background:#153fcb;color:#e1ff5b;letter-spacing:.15em;font:italic 900 14px var(--font-display);transform:skewY(-2deg)}
+.system-edit .modal-header{border-bottom:2px solid #173870}.system-edit .modal-input{border-radius:0;border:2px solid #2259c1;background:white;padding:13px}
+.system-edit .btn-save{background:#164ffa;color:white;border-radius:0;box-shadow:4px 4px 0 #d6fb4a}.system-edit .modal-close{min-width:40px;min-height:40px}
+@keyframes system-pop{from{opacity:0;transform:translateX(45px) rotate(6deg)}to{opacity:1;transform:rotate(-1deg)}}
+@media(max-width:1100px){.settings-page .settings-console{grid-template-columns:175px minmax(0,1fr);gap:24px}.settings-index a b{font-size:13px}.settings-page .settings-index a{padding:8px}.settings-page .settings-identity{margin-bottom:28px}}
+@media(max-width:760px){.settings-page .settings-console{display:block}.settings-page .settings-index{position:relative;top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 28px;padding:0 4px}.settings-index-caption{grid-column:1/-1}.settings-page .settings-index a{min-height:54px;padding:8px;margin:0!important}.settings-index a small{font-size:21px}.settings-index a b{font-size:12px}.settings-index a em{font-size:11px}.settings-index a i{display:none}.settings-page .settings-index a:hover,.settings-page .settings-index a[aria-current]{transform:rotate(-3deg) translateY(-2px)}.settings-page .settings-identity{padding:25px 18px;gap:15px;min-height:180px}.settings-page .settings-emblem{font-size:74px}.settings-kicker{font-size:9px;padding:5px 6px}.settings-config{font-size:98px;bottom:18px}.settings-page .settings-group-title{font-size:17px}.settings-page .settings-card{padding:14px 7px 20px}.settings-page :deep(.settings-item){padding:14px 10px}.settings-page .presentation-setting{padding:13px 10px}.settings-page .presentation-buttons{flex-wrap:wrap}.system-edit{max-width:calc(100vw - 40px);box-shadow:7px 7px 0 #ff478b!important}.settings-page .glossary-toolbar{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.settings-page *,.system-edit{animation:none!important;transition:none!important}}

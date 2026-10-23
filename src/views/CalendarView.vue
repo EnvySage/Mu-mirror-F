@@ -9,12 +9,16 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 import CalendarWidget from '@/components/molecules/CalendarWidget.vue'
 import RecordCard from '@/components/molecules/RecordCard.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
+import DateTurnOverlay from '@/components/atoms/DateTurnOverlay.vue'
+import { prefersReducedMotion } from '@/motion/core'
 
 const router = useRouter()
 const recordsStore = useRecordsStore()
 const ui = useUIStore()
 
 const selectedDate = ref(null)
+const dateTurn = ref(null)
+let turnSerial = 0
 const filterInfo = ref('按月标记，点击日期看当天')
 
 /**
@@ -37,6 +41,9 @@ function dayKey(date) {
 }
 
 function onDateSelect(date) {
+  if (selectedDate.value && dayKey(date) !== dayKey(selectedDate.value) && !prefersReducedMotion()) {
+    dateTurn.value = { from:new Date(selectedDate.value), to:new Date(date), serial:++turnSerial }
+  }
   selectedDate.value = date
   filterInfo.value = formatFullDate(date)
   recordsStore.fetchDayRecords(dayKey(date))
@@ -74,15 +81,18 @@ onMounted(() => {
             :model-value="selectedDate"
             @select-date="onDateSelect"
             @pick-date="onDateDouble"
+            @change-month="onDateSelect"
           />
         </div>
 
         <div v-if="selectedDate" class="calendar-records">
+          <header class="agenda-heading"><span>DAILY LOG / {{ selectedDate.getFullYear() }}</span><div><strong>{{ String(selectedDate.getMonth()+1).padStart(2,'0') }}<i>/</i>{{ String(selectedDate.getDate()).padStart(2,'0') }}</strong><b>{{ ['SUN','MON','TUE','WED','THU','FRI','SAT'][selectedDate.getDay()] }}<small>{{ ['周日','周一','周二','周三','周四','周五','周六'][selectedDate.getDay()] }}</small></b></div><p>把普通的一天，留在这里。</p></header>
           <div v-if="recordsStore.dayRecordsLoading || !daySynced" class="empty-state" style="padding:34px 0">
             <div class="empty-title">加载中…</div>
           </div>
           <div v-else-if="recordsStore.dayRecordsError" class="empty-state" style="padding:34px 0">
             <div class="empty-title">{{ recordsStore.dayRecordsError }}</div>
+            <button class="agenda-retry" @click="recordsStore.fetchDayRecords(dayKey(selectedDate))">重新加载当天记录 ↗</button>
           </div>
           <div v-else-if="filteredRecords.length === 0" class="empty-state" style="padding:34px 0">
             <div class="empty-title">这一天没有记录</div>
@@ -105,8 +115,11 @@ onMounted(() => {
         <aside v-else class="calendar-invitation"><span aria-hidden="true">DAY BY DAY</span><div><h2>选个日子，<br>重逢那天的你。</h2><p>点亮的日期里，藏着你留下的生活。<br>选择一天，看看当时发生了什么。</p></div></aside>
       </div>
     </div>
+    <Teleport to="body"><DateTurnOverlay v-if="dateTurn" :key="dateTurn.serial" :from="dateTurn.from" :to="dateTurn.to" @done="dateTurn = null" /></Teleport>
   </div>
 </template>
+
+<style scoped src="@/assets/styles/persona-calendar.css"></style>
 
 <style scoped>
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }

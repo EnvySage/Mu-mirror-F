@@ -8,7 +8,7 @@ const props = defineProps({
   modelValue: { type: Date, default: null },
 })
 
-const emit = defineEmits(['selectDate', 'pickDate', 'update:modelValue'])
+const emit = defineEmits(['selectDate', 'pickDate', 'update:modelValue', 'changeMonth'])
 
 const recordsStore = useRecordsStore()
 
@@ -75,6 +75,7 @@ function changeMonth(delta) {
   monthMotion.change(() => {
     displayedDate.value = new Date(calendarDate.value)
     selectedDate.value = null
+    if (props.mode === 'full') emit('changeMonth', new Date(displayedDate.value))
   }, delta)
 }
 
@@ -108,7 +109,7 @@ function selectDay(dayObj) {
     </div>
       <div ref="monthGrid" class="calendar-grid">
         <div class="calendar-weekdays">
-          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          <span>日<small v-if="mode === 'full'">SUN</small></span><span>一<small v-if="mode === 'full'">MON</small></span><span>二<small v-if="mode === 'full'">TUE</small></span><span>三<small v-if="mode === 'full'">WED</small></span><span>四<small v-if="mode === 'full'">THU</small></span><span>五<small v-if="mode === 'full'">FRI</small></span><span>六<small v-if="mode === 'full'">SAT</small></span>
         </div>
         <div class="calendar-days">
           <button
@@ -118,7 +119,7 @@ function selectDay(dayObj) {
             type="button" :disabled="d.otherMonth" :aria-pressed="!!d.isSelected"
             :aria-label="`${year}年${month + 1}月${d.day}日${d.hasRecord ? '，有记录' : ''}`"
             @click="selectDay(d)"
-          >{{ d.day }}</button>
+          ><span>{{ d.day }}</span><small v-if="mode === 'full' && d.isToday" class="calendar-today-label">TODAY</small></button>
         </div>
       </div>
     <div class="calendar-legend">

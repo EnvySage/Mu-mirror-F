@@ -12,6 +12,9 @@ import SettingsItem from '@/components/molecules/SettingsItem.vue'
 import TermCard from '@/components/molecules/TermCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import { usePresentationMode } from '@/composables/usePresentationMode'
+import { useDialogFocus } from '@/composables/useDialogFocus'
+import { prefersReducedMotion } from '@/motion/core'
+import { usePaperEntrance } from '@/motion/usePaperEntrance'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
@@ -21,6 +24,28 @@ const glossary = useGlossaryStore()
 const ui = useUIStore()
 const presentation = usePresentationMode()
 const homePage = ref(localStorage.getItem('mirror.home-page') || 'auto')
+const scrollArea = ref(null)
+usePaperEntrance(scrollArea, () => true, '.settings-identity, .settings-group')
+const activeSection = ref('settings-presentation')
+const sections = [
+  ['presentation', 'DISPLAY', '页面呈现'], ['model', 'CONNECTION', 'AI 模型连接'],
+  ['embedding', 'RETRIEVAL', '记忆检索'], ['authorization', 'PERMISSION', 'AI 使用与授权'],
+  ['glossary', 'LEXICON', '个人词典'], ['memory', 'MEMORY', '镜子的记忆'], ['data', 'ARCHIVE', '数据与账号'],
+]
+function trackSection() {
+  const root = scrollArea.value
+  if (!root) return
+  const top = root.getBoundingClientRect().top + Math.min(200, root.clientHeight * .35)
+  const groups = [...root.querySelectorAll('.settings-group')]
+  activeSection.value = (groups.filter(el => el.getBoundingClientRect().top <= top).at(-1) || groups[0])?.id
+}
+function jumpSection(id) {
+  const root = scrollArea.value
+  const target = root?.querySelector('#' + id)
+  if (!target) return
+  activeSection.value = id
+  root.scrollTo({ top: root.scrollTop + target.getBoundingClientRect().top - root.getBoundingClientRect().top - 22, behavior: prefersReducedMotion() ? 'instant' : 'smooth' })
+}
 
 function setHomePage(value) {
   homePage.value = value
@@ -158,6 +183,8 @@ async function onLookbackChange(val) {
 }
 
 const showEditModal = ref(false)
+const editDialog = ref(null)
+useDialogFocus(() => showEditModal.value, editDialog, '.modal-input', () => { showEditModal.value = false })
 const editField = ref('')
 const editLabel = ref('')
 const editValue = ref('')
@@ -252,11 +279,15 @@ function handleLogout() {
 
 <template>
   <div class="page settings-page">
-    <div class="page-content">
+    <div ref="scrollArea" class="page-content" @scroll.passive="trackSection">
       <PageMasthead title="设置" english="SYSTEM" description="让镜子按你的方式，理解你的生活" />
-      <div class="settings-identity"><span class="settings-emblem" aria-hidden="true">M/</span><div><h2>你的镜子，由你设定。</h2><p>{{ auth.user?.username || 'Mirror' }} 的个人空间</p></div></div>
-      <nav class="settings-index" aria-label="设置分区"><a href="#settings-model">模型连接</a><a href="#settings-glossary">个人词典</a><a href="#settings-memory">镜子的记忆</a><a href="#settings-data">数据与账号</a></nav>
+      <div class="settings-identity"><span class="settings-config" aria-hidden="true">CONFIG!</span><span class="settings-emblem" aria-hidden="true">M/</span><div><span class="settings-kicker">MAKE YOUR OWN RULES</span><h2>你的镜子，<br>由你设定。</h2><p>{{ auth.user?.username || 'Mirror' }} 的个人空间</p></div></div>
       <div v-if="settingsStore.error" class="settings-load-error" role="alert">{{ settingsStore.error }}<button class="p3-link" @click="settingsStore.fetchSettings()">重试</button></div>
+      <div class="settings-console">
+      <nav class="settings-index" aria-label="设置分区">
+        <span class="settings-index-caption" aria-hidden="true">TUNE YOUR MIRROR ↘</span>
+        <a v-for="([id, english, label], index) in sections" :key="id" :href="'#settings-' + id" :aria-current="activeSection === 'settings-' + id ? 'location' : undefined" @click.prevent="jumpSection('settings-' + id)"><small>0{{ index + 1 }}</small><span><b>{{ english }}</b><em>{{ label }}</em></span><i aria-hidden="true">↗</i></a>
+      </nav>
       <div class="settings-wrap">
       <div class="settings-group" id="settings-presentation">
         <div class="settings-group-title">页面呈现</div>
@@ -355,7 +386,7 @@ function handleLogout() {
         </div>
       </div>
 
-      <div class="settings-group">
+      <div class="settings-group" id="settings-authorization">
         <div class="settings-group-title">AI 使用与授权</div>
         <div class="settings-card card">
           <div class="record-mode-setting">
@@ -568,9 +599,10 @@ function handleLogout() {
       </div>
 
       <!-- 编辑弹窗 -->
+      </div>
       <Teleport to="body">
         <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-          <div class="modal-content" role="dialog" aria-modal="true" :aria-label="editLabel">
+          <div ref="editDialog" class="modal-content system-edit" role="dialog" aria-modal="true" :aria-label="editLabel" tabindex="-1">
             <div class="modal-header">
               <h3>{{ editLabel }}</h3>
               <button class="modal-close" title="关闭" @click="showEditModal = false">
@@ -599,7 +631,7 @@ function handleLogout() {
                 class="modal-input"
                 :aria-label="editLabel"
                 :placeholder="editPlaceholder"
-                @keyup.enter="saveEdit"
+                @keydown.enter.prevent="saveEdit"
               >
             </div>
             <div class="modal-footer">
@@ -865,3 +897,4 @@ input[type="range"] { width: 100%; margin-top: 10px; accent-color: var(--accent)
 .settings-load-error{display:flex;gap:20px;justify-content:space-between;color:#ffadc6;margin-bottom:20px;font-size:12px}
 @media(max-width:599px){.settings-identity{padding:20px}.settings-identity h2{font-size:18px}.settings-index{gap:8px 20px}.settings-index a{font-size:11px}.settings-emblem{font-size:48px}}
 </style>
+<style scoped src="@/assets/styles/persona-settings.css"></style>

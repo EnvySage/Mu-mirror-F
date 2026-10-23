@@ -60,6 +60,7 @@ const growthReviewVersion = ref(null)
 const growthTouched = ref(false)
 const growthReviewMin = computed(() => Number(growth.config?.review_min ?? growth.config?.reviewMin ?? NaN))
 const growthReviewMax = computed(() => Number(growth.config?.review_max ?? growth.config?.reviewMax ?? NaN))
+const growthReviewConfigured = computed(() => Number.isFinite(growthReviewMin.value) && Number.isFinite(growthReviewMax.value))
 const chunkNodes = ref([])
 const sameSet = (a, b) => a.size === b.size && [...a].every((id) => b.has(id))
 watch(() => props.proposal?.id, () => { candidateEditing.value = true })
@@ -377,14 +378,14 @@ function onAddChunk() {
 
     <section v-if="editable" class="review-growth" aria-label="本条记录的成长贡献">
       <div class="review-list-label"><span>本条记录的成长贡献</span><span>只在完整入库后入账</span></div>
-      <p v-if="growth.config" class="review-growth-note">AI 建议仅供参考。按这条记录里具体发生的事调整 {{ growthReviewMin }}–{{ growthReviewMax }} 分；不选记忆片段或入库降级时不会加分，之后可独立手动记一笔。</p>
+      <p v-if="growthReviewConfigured" class="review-growth-note">AI 建议仅供参考。按这条记录里具体发生的事调整 {{ growthReviewMin }}–{{ growthReviewMax }} 分；不选记忆片段或入库降级时不会加分，之后可独立手动记一笔。</p>
       <p v-else class="review-growth-note" role="status">五维分值配置暂不可用；本次记录审核仍可继续，但不会记成长分。</p>
       <p v-if="growthDefinitionChanged" class="review-growth-warning" role="alert">五维定义在审核期间发生变化，当前分数不能确认。请按新定义重新审核。</p>
       <p v-else-if="growth.axesDefinition && growthDraft.length !== 5" class="review-growth-note">正在读取五维定义…</p>
       <div v-else-if="!growth.axesDefinition" class="review-growth-note" role="status">五维定义暂不可用；本次记录审核仍可继续，但不会记成长分。</div>
       <div v-for="(item, index) in growthDraft" :key="item.dimensionId" class="review-growth-row">
         <div><b>{{ item.name }}</b><small>{{ item.description }}</small></div>
-        <label><span>分数</span><input :value="item.points" type="number" :min="growthReviewMin" :max="growthReviewMax" step="1" :disabled="authorizationBusy || growthDefinitionChanged || !growth.config" :aria-label="`${item.name}成长分数`" @input="updateGrowth(index, 'points', $event.target.value)"></label>
+        <label><span>分数</span><input :value="item.points" type="number" :min="growthReviewConfigured ? growthReviewMin : undefined" :max="growthReviewConfigured ? growthReviewMax : undefined" step="1" :disabled="authorizationBusy || growthDefinitionChanged || !growthReviewConfigured" :aria-label="`${item.name}成长分数`" @input="updateGrowth(index, 'points', $event.target.value)"></label>
         <label class="review-growth-reason"><span>本条依据</span><input :value="item.reason" maxlength="500" :disabled="authorizationBusy || growthDefinitionChanged" :aria-label="`${item.name}贡献原因`" placeholder="有具体进展再填写" @input="updateGrowth(index, 'reason', $event.target.value)"></label>
       </div>
       <button v-if="growthDefinitionChanged" type="button" class="growth-recheck" :disabled="authorizationBusy" @click="recheckGrowthDefinition">按新定义重新审核</button>

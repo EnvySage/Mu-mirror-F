@@ -72,6 +72,7 @@ export const useRecordsStore = defineStore('records', () => {
   const dayRecordsKey = ref(null)
   const dayRecordsLoading = ref(false)
   const dayRecordsError = ref(null)
+  let dayRequestGeneration = 0
 
   const totalCount = computed(() => records.value.length)
 
@@ -128,20 +129,23 @@ export const useRecordsStore = defineStore('records', () => {
    * @returns {Promise<Record[]>}
    */
   async function fetchDayRecords(dateStr) {
+    const generation = ++dayRequestGeneration
     dayRecordsKey.value = dateStr
     dayRecordsLoading.value = true
     dayRecordsError.value = null
     try {
       const res = await apiGetRecords({ startDate: dateStr, endDate: dateStr })
+      if (generation !== dayRequestGeneration) return []
       dayRecords.value = res.data || []
       return dayRecords.value
     } catch (err) {
+      if (generation !== dayRequestGeneration) return []
       dayRecords.value = []
       dayRecordsError.value = err.message || '获取当天记录失败'
       console.error('Failed to fetch day records:', err)
       return []
     } finally {
-      dayRecordsLoading.value = false
+      if (generation === dayRequestGeneration) dayRecordsLoading.value = false
     }
   }
 
@@ -153,7 +157,7 @@ export const useRecordsStore = defineStore('records', () => {
   async function fetchRecord(id, { isCurrent = () => true } = {}) {
     try {
       const res = await apiGetRecord(id)
-      if (!isCurrent()) return null
+      if (!isCurrent() || !res.data) return null
       // 更新本地缓存
       const index = records.value.findIndex(r => String(r.id) === String(id))
       if (index !== -1) {

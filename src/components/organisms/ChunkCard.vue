@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, computed, watch, ref, nextTick } from 'vue'
+import { reactive, computed, watch, ref, nextTick, onBeforeUnmount } from 'vue'
 import { CONTENT_TYPES, ALL_MOODS, TASK_STATUSES, typeMap, taskStatusMap } from '@/constants/tags'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { useRecordsStore } from '@/stores/records'
@@ -86,14 +86,26 @@ watch(() => props.chunk.metadata, (metadata) => {
   edit.userTags = (metadata?.userTags ?? metadata?.user_tags ?? metadata?.tags ?? []).join('，')
 })
 
-/** 新增空片段自动聚焦 */
+/** Fit existing text immediately, and refit when the paper width changes. */
+let textResize
 watch(textareaEl, async (el) => {
-  if (el && isNew.value && !edit.segment) {
+  textResize?.disconnect()
+  if (el) {
     await nextTick()
+    autoGrow(el)
+    let width = el.clientWidth
+    textResize = new ResizeObserver(() => {
+      if (el.clientWidth !== width) { width = el.clientWidth; autoGrow(el) }
+    })
+    textResize.observe(el)
+  }
+  if (el && isNew.value && !edit.segment) {
     el.focus()
     el.placeholder = '写下新片段…（保存后 AI 自动单段分类）'
   }
 })
+watch(() => edit.segment, async () => { await nextTick(); if (textareaEl.value) autoGrow(textareaEl.value) })
+onBeforeUnmount(() => textResize?.disconnect())
 
 function autoGrow(el) {
   el.style.height = 'auto'
@@ -249,6 +261,7 @@ async function removeChunk() {
       ref="textareaEl"
       v-model="edit.segment"
       class="chunk-segment"
+      :aria-label="`片段 ${index + 1} 原文`"
       rows="1"
       :disabled="saving"
       @input="onSegmentInput"

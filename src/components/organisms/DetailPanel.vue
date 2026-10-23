@@ -12,6 +12,7 @@ import { createPrepareKey } from '@/api/actions'
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { formatFullDate } from '@/utils/time'
+import { usePaperEntrance } from '@/motion/usePaperEntrance'
 
 const ui = useUIStore()
 const recordsStore = useRecordsStore()
@@ -53,6 +54,12 @@ onBeforeUnmount(removeDetailGuard)
 const record = computed(() => {
   if (!ui.selectedRecordId) return null
   return recordsStore.getById(ui.selectedRecordId)
+})
+usePaperEntrance(readerEl, () => record.value?.id, '.detail-folio, .review-original, .record-only-view, .review-growth, .chunk-review-item')
+const journalDate = computed(() => {
+  const date = new Date(record.value?.created_at)
+  if (Number.isNaN(date.getTime())) return null
+  return { day: String(date.getDate()).padStart(2, '0'), month: String(date.getMonth() + 1).padStart(2, '0'), year: date.getFullYear(), weekday: date.toLocaleDateString('en', { weekday: 'long' }).toUpperCase() }
 })
 const memoryState = computed(() => String(record.value?.memory_state ?? record.value?.memoryState ?? (['reviewing', 'record_only'].includes(record.value?.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
 const memoryFailureReason = computed(() => record.value?.memory_failure_reason ?? record.value?.memoryFailureReason ?? record.value?.memory_error ?? record.value?.memoryError ?? '')
@@ -538,6 +545,11 @@ async function deleteRecord() {
           <div v-if="loadingRecord && !record" class="detail-load-state" role="status"><span class="spinner" /> 正在载入这段记录…</div>
           <div v-else-if="detailError && !record" class="detail-load-state" role="alert"><p>{{ detailError }}</p><button class="detail-confirm" @click="retryLoad">重试</button><button class="detail-back" @click="close">返回列表</button></div>
           <template v-else-if="record">
+          <header class="detail-folio" data-chart-reveal>
+            <div class="folio-type"><span>KEEP A LITTLE OF TODAY.</span><h2>这一天，<br><em>值得留下。</em></h2><b>MY JOURNAL / 私人存档</b></div>
+            <div v-if="journalDate" class="folio-date"><span>{{ journalDate.year }} / {{ journalDate.month }}</span><strong>{{ journalDate.day }}</strong><em>{{ journalDate.weekday }}</em></div>
+            <span class="folio-spark" aria-hidden="true">✳</span>
+          </header>
           <div v-if="actionError" class="detail-error">{{ actionError }}</div>
           <ActionCard v-if="preparedRecordAction" :proposal="preparedRecordAction" hide-edit @updated="onRecordActionUpdated" />
           <ActionCard v-if="memoryLifecycleAction" :proposal="memoryLifecycleAction" hide-edit @updated="onMemoryLifecycleUpdated" />
@@ -729,3 +741,4 @@ async function deleteRecord() {
 @media(max-width:760px) { .detail-reader :deep(.chunk-card) { padding:18px; clip-path:polygon(0 0,calc(100% - 13px) 0,100% 13px,100% 100%,10px 100%,0 calc(100% - 10px)); } .detail-reader :deep(.chunk-card)::before { transform:translate(4px,4px); clip-path:polygon(0 0,calc(100% - 13px) 0,100% 13px,100% 100%,10px 100%,0 calc(100% - 10px)); } }
 @media(prefers-reduced-motion:reduce) { .detail-page,.detail-reader,.detail-reader :deep(.review-original),.detail-reader :deep(.chunk-review-item),.detail-reader :deep(.chunk-top),.detail-reader :deep(.chunk-segment),.detail-reader :deep(.chunk-field:nth-of-type(n+2)) { animation:none!important; transition:none!important; } }
 </style>
+<style scoped src="@/assets/styles/persona-detail.css"></style>

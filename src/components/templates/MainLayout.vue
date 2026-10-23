@@ -138,7 +138,7 @@ watch(() => route.name, () => {
 
 <style scoped>
 .app { position: relative; isolation: isolate; z-index: 1; display: flex; height: 100dvh; background: #06123f; }
-.app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, #03133d99, #06123fe8 75%), url('/art/water-surface.webp') center top / cover; }
+.app-water { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(155deg, #073e8588, #092d73c9 58%, #061746e3), url('/art/water-surface.webp') center top / cover; }
 /* Let the mobile column shrink so each page can scroll within the viewport. */
 .main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 @media (min-width: 900px) {
