@@ -104,11 +104,60 @@ export const useChatStore = defineStore('chat', () => {
   /** 历史加载中 / 网络失败（ChatView 据此展示空态文案，后端未起时不白屏） */
   const historyLoading = ref(false)
   const historyError = ref(false)
+  /** 刷新时上一轮回答仍在后端生成：显示占位并轮询，落库后自动补上 */
+  const recovering = ref(false)
+  let recoveryTimer = null
+  let recoveryToken = 0
 
   /** 中断当前流（仅显式切换会话或新建会话时） */
   let abortController = null
   let activeAiMessage = null
   let pendingRetry = null
+
+  function stopRecovery() {
+    recoveryToken += 1
+    if (recoveryTimer) clearTimeout(recoveryTimer)
+    recoveryTimer = null
+    recovering.value = false
+  }
+
+  /**
+   * 刷新后若最后一条是刚发出的 user 消息、还没有 assistant，说明后端仍在生成。
+   * 轮询会话，等 assistant 落库后一次性替换；超过 2 分钟停止，避免无限请求。
+   */
+  function maybeStartRecovery(sessionIdToLoad, list) {
+    const last = list[list.length - 1]
+    if (!last || last.role !== 'user') return
+    const ts = Date.parse(String(last.createdAt || '').replace(' ', 'T'))
+    if (!Number.isFinite(ts) || Date.now() - ts > 5 * 60 * 1000) return
+    stopRecovery()
+    const token = recoveryToken
+    const assistantCount = list.filter(message => message.role === 'ai').length
+    let attempts = 0
+    recovering.value = true
+    const tick = async () => {
+      if (token !== recoveryToken) return
+      attempts += 1
+      try {
+        const res = await apiGetSession(sessionIdToLoad)
+        const serverMessages = res.data?.messages || []
+        if (serverMessages.filter(message => message.role === 'assistant').length > assistantCount) {
+          await loadSession(sessionIdToLoad, { preserveLocalState: true, recovery: true, force: true })
+          return
+        }
+      } catch {
+        // 网络抖动继续重试
+      }
+      if (token !== recoveryToken) return
+      if (attempts >= 60) {
+        stopRecovery()
+        return
+      }
+      recoveryTimer = setTimeout(tick, 2000)
+    }
+    recoveryTimer = setTimeout(tick, 2000)
+  }
+
   /** 用户当前应用会话内操作过对话后，不再用自动恢复覆盖本地消息 */
   let hasLocalChatActivity = false
   /** 合并同一时刻的自动恢复调用（路由重复挂载时只发一次历史请求） */
@@ -249,12 +298,16 @@ export const useChatStore = defineStore('chat', () => {
   async function sendMessage(content) {
     const text = content.trim()
     if (!text || sending.value) return
+    // 先占用发送锁，再做异步会话解析；否则解析期间可重复点击，两条流会写进同一 placeholder。
+    sending.value = true
+    stopRecovery()
 
     // Resolve the server day once before starting this turn. A stream that
     // crosses midnight keeps its original session; the next send resolves again.
     try {
       await ensureTodaySession()
     } catch (err) {
+      sending.value = false
       console.error("Failed to resolve today's chat session:", err)
       historyError.value = true
       return false
@@ -552,8 +605,9 @@ export const useChatStore = defineStore('chat', () => {
    * 加载会话历史（GET /api/mirror/sessions/{id}），失败置 historyError（空态兜底不白屏）
    * @param {string} id
    */
-  async function loadSession(id, { preserveLocalState = false } = {}) {
-    if (!preserveLocalState) {
+  async function loadSession(id, { preserveLocalState = false, recovery = false, force = false } = {}) {
+    if (!recovery) stopRecovery()
+    if (!preserveLocalState && !force) {
       hasLocalChatActivity = true
       if (sending.value) abort()
     }
@@ -563,7 +617,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const res = await apiGetSession(id)
       // 自动恢复可能与用户发送、点选其他会话或新建会话并发；本地操作优先。
-      if (preserveLocalState && (hasLocalChatActivity || sending.value || messages.value.length > 0)) {
+      if (preserveLocalState && !force && (hasLocalChatActivity || sending.value || messages.value.length > 0)) {
         return false
       }
       const data = res.data
@@ -581,6 +635,7 @@ export const useChatStore = defineStore('chat', () => {
         role,
         actionSourceMessage: role === 'ai' ? lastUserMessageId : null,
         content: m.content || '',
+        createdAt: m.created_at || m.createdAt || '',
         route: null,
         typing: false,
         sources: (m.sources || [])
@@ -605,6 +660,8 @@ export const useChatStore = defineStore('chat', () => {
       sessionId.value = id
       // 历史会话设为当前会话 → 同步写入存档
       saveSessionId(id)
+      if (recovery) stopRecovery()
+      else maybeStartRecovery(id, list)
       return true
     } catch (err) {
       console.error('Failed to load session:', err)
@@ -643,6 +700,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 开新会话：清空当前消息与归属（会话在后端首次发送时才真正创建） */
   function newConversation() {
+    stopRecovery()
     hasLocalChatActivity = true
     if (sending.value) abort()
     clearMessages()
@@ -700,6 +758,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearMessages() {
+    stopRecovery()
     hasLocalChatActivity = true
     discardRetry()
     messages.value = []
@@ -725,6 +784,7 @@ export const useChatStore = defineStore('chat', () => {
     activeSessionId,
     historyLoading,
     historyError,
+    recovering,
     sendMessage,
     retryLastMessage,
     refreshRun,

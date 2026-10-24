@@ -26,6 +26,7 @@ import { createMotionScope, duration, gsap, prefersReducedMotion } from '@/motio
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { useSceneActivity } from '@/motion/useSceneActivity'
+import ChatMarkdown from '@/components/molecules/ChatMarkdown.vue'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -47,6 +48,30 @@ const chat = useChatStore()
 const actions = useActionsStore()
 const vault = useVaultStore()
 const toast = useToastStore()
+
+/**
+ * 显示顺序按「user 消息 → 它对应的 AI 回复」配对。
+ * 流式事件和会话刷新可能让 AI 占位与用户消息的 push 顺序错开；刷新后服务端顺序正确，
+ * 说明配对关系才是稳定真源，数组顺序不是。
+ */
+const orderedMessages = computed(() => {
+  const list = chat.messages
+  const out = []
+  const consumed = new Set()
+  for (const userMessage of list) {
+    if (userMessage.role !== 'user') continue
+    out.push(userMessage)
+    for (const reply of list) {
+      if (reply.role !== 'ai' || String(reply.actionSourceMessage) !== String(userMessage.id)) continue
+      out.push(reply)
+      consumed.add(reply)
+    }
+  }
+  for (const message of list) {
+    if (!consumed.has(message) && !out.includes(message)) out.push(message)
+  }
+  return out
+})
 
 const input = computed({ get: () => chat.draft, set: value => { chat.draft = value } })
 const messagesEl = ref(null)
@@ -535,7 +560,7 @@ async function onRemoveSession(id) {
           />
           <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="对话消息" @scroll.passive="chatScroll.onScroll" @wheel.passive="chatScroll.onWheel" @touchstart.passive="chatScroll.onTouchStart" @touchmove.passive="chatScroll.onTouchMove" @keydown="chatScroll.onKeydown">
             <div
-              v-for="msg in chat.messages"
+              v-for="msg in orderedMessages"
               :key="msg.id"
               v-message-enter="{ id: msg.id, animate: chat.sending && !chat.historyLoading }"
               :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai']"
@@ -546,26 +571,36 @@ async function onRemoveSession(id) {
                 <ToolTrail v-if="msg.role === 'ai'" :tools="msg.toolsUsed" />
                 <span v-if="msg.typing" class="typing-dots"><i /><i /><i /></span>
                 <template v-else-if="!msg.typing">
-                  <template v-for="(seg, si) in parseCitations(msg.content, msg.sources, msg.vaultRefs)" :key="si">
-                    <button
-                      v-if="seg.type === 'cite' && seg.source"
-                      class="cite-chip"
-                      :title="citeTitle(seg.source)"
-                      @click="openSource(seg.source)"
-                    >{{ seg.n }}</button>
-                    <span v-else-if="seg.type === 'cite'">[{{ seg.n }}]</span>
-                    <!-- 文件引用 [Fn]：行内文件芯片（点击预览），不再以裸文本/加粗文件名出现 -->
-                    <button
-                      v-else-if="seg.type === 'vault' && seg.ref"
-                      class="cite-file-chip"
-                      :title="`文件 · ${seg.ref.displayName}`"
-                      @click="openVaultRef(seg.ref)"
-                    >
-                      <FileTypeIcon :kind="seg.ref.category || 'file'" />
-                      <span class="cite-file-name">{{ seg.ref.displayName }}</span>
-                    </button>
-                    <span v-else-if="seg.type === 'vault'" class="cite-file-plain">[F{{ seg.n }}]</span>
-                    <template v-else>{{ seg.value }}</template>
+                  <ChatMarkdown
+                    v-if="msg.role === 'ai'"
+                    :content="msg.content"
+                    :sources="msg.sources"
+                    :vault-refs="msg.vaultRefs"
+                    @open-source="openSource"
+                    @open-vault="openVaultRef"
+                  />
+                  <template v-else>
+                    <template v-for="(seg, si) in parseCitations(msg.content, msg.sources, msg.vaultRefs)" :key="si">
+                      <button
+                        v-if="seg.type === 'cite' && seg.source"
+                        class="cite-chip"
+                        :title="citeTitle(seg.source)"
+                        @click="openSource(seg.source)"
+                      >{{ seg.n }}</button>
+                      <span v-else-if="seg.type === 'cite'">[{{ seg.n }}]</span>
+                      <!-- 文件引用 [Fn]：行内文件芯片（点击预览），不再以裸文本/加粗文件名出现 -->
+                      <button
+                        v-else-if="seg.type === 'vault' && seg.ref"
+                        class="cite-file-chip"
+                        :title="`文件 · ${seg.ref.displayName}`"
+                        @click="openVaultRef(seg.ref)"
+                      >
+                        <FileTypeIcon :kind="seg.ref.category || 'file'" />
+                        <span class="cite-file-name">{{ seg.ref.displayName }}</span>
+                      </button>
+                      <span v-else-if="seg.type === 'vault'" class="cite-file-plain">[F{{ seg.n }}]</span>
+                      <template v-else>{{ seg.value }}</template>
+                    </template>
                   </template>
                 </template>
 
@@ -632,6 +667,11 @@ async function onRemoveSession(id) {
                   @remove="() => onReceiptRemove(item)"
                 />
               </div>
+            </div>
+
+            <div v-if="chat.recovering" class="chat-recovering" role="status">
+              <span class="typing-dots"><i /><i /><i /></span>
+              <span>上一轮回答仍在生成，完成后会自动出现</span>
             </div>
           </div>
 
@@ -777,6 +817,14 @@ async function onRemoveSession(id) {
 .chat-msg-ai .chat-msg-bubble {
   background: #FFFFFF; border: 1px solid var(--line);
   border-bottom-left-radius: 6px;
+}
+
+/* 刷新后等待后端完成上一轮 */
+.chat-recovering {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 0 4px; padding: 10px 14px;
+  color: var(--text-mid); font-size: 12px;
+  background: #ffffffb8; border: 1px dashed var(--line); border-radius: 8px;
 }
 
 /* 意图路由眉标 */
