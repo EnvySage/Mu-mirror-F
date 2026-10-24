@@ -1,398 +1,156 @@
 <script setup>
-/**
- * 文件预览模态（任务 2 · GET /api/vault/{id}/preview 内嵌流）
- *
- * mime 分派：
- *   text/markdown · text/plain · text/csv → 文本预览（md 走 renderMarkdown 轻渲染器；
- *                                            csv/plain 等宽纯文本）
- *   application/pdf                        → <iframe :src="objectUrl">
- *   image/*                                → <img :src="objectUrl">
- *   docx / 音视频 / 其他                    → 降级卡片「该类型暂不支持内嵌预览」+ 下载
- *
- * 数据链路：axios responseType:'blob'（走 request 封装带鉴权）→ MIME/文件名解析 →
- * URL.createObjectURL；关闭时 revoke 防内存泄漏。
- * 交互：ESC / 点遮罩 / 关闭键退出；max-width 720px，max-height 85vh 内容区滚动。
- * 走查口径：digest_status 非 confirmed/extracted（pending/skipped/failed）时预览照常
- * 可用——保管完整就可看（设计稿 §3.3b「未确认：可下载预览」）；仅 deleted 不可。
- */
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick, watch, defineAsyncComponent } from 'vue'
 import request from '@/api/request'
 import { renderMarkdown } from '@/utils/mdPreview'
+import { previewType, parseCsv, docxHtml } from '@/utils/filePreview'
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 
-const props = defineProps({
-  /** vault 条目（snake_case；对话文件卡传 camelCase 时兼容取值） */
-  item: { type: Object, required: true },
-  origin: { type: Object, default: null },
-})
-
+const PdfDocumentPreview = defineAsyncComponent(() => import('@/components/molecules/PdfDocumentPreview.vue'))
+const props = defineProps({ item: { type: Object, required: true }, origin: { type: Object, default: null } })
 const emit = defineEmits(['close'])
-
-const loading = ref(false)
-const error = ref('')
-const mime = ref('')
-const filename = ref('')
-const objectUrl = ref('')
-const textContent = ref('')
-const dialogEl = ref(null)
-const maskEl = ref(null)
-const active = ref(false)
-const closing = ref(false)
+const loading = ref(true), error = ref(''), downloadError = ref(''), downloading = ref(false)
+const mime = ref(''), objectUrl = ref(''), textContent = ref(''), documentHtml = ref('')
+const rawBlob = shallowRef(null), truncated = ref(false), imageZoom = ref(1)
+const audioPlaying = ref(false)
+const dialogEl = ref(null), maskEl = ref(null), active = ref(false), closing = ref(false)
 const overlay = useOverlayMotion({ distance: 26, scale: .985 })
-let requestGeneration = 0
+let generation = 0, controller, downloadController
 useDialogFocus(() => active.value, dialogEl, '.fpm-close', closeWithMotion)
 
-/** 展示名（显示名优先，回退接口 Content-Disposition 文件名） */
-const displayName = computed(() =>
-  props.item?.display_name || props.item?.displayName || filename.value || '未命名文件')
+const displayName = computed(() => props.item.display_name || props.item.displayName || props.item.original_name || props.item.originalName || '未命名文件')
+const format = computed(() => previewType(props.item, mime.value))
+const kind = computed(() => format.value.kind)
+const mdHtml = computed(() => kind.value === 'markdown' ? renderMarkdown(textContent.value) : '')
+const csv = computed(() => kind.value === 'csv' ? parseCsv(textContent.value) : { rows: [] })
+const isCurrent = id => active.value && !closing.value && id === generation
+function revoke() { if (objectUrl.value) URL.revokeObjectURL(objectUrl.value); objectUrl.value = '' }
+function reset() { revoke(); rawBlob.value = null; textContent.value = ''; documentHtml.value = ''; error.value = ''; downloadError.value = ''; truncated.value = false; imageZoom.value = 1; audioPlaying.value = false; mime.value = '' }
 
-/** mime 分派（扩展名兜底：后端 Content-Type 可能给 application/octet-stream） */
-const kind = computed(() => {
-  const m = (mime.value || '').toLowerCase()
-  const ext = String(props.item?.file_type || props.item?.fileType || displayName.value)
-    .split('.').pop().toLowerCase()
-  if (m === 'text/markdown' || m === 'text/x-markdown' || ext === 'md') return 'markdown'
-  if (m.startsWith('text/') || ['txt', 'csv', 'log', 'json'].includes(ext)) {
-    return ext === 'csv' || m === 'text/csv' ? 'csv' : 'text'
-  }
-  if (m === 'application/pdf' || ext === 'pdf') return 'pdf'
-  if (m.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) return 'image'
-  return 'unsupported'
-})
-
-const isText = computed(() => kind.value === 'markdown' || kind.value === 'text' || kind.value === 'csv')
-const mimeBadge = computed(() => {
-  if (kind.value === 'markdown') return 'MD'
-  if (kind.value === 'csv') return 'CSV'
-  if (kind.value === 'text') return 'TXT'
-  if (kind.value === 'pdf') return 'PDF'
-  if (kind.value === 'image') return 'IMG'
-  return 'FILE'
-})
-
-/** md 渲染（renderMarkdown 内部先 HTML escape 全部原文再套标签——XSS 防线） */
-const mdHtml = computed(() => (kind.value === 'markdown' ? renderMarkdown(textContent.value) : ''))
-
-/** 降级卡文案（docx/音视频/其他） */
-const unsupportedTip = computed(() => {
-  if (kind.value === 'image') return ''
-  const m = (mime.value || '').toLowerCase()
-  if (m.includes('word') || m.includes('officedocument') || displayName.value.toLowerCase().endsWith('.docx')) {
-    return 'docx 暂不支持内嵌预览 · 可下载原文件查看'
-  }
-  if (m.startsWith('audio/') || ['mp3', 'wav', 'm4a'].includes(String(props.item?.file_type || '').toLowerCase())) {
-    return '音频暂不支持内嵌预览 · 可下载原文件播放'
-  }
-  return '该类型暂不支持内嵌预览 · 可下载原文件'
-})
-
-onMounted(async () => {
-  active.value = true
-  load()
-  await nextTick()
-  if (active.value && !closing.value) overlay.open(dialogEl.value, maskEl.value)
-})
-
-onBeforeUnmount(() => {
-  active.value = false
-  requestGeneration += 1
-  revoke()
-})
+async function load() {
+  controller?.abort()
+  controller = new AbortController()
+  const id = ++generation
+  reset(); loading.value = true
+  try {
+    const blob = await request.get('/vault/' + props.item.id + '/preview', { responseType: 'blob', timeout: 60000, signal: controller.signal })
+    if (!isCurrent(id)) return
+    if (!(blob instanceof Blob) || !blob.size) throw new Error('文件内容为空或未返回有效文件，请重试。')
+    // API errors occasionally arrive as a JSON blob instead of a document.
+    if (blob.type.includes('application/json')) throw new Error('暂时无法读取原文件，请重新加载。')
+    mime.value = blob.type
+    const type = format.value
+    if (['markdown', 'text', 'csv'].includes(type.kind)) {
+      const limit = 1024 * 1024
+      const text = await blob.slice(0, limit).text()
+      if (!isCurrent(id)) return
+      textContent.value = text
+      truncated.value = blob.size > limit
+    } else if (type.kind === 'docx') {
+      const html = await docxHtml(blob)
+      if (!isCurrent(id)) return
+      documentHtml.value = html
+    } else if (type.kind === 'pdf') rawBlob.value = blob
+    else if (['image', 'audio'].includes(type.kind)) {
+      // Servers may return octet-stream; restore the known file MIME for native media.
+      objectUrl.value = URL.createObjectURL(blob.slice(0, blob.size, type.mime))
+    }
+  } catch (e) {
+    if (isCurrent(id) && e.code !== 'ERR_CANCELED') error.value = kind.value === 'docx' ? '这份 Word 文件未能打开，文件可能已损坏。你可以重试或下载原文件。' : e.message || '文件未能打开，请重试。'
+  } finally { if (isCurrent(id)) loading.value = false }
+}
 
 async function closeWithMotion() {
   if (closing.value) return
-  closing.value = true
-  requestGeneration += 1
-  loading.value = false
+  closing.value = true; generation++; controller?.abort(); downloadController?.abort()
+  dialogEl.value?.querySelector('audio')?.pause()
   const result = await overlay.close(dialogEl.value, maskEl.value)
   if (result.includes('cancelled')) return
-  active.value = false
-  emit('close')
+  active.value = false; emit('close')
 }
-
-function revoke() {
-  if (objectUrl.value) {
-    URL.revokeObjectURL(objectUrl.value)
-    objectUrl.value = ''
-  }
+function mediaError(event) {
+  if (loading.value || closing.value || event.currentTarget.getAttribute('src') !== objectUrl.value) return
+  error.value = kind.value === 'audio' ? '浏览器无法播放这段音频，请下载后使用播放器打开。' : '图片未能显示，请检查文件是否完整。'
 }
-
-async function load() {
-  const generation = ++requestGeneration
-  active.value = true
-  loading.value = true
-  error.value = ''
-  try {
-    // 注意：request.js 响应拦截器 return res（=response.data）——responseType:'blob' 时
-    // 返回值就是 Blob 本身（headers 不经手）。真 headers/文件名需另走原生 axios 或按
-    // blob.type 推断；此处 mime 用 blob.type，文件名用前端已知字段兜底。
-    const blob = await request.get(`/vault/${props.item.id}/preview`, { responseType: 'blob', timeout: 60000 })
-    if (!active.value || generation !== requestGeneration) return
-    const realBlob = blob instanceof Blob ? blob : new Blob([blob])
-    mime.value = String(realBlob.type || 'application/octet-stream').split(';')[0].trim()
-    filename.value = props.item.original_name || props.item.originalName || props.item.display_name || `preview-${props.item.id}`
-    if (isTextLike(mime.value)) {
-      textContent.value = await realBlob.text()
-      if (!active.value || generation !== requestGeneration) return
-    } else {
-      revoke()
-      if (!active.value || generation !== requestGeneration) return
-      objectUrl.value = URL.createObjectURL(realBlob)
-    }
-  } catch (err) {
-    console.error('Preview load failed:', err)
-    if (active.value && generation === requestGeneration) error.value = err?.message || '预览加载失败'
-  } finally {
-    if (active.value && generation === requestGeneration) loading.value = false
-  }
-}
-
-/** Content-Disposition 文件名解析（filename*=UTF-8'' 优先，降级 filename=）
- *  注：拦截器 return response.data 后 axios headers 不经手，此函数留作
- *  fetchPreviewBlob（api/vault.js）与后续直连 axios 场景共用。 */
-function parseDisposition(disposition) {
-  const utf8 = disposition.match(/filename\*=(?:UTF-8'')?([^;]+)/i)
-  if (utf8) {
-    try { return decodeURIComponent(utf8[1].replace(/["']/g, '').trim()) } catch { return utf8[1] }
-  }
-  const plain = disposition.match(/filename="?([^";]+)"?/i)
-  return plain ? plain[1].trim() : `preview-${props.item.id}`
-}
-
-/** 文本族判定（load 时用；kind 依赖 mime 已就绪前的粗判） */
-function isTextLike(m) {
-  const mimeStr = String(m || '').toLowerCase()
-  if (mimeStr.startsWith('text/')) return true
-  const ext = String(props.item?.file_type || props.item?.fileType || displayName.value)
-    .split('.').pop().toLowerCase()
-  return ['md', 'txt', 'csv', 'log', 'json'].includes(ext)
-}
-
-/** 下载原文件（GET /api/vault/{id}/download blob 触发保存） */
-const downloading = ref(false)
 
 async function download() {
   if (downloading.value) return
-  downloading.value = true
+  const id = props.item.id
+  const name = props.item.original_name || props.item.originalName || displayName.value
+  downloading.value = true; downloadError.value = ''; downloadController = new AbortController()
   try {
-    // 拦截器 return response.data —— responseType:'blob' 时直接就是 Blob
-    const blob = await request.get(`/vault/${props.item.id}/download`, { responseType: 'blob', timeout: 60000 })
-    const realBlob = blob instanceof Blob ? blob : new Blob([blob])
-    saveBlob(realBlob, props.item.original_name || props.item.originalName || props.item.display_name || `file-${props.item.id}`)
-  } catch (err) {
-    console.error('Download failed:', err)
-    error.value = err?.message || '下载失败'
-  } finally {
-    downloading.value = false
-  }
+    const blob = await request.get('/vault/' + id + '/download', { responseType: 'blob', timeout: 60000, signal: downloadController.signal })
+    if (!active.value || closing.value || id !== props.item.id) return
+    if (!(blob instanceof Blob) || !blob.size || blob.type.includes('application/json')) throw new Error('原文件下载失败，请重试。')
+    const url = URL.createObjectURL(blob), anchor = document.createElement('a')
+    anchor.href = url; anchor.download = name; document.body.appendChild(anchor); anchor.click(); anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+  } catch (e) { if (active.value && !closing.value && e.code !== 'ERR_CANCELED') downloadError.value = e.message || '下载失败，请重试。' }
+  finally { downloading.value = false }
 }
-
-function saveBlob(blob, name) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 4000)
-}
+onMounted(async () => { active.value = true; load(); await nextTick(); if (!closing.value) overlay.open(dialogEl.value, maskEl.value) })
+watch(() => props.item.id, () => { downloadController?.abort(); if (active.value && !closing.value) load() })
+onBeforeUnmount(() => { active.value = false; generation++; controller?.abort(); downloadController?.abort(); revoke() })
 </script>
 
 <template>
   <Teleport to="body">
-    <div ref="maskEl" :class="['fpm-mask', { closing }]" @click.self="closeWithMotion">
-      <div ref="dialogEl" :class="['fpm-card', { closing }]" role="dialog" aria-modal="true" :aria-label="displayName" tabindex="-1">
-        <!-- 顶部：文件名 + mime 徽标 + 关闭 -->
-        <div class="fpm-head">
-          <span class="fpm-badge">{{ mimeBadge }}</span>
-          <div class="fpm-title" :title="displayName">{{ displayName }}</div>
-          <button class="fpm-close" aria-label="关闭预览" @click="closeWithMotion">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
+    <div ref="maskEl" class="fpm-mask" @click.self="closeWithMotion">
+      <section ref="dialogEl" class="fpm-card" role="dialog" aria-modal="true" :aria-label="displayName" tabindex="-1">
+        <header class="fpm-head">
+          <span class="fpm-badge">{{ format.extension.toUpperCase() }}</span>
+          <div class="fpm-heading"><span>MEMORY / OPEN FILE</span><h2 class="fpm-title">{{ displayName }}</h2></div>
+          <button class="fpm-close" aria-label="关闭预览" @click="closeWithMotion">×</button>
+        </header>
+        <div class="fpm-body" :aria-busy="loading">
+          <div v-if="loading" class="fpm-state" role="status"><span class="spinner" /><strong>正在打开这份记忆…</strong><span>让灵感重新浮现。</span></div>
+          <div v-else-if="error" class="fpm-state" role="alert"><b class="fpm-state-mark">!</b><strong>{{ error }}</strong><button class="fpm-action" @click="load">重新加载 ↗</button></div>
+          <template v-else>
+            <p v-if="truncated" class="fpm-note">文件较长，仅预览前 1 MB。下载可查看完整内容。</p>
+            <article v-if="kind === 'markdown'" class="fpm-document" v-html="mdHtml" />
+            <pre v-else-if="kind === 'text'" class="fpm-text">{{ textContent || '这份文件还没有文字。' }}</pre>
+            <div v-else-if="kind === 'csv'" class="fpm-csv">
+              <p class="fpm-note">表格预览 · 首行为表头<span v-if="csv.truncated"> · 仅显示前 200 条数据、前 50 列</span><span v-if="csv.malformed"> · 引号未闭合，已按现有内容显示</span></p>
+              <div class="fpm-table-scroll" tabindex="0" aria-label="CSV 表格，可横向滚动">
+                <table v-if="csv.rows.length"><thead><tr><th v-for="(cell, i) in csv.rows[0]" :key="i" scope="col">{{ cell || '列 ' + (i + 1) }}</th></tr></thead><tbody><tr v-for="(row, r) in csv.rows.slice(1)" :key="r"><td v-for="(cell, c) in row" :key="c">{{ cell }}</td></tr></tbody></table>
+                <p v-else>这份表格还没有内容。</p>
+              </div>
+            </div>
+            <template v-else-if="kind === 'docx'"><p class="fpm-note">Word 内容预览 · 复杂页眉、图表和分页请下载原文件查看。</p><article class="fpm-document fpm-word" v-html="documentHtml || '<p>这份文档还没有文字。</p>'" /></template>
+            <PdfDocumentPreview v-else-if="kind === 'pdf' && rawBlob" :blob="rawBlob" />
+            <div v-else-if="kind === 'image'" class="fpm-image-view">
+              <div class="fpm-image-tools"><button :aria-pressed="imageZoom === 1" @click="imageZoom = 1">适应窗口</button><button :aria-pressed="imageZoom === 2" @click="imageZoom = 2">放大查看</button></div>
+              <div class="fpm-image-scroll" tabindex="0" aria-label="图片预览"><img :src="objectUrl" :alt="displayName" :style="{ maxWidth: imageZoom === 1 ? '100%' : 'none', width: imageZoom === 1 ? 'auto' : '200%' }" @error="mediaError"></div>
+            </div>
+            <div v-else-if="kind === 'audio'" class="fpm-audio">
+              <div class="audio-disc" :class="{ 'is-playing': audioPlaying }" aria-hidden="true"><i /><span>KEEP<br>LISTENING.</span></div>
+              <span class="audio-caption">SOUNDTRACK OF YOUR DAYS</span><h3>{{ displayName }}</h3>
+              <audio :src="objectUrl" controls preload="metadata" :aria-label="displayName" @play="audioPlaying = true" @pause="audioPlaying = false" @ended="audioPlaying = false" @error="mediaError" />
+              <p>按下播放，回到那个瞬间。</p>
+            </div>
+            <div v-else class="fpm-state"><b class="fpm-state-mark">↗</b><strong>这类文件暂不支持直接预览。</strong><span>下载原文件后，用对应的应用打开。</span></div>
+          </template>
         </div>
-
-        <!-- 内容区（85vh 限高滚动） -->
-        <div class="fpm-body">
-          <div v-if="loading" class="fpm-state"><span class="spinner" /> 加载预览…</div>
-
-          <div v-else-if="error" class="fpm-state fpm-state-error">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-            {{ error }}
-          </div>
-
-          <!-- md 渲染 -->
-          <div v-else-if="kind === 'markdown'" class="fpm-md" v-html="mdHtml" />
-
-          <!-- csv / plain 等宽文本 -->
-          <pre v-else-if="kind === 'csv' || kind === 'text'" class="fpm-text">{{ textContent }}</pre>
-
-          <!-- pdf iframe -->
-          <iframe
-            v-else-if="kind === 'pdf' && objectUrl"
-            :src="objectUrl"
-            class="fpm-pdf"
-            title="PDF 预览"
-          />
-
-          <!-- image -->
-          <div v-else-if="kind === 'image' && objectUrl" class="fpm-img-wrap">
-            <img :src="objectUrl" :alt="displayName" class="fpm-img">
-          </div>
-
-          <!-- 降级卡（docx/音视频/其他） -->
-          <div v-else-if="kind === 'unsupported'" class="fpm-fallback">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/></svg>
-            <div class="fpm-fallback-tip">{{ unsupportedTip }}</div>
-          </div>
-        </div>
-
-        <!-- 底部：下载原文件 -->
-        <div class="fpm-foot">
-          <button class="fpm-dl" :disabled="downloading" @click="download">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-            {{ downloading ? '下载中…' : '下载原文件' }}
-          </button>
-        </div>
-      </div>
+        <footer class="fpm-foot"><span>KEEP WHAT MATTERS.</span><p v-if="downloadError" role="alert">{{ downloadError }}</p><button class="fpm-action" :disabled="downloading" @click="download">{{ downloading ? '下载中…' : '下载原文件 ↗' }}</button></footer>
+      </section>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.fpm-mask {
-  position: fixed; inset: 0; z-index: 60;
-  background: rgba(26, 26, 23, .4);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-}
-
-.fpm-card {
-  width: 100%; max-width: 720px;
-  max-height: 85vh;
-  background: #FFFFFF;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-float);
-  display: flex; flex-direction: column;
-  overflow: hidden;
-  clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%);
-  transition:border-color .3s;
-}
-
-.fpm-head {
-  display: flex; align-items: center; gap: 9px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
-}
-.fpm-badge {
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em;
-  color: var(--accent); background: var(--accent-soft);
-  padding: 2px 7px; border-radius: var(--radius-full); flex-shrink: 0;
-}
-.fpm-title {
-  flex: 1; min-width: 0;
-  font-size: 13.5px; font-weight: 600; color: var(--text-hi);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.fpm-close {
-  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
-  display: grid; place-items: center;
-  color: var(--text-low); transition: color .15s, background .15s;
-}
-.fpm-close:hover { color: var(--text-hi); background: var(--ink-2); }
-.fpm-close svg { width: 14px; height: 14px; }
-
-.fpm-body {
-  flex: 1; min-height: 0; overflow-y: auto;
-  padding: 14px 16px;
-  -webkit-overflow-scrolling: touch;
-}
-
-.fpm-state {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 40px 12px;
-  font-size: 12.5px; color: var(--text-low);
-}
-.fpm-state-error { color: var(--danger); }
-.fpm-state-error svg { width: 15px; height: 15px; flex-shrink: 0; }
-
-/* md 渲染样式（晨纸排版；全部晨纸 token，无深色） */
-.fpm-md { font-size: 13.5px; line-height: 1.8; color: var(--text-hi); overflow-wrap: anywhere; }
-.fpm-md :deep(h1) { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 14px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-.fpm-md :deep(h2) { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 14px 0 7px; }
-.fpm-md :deep(h3) { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
-.fpm-md :deep(h4), .fpm-md :deep(h5), .fpm-md :deep(h6) { font-size: 13.5px; font-weight: 600; margin: 10px 0 5px; color: var(--text-mid); }
-.fpm-md :deep(h1:first-child), .fpm-md :deep(h2:first-child), .fpm-md :deep(h3:first-child) { margin-top: 0; }
-.fpm-md :deep(p) { margin: 7px 0; }
-.fpm-md :deep(strong) { font-weight: 600; }
-.fpm-md :deep(a) { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.fpm-md :deep(ul), .fpm-md :deep(ol) { margin: 7px 0; padding-left: 22px; }
-.fpm-md :deep(li) { margin: 3px 0; }
-.fpm-md :deep(blockquote) {
-  margin: 9px 0; padding: 7px 12px;
-  border-left: 2px solid var(--accent);
-  background: var(--ink-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  color: var(--text-mid);
-}
-.fpm-md :deep(code) {
-  font-family: var(--font-mono); font-size: 12px;
-  background: var(--ink-2); border: 1px solid var(--line);
-  padding: 1px 5px; border-radius: 4px;
-}
-.fpm-md :deep(pre) {
-  margin: 9px 0; padding: 10px 12px;
-  background: var(--ink-2); border: 1px solid var(--line);
-  border-radius: var(--radius-sm); overflow-x: auto;
-}
-.fpm-md :deep(pre code) { background: none; border: none; padding: 0; font-size: 11.5px; line-height: 1.7; }
-.fpm-md :deep(hr) { border: none; border-top: 1px solid var(--line); margin: 13px 0; }
-
-/* csv / plain 等宽文本 */
-.fpm-text {
-  margin: 0;
-  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.75;
-  color: var(--text-mid);
-  white-space: pre-wrap; word-break: break-word;
-}
-
-/* pdf / image */
-.fpm-pdf { width: 100%; height: calc(85vh - 130px); min-height: 320px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--ink-2); }
-.fpm-img-wrap { display: flex; justify-content: center; }
-.fpm-img { max-width: 100%; max-height: calc(85vh - 160px); border-radius: var(--radius-sm); border: 1px solid var(--line); }
-
-/* 降级卡 */
-.fpm-fallback {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 42px 16px;
-  border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
-  background: var(--ink-2);
-}
-.fpm-fallback svg { width: 26px; height: 26px; color: var(--text-low); }
-.fpm-fallback-tip { font-size: 12.5px; color: var(--text-mid); text-align: center; line-height: 1.7; }
-
-.fpm-foot {
-  display: flex; justify-content: flex-end;
-  padding: 10px 14px;
-  border-top: 1px solid var(--line);
-  flex-shrink: 0;
-}
-.fpm-dl {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: var(--accent);
-  padding: 5px 14px; border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: #FFFFFF; transition: background .15s;
-}
-.fpm-dl:hover:not(:disabled) { background: var(--accent-soft); }
-.fpm-dl:disabled { opacity: .5; cursor: not-allowed; }
-.fpm-dl svg { width: 13px; height: 13px; }
-
-@media (max-width: 480px) {
-  .fpm-mask { padding: 0; align-items: flex-end; }
-  .fpm-card { max-width: 100%; max-height: 88dvh; border-radius: 16px 16px 0 0; border-bottom: none; }
-  .fpm-body { padding: 12px 14px; }
-}
+.fpm-mask{position:fixed;inset:0;z-index:60;background:#06183ecc;backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:24px}
+.fpm-card{width:100%;max-width:1020px;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;background:#d6ebee;box-shadow:9px 10px 0 #66d9ec66,-6px -6px 0 #ec90b466;color:#203c68;border-top:5px solid #dfff77}
+.fpm-head{display:flex;align-items:center;gap:17px;padding:23px 27px;background:#143872;color:#fff3de;flex-shrink:0}.fpm-badge{font:italic 900 27px var(--font-display);background:#efa3c2;color:#1e3970;padding:8px 13px;transform:rotate(-5deg);max-width:95px;overflow:hidden;text-overflow:ellipsis}.fpm-heading{min-width:0;flex:1}.fpm-heading>span{font:800 11px var(--font-display);letter-spacing:.16em;color:#a0e6ef}.fpm-title{font-size:18px;font-weight:800;margin-top:4px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.fpm-close{flex-shrink:0;background:#dfff77;color:#153975;width:40px;height:40px;font-size:29px;transform:rotate(4deg)}.fpm-close:hover{transform:rotate(-4deg)}
+.fpm-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:23px;background:repeating-linear-gradient(125deg,transparent 0 30px,#2e5c8b0a 30px 31px),#d6ebee}.fpm-state{min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px;text-align:center;font-size:13px}.fpm-state strong{font-size:18px;max-width:40ch;overflow-wrap:anywhere}.fpm-state-mark{font:italic 900 60px var(--font-display);color:#b53d74}.fpm-note{font-size:11px;padding:0 0 15px;line-height:1.8;color:#3f5c78}
+.fpm-document,.fpm-text{background:#fffdf5;padding:32px 40px;min-height:240px;box-shadow:4px 5px 0 #7dabc44a;font-size:15px;line-height:1.95;overflow-wrap:anywhere;color:#273e60;max-width:100%;overflow-x:auto}
+.fpm-text{white-space:pre-wrap;font:13px/1.9 var(--font-mono)}.fpm-document :deep(h1){font-size:30px;line-height:1.45;border-bottom:3px solid #8edeea;padding-bottom:14px;margin-bottom:22px;color:#173b77}.fpm-document :deep(h2){font-size:23px;line-height:1.5;margin:25px 0 10px}.fpm-document :deep(h3){font-size:18px;margin:18px 0 9px}.fpm-document :deep(p){margin:10px 0}.fpm-document :deep(ul),.fpm-document :deep(ol){padding-left:25px;margin:12px 0}.fpm-document :deep(blockquote){border-left:4px solid #e88ab5;background:#f8e8ef;padding:10px 20px;margin:18px 0}.fpm-document :deep(pre){overflow:auto;background:#112f66;color:#e0f0ff;padding:17px;max-width:100%;white-space:pre}.fpm-document :deep(code){font-size:13px}.fpm-document :deep(a){color:#1758bc;text-decoration:underline}.fpm-document :deep(img){max-width:100%;height:auto}.fpm-document :deep(table),.fpm-csv table{border-collapse:collapse;font-size:13px;line-height:1.7}.fpm-document :deep(td),.fpm-document :deep(th),.fpm-csv td,.fpm-csv th{border:1px solid #8caac688;padding:10px 14px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;min-width:85px;max-width:420px}.fpm-document :deep(th),.fpm-csv th{background:#193e7f;color:#fff4dc}.fpm-csv tbody tr:nth-child(even){background:#dff0f2}.fpm-table-scroll{overflow:auto;max-height:60dvh;background:#fffdf6}.fpm-table-scroll table{width:100%}
+.fpm-image-tools{display:flex;gap:8px;margin-bottom:15px}.fpm-image-tools button{background:#f9f3e6;padding:8px 14px;color:#234a7e;font-size:12px}.fpm-image-tools button[aria-pressed=true]{background:#173c80;color:white}.fpm-image-scroll{overflow:auto;text-align:center;max-height:62dvh;background:repeating-conic-gradient(#c3d7e0 0% 25%,#e1ebec 0% 50%) 50%/20px 20px;padding:15px}.fpm-image-scroll img{display:block;margin:0 auto;max-height:none}
+.fpm-audio{display:flex;flex-direction:column;align-items:center;gap:18px;padding:25px 15px;background:#fae5ed;text-align:center}.audio-disc{height:200px;width:200px;border-radius:50%;background:repeating-radial-gradient(circle,#163673 0 2px,#244a87 3px 4px);position:relative;display:grid;place-items:center;box-shadow:8px 8px 0 #f2aecc;transform:rotate(-12deg)}.audio-disc i{position:absolute;width:75px;height:75px;border-radius:50%;background:#c7f28b}.audio-disc span{position:relative;font:italic 900 16px/.9 var(--font-display);color:#153975;transform:rotate(12deg)}.audio-caption{font:800 11px var(--font-display);letter-spacing:.15em}.fpm-audio h3{font-size:19px;overflow-wrap:anywhere;max-width:100%}.fpm-audio audio{width:min(100%,500px)}.fpm-audio p{font-size:12px;color:#5e6480}
+.fpm-foot{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;flex-shrink:0;padding:17px 27px;border-top:1px dashed #7fa6c6;background:#f7efdf}.fpm-foot>span{font:italic 900 16px var(--font-display);color:#436688}.fpm-foot p{font-size:11px;color:#a93061;overflow-wrap:anywhere}.fpm-action{padding:10px 18px;min-height:40px;font-size:12px;font-weight:800;background:#173c80;color:#fff8df;box-shadow:3px 3px 0 #ed8bb5}.fpm-action:disabled{opacity:.5}
+@media(max-width:599px){.fpm-mask{padding:12px}.fpm-card{max-height:94dvh}.fpm-head{padding:16px 14px;gap:11px}.fpm-badge{font-size:21px;padding:6px 8px;max-width:65px}.fpm-heading>span{font-size:9px}.fpm-title{font-size:15px}.fpm-close{width:34px;height:34px;font-size:26px}.fpm-body{padding:14px}.fpm-document,.fpm-text{padding:22px 18px;font-size:14px}.fpm-document :deep(h1){font-size:24px}.fpm-foot{padding:14px;gap:10px}.fpm-foot>span{font-size:11px}.fpm-action{padding:9px 12px}.fpm-state{padding:20px 5px;min-height:230px}.fpm-state strong{font-size:16px}.audio-disc{width:155px;height:155px}}
+</style>
+<style scoped>
+.audio-disc{animation:vinyl-turn 9s linear infinite;animation-play-state:paused}.audio-disc.is-playing{animation-play-state:running}
+@keyframes vinyl-turn{from{transform:rotate(-12deg)}to{transform:rotate(348deg)}}
+@media(prefers-reduced-motion:reduce){.audio-disc{animation:none}}
 </style>

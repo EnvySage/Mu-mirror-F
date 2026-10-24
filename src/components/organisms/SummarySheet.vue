@@ -20,6 +20,7 @@ import { useToastStore } from '@/stores/toast'
 import TermCard from '@/components/molecules/TermCard.vue'
 import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDialogFocus'
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
+import { usePaperEntrance } from '@/motion/usePaperEntrance'
 
 const props = defineProps({
   show: Boolean,
@@ -46,6 +47,7 @@ const busyTermId = ref(null)
 
 /** 滚动容器（触底判定 + 打开时复位到顶部） */
 const bodyEl = ref(null)
+usePaperEntrance(bodyEl, () => summaries.list.map(item => item.summary_date).join(','), '.summary-item')
 const dialogEl = ref(null)
 const focusOpen = ref(false)
 const dialogFocus = useDialogFocus(() => focusOpen.value, dialogEl, '.sheet-close', () => emit('close'))
@@ -247,12 +249,12 @@ function openSource(term) {
           <div><span class="summary-edition">DAILY REFLECTION</span><h2 id="summary-title">每日总结</h2></div>
           <button class="sheet-close" @click="emit('close')">关闭 <span aria-hidden="true">×</span></button>
         </header>
+        <div ref="bodyEl" class="sheet-body" @scroll="onBodyScroll">
         <div class="summary-cover">
           <div><p class="cover-caption">给认真生活的你，一次回望。</p><h3>这一天，<br>也有值得记住的事。</h3></div>
           <div class="cover-index" v-if="!summaries.loading && !summaries.error && summaries.list.length"><strong>{{ String(summaries.list.length).padStart(2, '0') }}</strong><span>篇已载入的日常<small>向下翻阅，更早的自己。</small></span></div>
           <span v-else class="cover-watermark" aria-hidden="true">DAY BY DAY.</span>
         </div>
-        <div ref="bodyEl" class="sheet-body" @scroll="onBodyScroll">
           <!-- 加载中 -->
           <template v-if="summaries.loading">
             <div class="summary-loading summary-state" role="status"><span class="spinner" /> 正在翻开你的日常…</div>
@@ -262,26 +264,6 @@ function openSource(term) {
           <template v-else-if="summaries.error">
             <div class="summary-empty summary-state" role="alert"><span class="state-mark" aria-hidden="true">!</span><h3>这次回望，还没有加载好。</h3><p>{{ summaries.error }}</p><button class="state-action" @click="retrySummaries">重新加载 <span aria-hidden="true">↗</span></button></div>
           </template>
-
-          <!-- 词条候选分区（总结正文之后，独立分区；无候选不渲染。
-               注意：summaries.error / loading 时不在此分支挂载，候选独立于日报状态） -->
-          <div v-if="!summaries.loading && !summaries.error && glossary.pending.length" class="glossary-section">
-            <div class="glossary-head">
-              <span class="glossary-title">个人词典候选</span>
-              <span class="glossary-count">{{ glossary.pending.length }}</span>
-            </div>
-            <TermCard
-              v-for="t in glossary.pending"
-              :key="t.id"
-              :term="t"
-              group="pending"
-              :busy="busyTermId === t.id"
-              @confirm="onConfirm(t)"
-              @save="data => onSave(t, data)"
-              @dismiss="onDismiss(t)"
-              @open-source="openSource"
-            />
-          </div>
 
           <!-- 日报流：按月分组 + 触底翻页 -->
           <template v-if="!summaries.loading && !summaries.error && monthGroups.length">
@@ -342,9 +324,10 @@ function openSource(term) {
 
                   <!-- 未展开：摘要行 + 展开按钮 -->
                   <template v-else>
-                    <p class="summary-text summary-text-brief">
-                      {{ (row.item.highlights && row.item.highlights.length ? row.item.highlights.join('\n') : '暂无摘要') }}
-                    </p>
+                    <ol class="summary-highlights" v-if="row.item.highlights?.length">
+                      <li v-for="(highlight, index) in row.item.highlights" :key="index"><span aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span><p>{{ highlight }}</p></li>
+                    </ol>
+                    <p v-else class="summary-text summary-text-brief">暂无摘要</p>
                     <button class="summary-expand" :aria-expanded="false" :aria-label="`阅读 ${row.date} 的完整总结`" @click="toggleItem(row.item)">阅读这一天 <span aria-hidden="true">↗</span></button>
                   </template>
                 </article>
@@ -362,6 +345,26 @@ function openSource(term) {
               <span v-else class="page-end">已经是最早的一篇日报了</span>
             </div>
           </template>
+
+          <!-- 词条候选分区（总结正文之后，独立分区；无候选不渲染。
+               注意：summaries.error / loading 时不在此分支挂载，候选独立于日报状态） -->
+          <div v-if="!summaries.loading && !summaries.error && glossary.pending.length" class="glossary-section">
+            <div class="glossary-head">
+              <span class="glossary-title">个人词典候选</span>
+              <span class="glossary-count">{{ glossary.pending.length }}</span>
+            </div>
+            <TermCard
+              v-for="t in glossary.pending"
+              :key="t.id"
+              :term="t"
+              group="pending"
+              :busy="busyTermId === t.id"
+              @confirm="onConfirm(t)"
+              @save="data => onSave(t, data)"
+              @dismiss="onDismiss(t)"
+              @open-source="openSource"
+            />
+          </div>
 
           <!-- 空态：无候选且无日报 -->
           <div v-if="!summaries.loading && !summaries.error && !monthGroups.length && !glossary.pending.length" class="summary-empty summary-state">
@@ -389,3 +392,4 @@ function openSource(term) {
 @media(min-width:900px){.sheet{top:50%;bottom:auto;transform:translate(-50%,-50%);height:88dvh;max-width:calc(100vw - 80px)}}
 @media(max-width:599px){.sheet{height:95dvh;max-height:none}.sheet-header{padding:17px 20px 15px}.sheet-header>div{display:block}.summary-edition{font-size:29px}.sheet-header h2{font-size:12px;margin-top:6px;padding:0;border:0}.summary-cover{padding:22px 22px 24px;gap:12px}.cover-caption{font-size:10px}.summary-cover h3{font-size:23px}.cover-index{display:block;padding:0}.cover-index strong{font-size:58px}.cover-index span{display:block;font-size:9px;margin-top:7px}.cover-index small{display:none}.cover-watermark{display:none}.sheet-body{padding:0 16px 24px}.month-head{padding-top:18px}.summary-item{padding:20px 18px}.summary-meta{gap:10px;margin-bottom:15px}.summary-date{font-size:30px;gap:7px}.summary-generated{display:none}.summary-records{padding-left:10px}.summary-text{font-size:13px;line-height:2}.summary-missing{padding:18px 15px;gap:9px}.summary-missing .summary-date{font-size:25px}.missing-note{font-size:10px}.missing-gen{padding:7px 12px}.summary-state h3{font-size:20px}}
 </style>
+<style scoped src="@/assets/styles/persona-summary.css"></style>

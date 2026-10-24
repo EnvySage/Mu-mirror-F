@@ -1,0 +1,79 @@
+[
+  {
+    "id": 501,
+    "originalName": "water-surface.webp",
+    "displayName": "蓝色水面的光影",
+    "fileType": "webp",
+    "kind": "image",
+    "description": "一张关于蓝色、光线与水面纹理的收藏。（演示素材）",
+    "sizeBytes": 117408,
+    "digestStatus": "confirmed",
+    "url": "/art/water-surface.webp"
+  },
+  {
+    "id": 510,
+    "originalName": "ideas.md",
+    "displayName": "灵感采样笔记",
+    "fileType": "md",
+    "kind": "document",
+    "description": "一份留给日常灵感的 Markdown 手记。（演示素材）",
+    "sizeBytes": 299,
+    "digestStatus": "confirmed",
+    "url": "/preview/ideas.md"
+  },
+  {
+    "id": 511,
+    "originalName": "field-notes.pdf",
+    "displayName": "日常灵感收集册",
+    "fileType": "pdf",
+    "kind": "document",
+    "description": "两页中文 PDF，收下那些微小而闪亮的瞬间。（演示素材）",
+    "sizeBytes": 3765,
+    "digestStatus": "confirmed",
+    "url": "/preview/field-notes.pdf"
+  },
+  {
+    "id": 512,
+    "originalName": "portfolio-letter.docx",
+    "displayName": "给作品集的一封便笺",
+    "fileType": "docx",
+    "kind": "document",
+    "description": "带有标题、段落、列表与表格的 Word 文档。（演示素材）",
+    "sizeBytes": 37120,
+    "digestStatus": "confirmed",
+    "url": "/preview/portfolio-letter.docx"
+  },
+  {
+    "id": 513,
+    "originalName": "week.csv",
+    "displayName": "这周的小发现",
+    "fileType": "csv",
+    "kind": "document",
+    "description": "把散步、写作和微小的发现排成一张表。（演示素材）",
+    "sizeBytes": 162,
+    "digestStatus": "confirmed",
+    "url": "/preview/week.csv"
+  },
+  {
+    "id": 514,
+    "originalName": "two-notes.wav",
+    "displayName": "两个音符的午后",
+    "fileType": "wav",
+    "kind": "audio",
+    "description": "两秒钟的演示音频，点击播放再听一遍。（演示素材）",
+    "sizeBytes": 64044,
+    "digestStatus": "confirmed",
+    "url": "/preview/two-notes.wav"
+  },
+  {
+    "id": 515,
+    "originalName": "note.txt",
+    "displayName": "给明天的自己",
+    "fileType": "txt",
+    "kind": "document",
+    "description": "简单的文字，也可以是一份值得留下的记忆。（演示素材）",
+    "sizeBytes": 128,
+    "digestStatus": "confirmed",
+    "url": "/preview/note.txt"
+  }
+]

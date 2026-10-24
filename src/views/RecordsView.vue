@@ -310,6 +310,7 @@ function onRetryRecord(record) {
                     v-for="record in group.items"
                     :key="record.id"
                     :record="record"
+                    editorial
                     :active="ui.selectedRecordId === record.id"
                     :featured="stableVariant(record.id, 7) === 0"
                     :layout-variant="stableVariant(record.id)"
@@ -496,3 +497,4 @@ function onRetryRecord(record) {
 @media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-tag-filter{flex:1 1 100%;justify-content:flex-start}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
 
 </style>
+<style scoped src="@/assets/styles/persona-records.css"></style>

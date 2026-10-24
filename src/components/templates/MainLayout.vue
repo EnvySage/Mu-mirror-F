@@ -38,12 +38,17 @@ const pageComponent = shallowRef(null)
 const renderedPage = ref(route.name)
 const renderedDate = ref(route.params.date)
 let pageGeneration = 0
+const routeWipe = ref(null)
+const { hooks: routeMotion, waitForIdle } = useRouteMotion(routeWipe)
 // Resolve async views before passing them to Transition. An unresolved async
 // placeholder has no stable parent for an interrupted out-in DOM handoff.
 watch([() => route.name, () => presentation.mode.value], async ([name, mode]) => {
   const generation = ++pageGeneration
   const candidate = resolvePresentationPage(mode, name)
   const resolved = candidate?.__asyncLoader ? await candidate.__asyncLoader() : candidate
+  // Finish the current reveal before handing off again. Rapid clicks coalesce
+  // to the latest destination instead of resetting a half-visible curtain.
+  await waitForIdle()
   if (generation !== pageGeneration) return
   renderedPage.value = name
   renderedDate.value = route.params.date
@@ -51,8 +56,6 @@ watch([() => route.name, () => presentation.mode.value], async ([name, mode]) =>
 }, { immediate: true })
 watch(() => route.params.date, date => { if (renderedPage.value === 'records') renderedDate.value = date })
 onBeforeUnmount(() => { pageGeneration += 1 })
-const routeWipe = ref(null)
-const routeMotion = useRouteMotion(routeWipe)
 
 const removeDraftGuard = router.beforeEach((to, from) => {
   if (to.fullPath !== from.fullPath && !ui.consumeNavigationApproval(to.fullPath) && !ui.confirmNavigationDrafts()) return false
@@ -125,7 +128,7 @@ watch(() => route.name, () => {
       </PresentationLayout>
       <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
-        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[route.name] }}</span>
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[renderedPage] }}</span>
       </div>
       <DetailPanel />
     </main>

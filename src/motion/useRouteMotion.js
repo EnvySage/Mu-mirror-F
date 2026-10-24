@@ -7,6 +7,9 @@ export function useRouteMotion(wipe) {
   let operation = null
   let generation = 0
   let disposed = false
+  const idleWaiters = new Set()
+  const notifyIdle = () => { idleWaiters.forEach(resolve => resolve()); idleWaiters.clear() }
+  const waitForIdle = () => !operation ? Promise.resolve() : new Promise(resolve => idleWaiters.add(resolve))
   const once = callback => {
     let called = false
     return () => { if (!called) { called = true; queueMicrotask(() => callback?.()) } }
@@ -23,6 +26,7 @@ export function useRouteMotion(wipe) {
     operation.leaveDone?.()
     operation.enterDone?.()
     operation = null
+    notifyIdle()
   }
   function finish(current) {
     if (operation !== current) return
@@ -31,6 +35,7 @@ export function useRouteMotion(wipe) {
     gsap.set(wipe.value, { visibility: 'hidden' })
     current.enterDone?.()
     operation = null
+    notifyIdle()
   }
   function leave(element, done) {
     stop()
@@ -39,14 +44,16 @@ export function useRouteMotion(wipe) {
     if (disposed || prefersReducedMotion() || !wipe.value) { current.leaveDone(); return }
     const back = wipe.value.querySelector('.wipe-band-back'), front = wipe.value.querySelector('.wipe-band-front'), label = wipe.value.querySelector('span')
     gsap.set(wipe.value, { visibility: 'visible' })
-    gsap.set([back, front], { xPercent: -120, skewX: -18 })
-    gsap.set(label, { opacity: 0, x: -55 })
-    gsap.set(element, { willChange: 'transform,opacity', pointerEvents: 'none' })
+    // CSS percentage transforms can be cached by GSAP as a pixel translation.
+    // Reset x as well so the cover/reveal doesn't inherit a second full offset.
+    gsap.set([back, front], { x: 0, xPercent: -120, skewX: -18 })
+    gsap.set(label, { opacity: 0, x: 0 })
+    gsap.set(element, { pointerEvents: 'none' })
     current.timeline
-      .to(element, { x: -18, opacity: .35, duration: duration(210), ease: 'power2.in' }, 0)
-      .to(back, { xPercent: 0, duration: duration(220), ease: 'power2.inOut' }, 0)
-      .to(front, { xPercent: 0, duration: duration(220), ease: 'power2.inOut' }, .035)
-      .to(label, { opacity: 1, x: 0, duration: duration(140), ease: 'power2.out' }, .1)
+      .to(back, { xPercent: 0, duration: duration(420), ease: 'power2.inOut' }, 0)
+      .to(front, { xPercent: 0, duration: duration(420), ease: 'power2.inOut' }, .055)
+      .to(label, { opacity: 1, duration: duration(220), ease: 'power2.out' }, .22)
+      .to({}, { duration: duration(75) })
       .call(() => {
         if (operation !== current) return
         current.timeline.pause()
@@ -55,7 +62,7 @@ export function useRouteMotion(wipe) {
       .play()
   }
   function beforeEnter(element) {
-    if (!prefersReducedMotion()) gsap.set(element, { opacity: 0, x: 24, willChange: 'transform,opacity' })
+    if (!prefersReducedMotion()) gsap.set(element, { opacity: 0, willChange: 'opacity' })
   }
   function enter(element, done) {
     let current = operation
@@ -67,27 +74,25 @@ export function useRouteMotion(wipe) {
     current.enterDone = once(done)
     if (disposed || prefersReducedMotion() || !wipe.value) { finish(current); return }
     const position = current.timeline.duration()
-    current.title = [...element.querySelectorAll('.masthead-en, .record-intro-copy, .stage-copy')]
     const back = wipe.value.querySelector('.wipe-band-back'), front = wipe.value.querySelector('.wipe-band-front'), label = wipe.value.querySelector('span')
     current.timeline
-      .to(element, { x: 0, opacity: 1, duration: duration(300), ease: 'power3.out' }, position)
-      .to(label, { opacity: 0, x: 90, duration: duration(170), ease: 'power2.in' }, position + .015)
-      .to(front, { xPercent: 120, duration: duration(285), ease: 'power2.inOut' }, position + .025)
-      .to(back, { xPercent: 120, duration: duration(285), ease: 'power2.inOut' }, position + .06)
-    if (current.title.length) current.timeline.fromTo(current.title,
-      { x: -18, opacity: 0 },
-      { x: 0, opacity: 1, duration: duration(230), ease: 'power3.out' }, position + .045)
+      .set(element, { opacity: 1 }, position)
+      .to(label, { opacity: 0, duration: duration(220), ease: 'power2.inOut' }, position)
+      .to(front, { x: 0, xPercent: 120, duration: duration(460), ease: 'power2.inOut' }, position + .04)
+      .to(back, { x: 0, xPercent: 120, duration: duration(460), ease: 'power2.inOut' }, position + .095)
     current.timeline.call(() => finish(current)).play(position)
   }
   function cancelEnter(element) {
     if (operation?.page !== element) return
-    // Vue has already settled its callback; preserve the current wipe until
-    // leave starts the next operation in the same patch.
+    // Unmount or an external Transition cancellation must also release queued
+    // destinations; normal navigation is serialized by MainLayout.
     operation.timeline.kill()
     cleanPage(element)
     operation.title?.forEach(cleanPage)
     operation.enterDone?.()
     operation = null
+    gsap.set(wipe.value, { visibility: 'hidden' })
+    notifyIdle()
   }
   const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
   const onPreference = event => {
@@ -101,5 +106,5 @@ export function useRouteMotion(wipe) {
   }
   preference.addEventListener?.('change', onPreference)
   onBeforeUnmount(() => { disposed = true; stop(); preference.removeEventListener?.('change', onPreference) })
-  return { onBeforeEnter: beforeEnter, onEnter: enter, onLeave: leave, onEnterCancelled: cancelEnter }
+  return { hooks: { onBeforeEnter: beforeEnter, onEnter: enter, onLeave: leave, onEnterCancelled: cancelEnter }, waitForIdle }
 }

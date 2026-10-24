@@ -506,11 +506,13 @@ const digestSummary = computed(() => {
       </div>
 
       <!-- 类型筛选 chips -->
+      <div class="archive-heading"><div><span>THE PERSONAL COLLECTION</span><h2>收集，也是生活。</h2></div><strong>{{ String(vault.items.length).padStart(2, '0') }}<small>份记忆资产</small></strong></div>
       <div class="filter-row">
         <button
           v-for="f in FILTERS"
           :key="f.key"
           :class="['chip', { selected: vault.filter === f.key }]"
+          :aria-pressed="vault.filter === f.key"
           @click="setFilter(f.key)"
         >{{ f.label }}</button>
       </div>
@@ -731,3 +733,4 @@ const digestSummary = computed(() => {
 @media(max-width:699px){.assets-grid :deep(.asset-layout){grid-column:1/-1!important;margin:0!important;width:100%}.assets-grid :deep(.asset-card){width:100%;min-height:unset;padding:18px 17px}.assets-grid :deep(.asset-card.shelf-lead){min-height:210px}}
 @media(max-width:599px){.dropzone{padding:24px 18px;gap:15px;min-height:170px}.vault-folder{width:65px}.dropzone-title{font-size:20px}.dropzone-plus{display:none}.dropzone-text{font-size:11px}.filter-row .chip{padding:7px 12px}.quota-card{padding:13px 16px}.dropzone-hint{font-size:9px}}
 </style>
+<style scoped src="@/assets/styles/persona-vault.css"></style>

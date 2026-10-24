@@ -14,6 +14,10 @@ export function bindCardMotion(surface) {
   const media = window.matchMedia('(prefers-reduced-motion: reduce)')
   const hover = window.matchMedia('(hover: hover) and (pointer: fine)')
   const glint = document.createElement('span')
+  const glintClip = document.createElement('span')
+  glintClip.className = 'card-glint-clip'
+  glintClip.setAttribute('aria-hidden', 'true')
+  Object.assign(glintClip.style, { position: 'absolute', inset: '0', overflow: 'hidden', pointerEvents: 'none', zIndex: '1', borderRadius: 'inherit' })
   glint.className = 'card-pointer-glint'
   glint.setAttribute('aria-hidden', 'true')
   Object.assign(glint.style, {
@@ -21,7 +25,8 @@ export function bindCardMotion(surface) {
     pointerEvents: 'none', opacity: '0', zIndex: '1',
     background: 'radial-gradient(ellipse at center,#b8fbff38 0%,#b8fbff12 32%,transparent 68%)',
   })
-  surface.append(glint)
+  glintClip.append(glint)
+  surface.append(glintClip)
   let bounds
   let frame = 0
   let point
@@ -111,7 +116,7 @@ export function bindCardMotion(surface) {
     list?.removeEventListener('list-motion-start', reset)
     resize?.disconnect()
     scope.dispose()
-    glint.remove()
+    glintClip.remove()
   }
   dispose.reset = reset
   return dispose

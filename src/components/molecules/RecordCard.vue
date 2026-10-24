@@ -11,6 +11,7 @@ const props = defineProps({
   featured: { type: Boolean, default: false },
   arrival: { type: Boolean, default: false },
   layoutVariant: { type: Number, default: 0 },
+  editorial: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['open', 'retry', 'delete'])
@@ -54,7 +55,8 @@ const processingPreview = computed(() => {
 </script>
 
 <template>
-  <div :class="['record-layout', `layout-${layoutVariant}`, { featured }]" :data-list-key="`record-${record.id}`">
+  <div :class="['record-layout', `layout-${layoutVariant}`, { featured, editorial }]" :data-list-key="`record-${record.id}`">
+  <span v-if="editorial" class="record-paper-label" aria-hidden="true">{{ status === 'record_only' ? 'JUST A MOMENT' : status === 'reviewing' ? 'TO BE CONTINUED' : status === 'processing' ? 'IN THE MAKING' : status === 'failed' ? 'TRY AGAIN' : 'LIFE IN PROGRESS' }}</span>
   <!-- processing：转圈 + "AI 整理中" -->
   <div v-card-lift v-if="status === 'processing'" :class="['record-card', 'card', 'processing', `layout-${layoutVariant}`, { active, featured, arrival }]" :data-object-source="'record'" :data-object-id="record.id" role="button" tabindex="0" aria-label="查看处理中的记录" @keydown.enter.self="emit('open', $event)" @keydown.space.self.prevent="emit('open', $event)" @click="emit('open', $event)">
     <div class="record-meta">

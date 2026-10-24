@@ -1,3 +1,5 @@
+import { vaultFixtureRoute } from './vaultFixtures'
+
 const userId = 'demo-visitor'
 let nextRecordId = 804
 let nextChunkId = 1404
@@ -313,7 +315,7 @@ function route(config) {
   if (path === '/api/todos/pending-suggestions') return result(config, { suggestions: [] })
   if (path === '/api/todos/open-chain') return result(config, { chains: clone(todos) })
   if (path === '/api/todos') return result(config, { todos: clone(todos) })
-  if (path === '/api/vault') return result(config, [{ id: 501, originalName: '灵感参考图.png', kind: 'image', fileType: 'png', sizeBytes: 1480000, digestStatus: 'confirmed', description: '用于作品集配色探索的参考图，虚构演示素材。', digestChunkCount: 1, quotaUsedBytes: 1480000, quotaBytes: 524288000, createdAt: demoTime(3, 15, 20) }])
+  if (path === '/api/vault' || path.startsWith('/api/vault/')) return vaultFixtureRoute(config, path, method, body, result)
   if (path === '/api/mirror/sessions') return result(config, [])
   const session = path.match(/^\/api\/mirror\/sessions\/([^/]+)$/)
   if (session && method === 'GET') return result(config, { id: session[1], messages: [] })
