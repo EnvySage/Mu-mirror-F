@@ -3,3 +3,8 @@
 deploy/** text eol=lf
 Jenkinsfile text eol=lf
 *.sh text eol=lf
+
+# 预览样例按原始字节保存：PDF 的 xref 偏移依赖精确字节，autocrlf 会破坏它
+public/preview/*.pdf binary
+public/preview/*.docx binary
+public/preview/*.wav binary
