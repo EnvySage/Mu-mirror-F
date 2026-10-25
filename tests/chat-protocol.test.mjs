@@ -82,3 +82,24 @@ test('created-record receipts normalize identically from SSE and history payload
   assert.deepEqual(repeatedReceipts, [{ recordId: 31, status: 'record_only', createdAt: '' }])
   assert.deepEqual(normalizeCreatedRecords([{ status: 'record_only' }, null]), [])
 })
+
+test('insecure origins fall back to getRandomValues for request IDs', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+  // 模拟 http://IP 直连：没有 randomUUID，只有 getRandomValues
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      getRandomValues(array) {
+        for (let index = 0; index < array.length; index += 1) array[index] = index * 17 + 3
+        return array
+      },
+    },
+  })
+  try {
+    const request = createChatRequest('line', 'session-a')
+    assert.match(request.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'crypto', original)
+    else delete globalThis.crypto
+  }
+})

@@ -1,6 +1,16 @@
 function randomUuid() {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
-  throw new Error('A secure UUID generator is required for chat request IDs')
+  // crypto.randomUUID 只在安全上下文（HTTPS / localhost）存在；线上是 http://IP:10000，
+  // 直接抛错会让发送卡死且不发请求。getRandomValues 在非安全上下文也可以用来生成 v4。
+  const bytes = new Uint8Array(16)
+  if (typeof globalThis.crypto?.getRandomValues !== 'function') {
+    throw new Error('A secure random generator is required for chat request IDs')
+  }
+  globalThis.crypto.getRandomValues(bytes)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 /** Create one immutable identity for one user submission. */
