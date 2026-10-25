@@ -59,7 +59,7 @@ function choosePrompt(index) { activePrompt.value = index; pageTurn.value += 1; 
 const MAX = 2000
 
 const count = computed(() => content.value.length)
-const enabled = computed(() => content.value.trim().length > 0 && !loading.value)
+const enabled = computed(() => content.value.trim().length > 0 && !loading.value && !preparedAction.value)
 
 watch(() => props.show, (val) => {
   actionPoller.stop()
@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
               </label>
             </div>
             <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">完成</button></div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">{{ preparedAction.state === 'PENDING' ? '关闭' : '完成' }}</button></div>
           </footer>
         </div>
       </section>

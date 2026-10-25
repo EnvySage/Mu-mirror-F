@@ -106,7 +106,7 @@ watch(() => route.name, () => {
 </script>
 
 <template>
-  <div class="app" :class="`presentation-mode-${presentation.mode.value}`">
+  <div class="app" :class="`presentation-mode-${presentation.mode.value}`" :data-entry-ready="!!pageComponent">
     <div class="app-water" aria-hidden="true" />
     <PersonaBackdrop />
     <DesktopLayout><AppSidebar /></DesktopLayout>

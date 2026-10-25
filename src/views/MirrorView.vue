@@ -15,7 +15,6 @@ import StatisticsDeck from '@/components/organisms/StatisticsDeck.vue'
 import PortraitCollage from '@/components/organisms/PortraitCollage.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
-import GrowthPanel from '@/components/organisms/GrowthPanel.vue'
 import MirrorStage from '@/components/organisms/MirrorStage.vue'
 import { beginMirrorCut as beginMirrorShatter } from '@/composables/useMirrorCut'
 import { gsap, prefersReducedMotion } from '@/motion/core'
@@ -482,7 +481,6 @@ onBeforeUnmount(() => {
         ]"
         @select="onViewSnapshot" @write="ui.openWriteModal()"
       />
-      <GrowthPanel />
       <div class="reflection-status" aria-label="近期状态概览">
         <div><span>最近的情绪</span><strong>{{ statsFirstLoad ? '正在读取…' : statsUnavailable ? '暂不可用' : moodSegments[0]?.label || '等待记录' }}</strong><i :style="{ background: moodSegments[0]?.color || 'var(--cyan)' }" /></div>
         <div><span>经常关注</span><strong>{{ statsUnavailable ? '暂不可用' : statsStore.keyword_top[0]?.keyword || '从下一条记录开始' }}</strong></div>

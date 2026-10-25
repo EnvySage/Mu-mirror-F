@@ -1,18 +1,23 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useGrowthStore } from '@/stores/growth'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import GrowthRadar from '@/components/charts/GrowthRadar.vue'
+import GrowthEntryDialog from '@/components/organisms/GrowthEntryDialog.vue'
 import { createPrepareKey } from '@/api/actions'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 
+const props = defineProps({ active: { type: Boolean, default: true } })
 const growth = useGrowthStore()
 const ui = useUIStore()
 const auth = useAuthStore()
 const axesEditing = ref(false)
 const axesDraft = ref([])
 const manualDimensionId = ref('')
+const previewDimensionId = ref('')
+const entryOpen = ref(false), entryAnchor = ref(null)
+const drafts = new Map()
 const manualPoints = ref('')
 const manualReason = ref('')
 const requestId = ref(makeRequestId())
@@ -76,7 +81,22 @@ function stageProgress(axis) {
   const previous = [...limits].reverse().find(n => n <= score) ?? 0
   return next ? Math.min(100, Math.max(0, (score - previous) / (next - previous) * 100)) : 100
 }
-function selectAxis(axis) { if (!growth.saving) manualDimensionId.value = axis.id }
+function selectAxis(axis, event) {
+  if (growth.saving) return
+  previewDimensionId.value = ''
+  if (manualDimensionId.value === axis.id) {
+    entryAnchor.value = event.currentTarget
+    entryOpen.value = true
+    return
+  }
+  drafts.set(manualDimensionId.value, { points: manualPoints.value, reason: manualReason.value, requestId: requestId.value })
+  const draft = drafts.get(axis.id)
+  manualDimensionId.value = axis.id
+  manualPoints.value = draft?.points ?? ''
+  manualReason.value = draft?.reason ?? ''
+  requestId.value = draft?.requestId || makeRequestId()
+  receipt.value = null
+}
 const entries = computed(() => growth.entries || [])
 const ready = computed(() => !!growth.overview && !!growth.config && Array.isArray(growth.axes) && growth.axes.length === 5)
 const canAddManual = computed(() => growth.axes.some(axis => axis.id === manualDimensionId.value)
@@ -170,12 +190,12 @@ function openSource(entry) {
   ledgerOpen.value = false
 }
 
-onMounted(() => {
-  growth.refresh().then(() => {
-    if (!manualDimensionId.value) manualDimensionId.value = growth.axes[0]?.id || ''
-    if (!axesLocked.value && localStorage.getItem(onboardingKey()) !== '1') onboardingOpen.value = true
-  })
-})
+function offerOnboarding() {
+  if (!manualDimensionId.value) manualDimensionId.value = growth.axes[0]?.id || ''
+  if (props.active && ready.value && !axesLocked.value && localStorage.getItem(onboardingKey()) !== '1') onboardingOpen.value = true
+}
+watch(() => props.active, active => { if (active) offerOnboarding() })
+onMounted(() => { growth.refresh().then(offerOnboarding) })
 </script>
 
 <template>
@@ -189,6 +209,7 @@ onMounted(() => {
       <div class="growth-heading-actions">
         <button v-if="ready" type="button" class="growth-secondary" @click="openLedger">成长账本</button>
         <button v-if="ready && !axesLocked && !axesEditing" type="button" class="growth-secondary" @click="startAxisEdit">编辑五维</button>
+        <slot name="actions" />
       </div>
     </header>
 
@@ -200,12 +221,12 @@ onMounted(() => {
     <div v-else-if="!ready" class="growth-status" role="status">成长分值配置暂不可用；当前不会展示或提交分数。<button type="button" class="growth-secondary" @click="growth.refresh">重新加载</button></div>
     <template v-else-if="ready">
       <div class="growth-overview">
-        <GrowthRadar :axes="growth.axes" :selected-id="manualDimensionId" />
+        <GrowthRadar :axes="growth.axes" :selected-id="manualDimensionId" @preview-axis="previewDimensionId = $event" />
         <div class="growth-axis-list" aria-label="各维度累计分数">
-          <p class="growth-select-hint">选择一个维度 <span aria-hidden="true">SELECT YOUR NEXT MOVE ↙</span></p>
-          <button v-for="(axis, index) in growth.axes" :key="axis.id" type="button" class="growth-axis-row" :style="{ '--axis': index }" :class="{ 'is-selected': manualDimensionId === axis.id }" :aria-pressed="manualDimensionId === axis.id" :disabled="growth.saving" @click="selectAxis(axis)">
+          <p class="growth-select-hint">选中维度，再点一次记一笔 <span aria-hidden="true">＋</span></p>
+          <button v-for="(axis, index) in growth.axes" :key="axis.id" type="button" class="growth-axis-row" :style="{ '--axis': index }" :class="{ 'is-selected': (previewDimensionId || manualDimensionId) === axis.id }" :aria-pressed="manualDimensionId === axis.id" aria-haspopup="dialog" :aria-expanded="entryOpen && manualDimensionId === axis.id" :disabled="growth.saving" @click="selectAxis(axis, $event)">
             <span class="growth-axis-index" aria-hidden="true">0{{ index + 1 }}</span>
-            <div class="growth-axis-name"><strong>{{ axis.name }}</strong><small>{{ axis.description }}</small></div>
+            <div class="growth-axis-name"><strong>{{ axis.name }}</strong><small>{{ manualDimensionId === axis.id ? '再点一次，记一笔 ↗' : axis.description }}</small></div>
             <div class="growth-axis-score"><b :key="axisPoints(axis)">{{ axisPoints(axis) }}</b><span>PT</span><small>阶段 {{ axis.stage_index ?? axis.stageIndex ?? '—' }}</small></div>
             <span class="growth-axis-track" aria-hidden="true"><i :style="{ width: `${stageProgress(axis)}%` }" /></span>
           </button>
@@ -223,14 +244,15 @@ onMounted(() => {
         <div class="growth-actions"><button type="button" class="growth-secondary" @click="axesEditing=false">取消</button><button type="button" class="growth-primary" :disabled="growth.saving || axesDraft.some(axis => !axis.name?.trim() || !axis.description?.trim())" @click="saveAxes">{{ growth.saving ? '正在保存…' : '保存五维' }}</button></div>
       </div>
 
-      <form v-else class="growth-manual-form" @submit.prevent="addManualContribution">
-        <div class="growth-form-title"><div><span class="growth-form-kicker" aria-hidden="true">MAKE A MOVE.</span><h3>给「{{ selectedAxis?.name || '成长' }}」记一笔</h3></div><span>{{ manualMin }}–{{ manualMax }} 分 · 每一步都算数</span></div>
+      <GrowthEntryDialog :open="entryOpen" :busy="growth.saving" :anchor="entryAnchor" :title="`给「${selectedAxis?.name || '成长'}」记一笔`" :subtitle="`累计 ${selectedAxis ? axisPoints(selectedAxis) : 0} 分 · 本次可记 ${manualMin}–${manualMax} 分`" @close="entryOpen = false">
+      <form class="growth-manual-form growth-entry-form" @submit.prevent="addManualContribution">
         <fieldset class="growth-point-picker" :disabled="growth.saving"><legend>选择分值</legend><div class="growth-point-options"><button v-for="points in pointChoices" :key="points" type="button" :class="{ active: Number(manualPoints) === points && manualPoints !== '' }" :aria-pressed="Number(manualPoints) === points && manualPoints !== ''" :aria-label="`增加 ${points} 分`" @click="manualPoints = points">+{{ points }}</button></div></fieldset>
-        <label v-if="manualMax - manualMin >= 8">自定义分值<input v-model="manualPoints" type="number" :min="manualMin" :max="manualMax" step="1" required :disabled="growth.saving"></label>
+        <label v-if="manualMax - manualMin >= 8" class="growth-custom-points">自定义分值<input v-model="manualPoints" type="number" :min="manualMin" :max="manualMax" step="1" required :disabled="growth.saving"><span>{{ manualMin }}–{{ manualMax }} 分</span></label>
         <label class="growth-reason">进展原因<textarea v-model.trim="manualReason" maxlength="500" rows="2" placeholder="记下这次具体做了什么" required :disabled="growth.saving" /></label>
         <div class="growth-actions"><span v-if="growth.error" class="growth-inline-error" role="alert">{{ growth.error }}</span><span class="growth-confirm-note">确认后计入成长账本</span><button type="submit" class="growth-primary" :disabled="growth.saving || !canAddManual">{{ growth.saving ? '正在确认…' : '确认这一步' }} <span aria-hidden="true">↗</span></button></div>
-        <div class="growth-receipt-slot" aria-live="polite" aria-atomic="true"><div v-if="receipt" :key="receipt.id" class="growth-receipt"><b>+{{ receipt.points }}</b><span><strong>{{ receipt.name }} · 进展已记下</strong><small>已确认，继续走自己的节奏。</small></span><i aria-hidden="true">STEP UP!</i></div></div>
+        <div class="growth-receipt-slot" aria-live="polite" aria-atomic="true"><div v-if="receipt" :key="receipt.id" class="growth-receipt"><b>+{{ receipt.points }}</b><span><strong>{{ receipt.name }} · 进展已记下</strong><small>已计入成长账本。</small></span></div></div>
       </form>
+      </GrowthEntryDialog>
 
     </template>
 
@@ -339,4 +361,17 @@ onMounted(() => {
 .growth-point-options button:focus-visible,.growth-primary:focus-visible{outline-offset:-4px;box-shadow:inset 0 0 0 3px #ff6bac;text-decoration:underline;text-underline-offset:3px}
 @media(max-width:800px){.growth-axis-list{padding-left:12px}.growth-panel{padding-top:32px}.growth-overview{padding-top:13px;gap:28px}.growth-panel::after{clip-path:polygon(0 1%,91% 0,100% 4%,100% 99%,6% 100%,0 97%)}.growth-heading h2{font-size:29px}.growth-heading{padding-inline:0}.growth-axis-row.is-selected{transform:translateX(-9px) rotate(-3deg)}.growth-receipt i{font-size:24px}}
 @media(prefers-reduced-motion:reduce){.growth-panel *{animation:none!important;transition:none!important}}
+.growth-entry-form{border:0;margin:0;padding:0;gap:14px}
+.growth-entry-form label{display:grid;gap:7px;color:#c5dcee;font-size:12px}
+.growth-entry-form input,.growth-entry-form textarea{width:100%;box-sizing:border-box;min-height:38px;padding:9px 10px;border:1px solid #54718d;background:#102a46;color:#eff9ff;font:inherit;border-radius:0}
+.growth-entry-form textarea{min-height:66px;resize:vertical;max-height:180px}
+.growth-entry-form input:focus-visible,.growth-entry-form textarea:focus-visible{outline:2px solid #78efff;outline-offset:2px}
+.growth-entry-form .growth-point-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(38px,1fr));gap:7px}
+.growth-entry-form .growth-point-options button{min-width:0;min-height:40px;font-size:23px;padding:5px}
+.growth-entry-form .growth-custom-points{display:flex;align-items:center;gap:12px}.growth-custom-points input{width:92px}.growth-custom-points>span{font-size:10px;color:#91aec4}
+.growth-entry-form .growth-actions{gap:10px}.growth-entry-form .growth-confirm-note{font-size:10px}
+.growth-entry-form .growth-receipt-slot{min-height:0}.growth-entry-form .growth-receipt-slot:empty{display:none}
+.growth-entry-form .growth-receipt{min-height:46px;padding:10px 15px}.growth-entry-form .growth-receipt>b{font-size:32px}
+.growth-heading-actions{align-items:center}.growth-overview{padding-bottom:12px}
+@media(prefers-reduced-motion:reduce){.growth-entry-form *{animation:none!important;transition:none!important}}
 </style>

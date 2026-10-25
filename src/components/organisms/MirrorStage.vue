@@ -2,6 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { captureMirrorCut as captureMirrorFace, beginMirrorCut as beginMirrorShatter } from '@/composables/useMirrorCut'
 import { useMirrorCardMotion } from '@/motion/useMirrorCardMotion'
+import GrowthRadar from '@/components/charts/GrowthRadar.vue'
+import GrowthPanel from '@/components/organisms/GrowthPanel.vue'
+import { useGrowthStore } from '@/stores/growth'
+import { useGrowthDock } from '@/motion/useGrowthDock'
 import { gsap, prefersReducedMotion } from '@/motion/core'
 
 const props = defineProps({
@@ -16,13 +20,17 @@ const surface = ref(null)
 const deck = ref(null)
 const cardMotion = useMirrorCardMotion(deck, () => props.currentId, () => props.nodes.map(node => node.id).join(','))
 const shattering = ref(false)
+const growth = useGrowthStore()
+const { origin: growthOrigin, trigger: growthTrigger, panel: growthPanel, inner: growthInner, closeButton: growthClose, expanded: growthExpanded, mounted: growthMounted, flying: growthFlying, departed: starDeparted, geometryVisible, toggle: toggleGrowth } = useGrowthDock(() => !props.busy && !shattering.value && !growth.saving)
+const growthLabel = computed(() => growth.axes.length === 5 ? '查看五维成长：' + growth.axes.map(axis => axis.name + ' ' + Number(axis.total_points ?? axis.totalPoints ?? 0) + ' 分').join('，') : '查看五维成长')
+
 let revealEffect = null
 const mirrorArt = ref(null)
 const inView = ref(false)
 let artTween, observer, motionPreference
 function onMotionPreference(event) { if (event.matches) resetArt() }
 function moveArt(event) {
-  if (prefersReducedMotion() || event.pointerType !== 'mouse' || props.busy) return
+  if (!starDeparted.value || prefersReducedMotion() || event.pointerType !== 'mouse' || props.busy) return
   const bounds = surface.value.getBoundingClientRect()
   artTween?.kill()
   artTween = gsap.to(mirrorArt.value, { x: (event.clientX - bounds.x - bounds.width / 2) * .025, y: (event.clientY - bounds.y - bounds.height / 2) * .025, rotation: (event.clientX - bounds.x - bounds.width / 2) * .008, duration: .6, ease: 'power3.out' })
@@ -56,6 +64,7 @@ function moveFocus(event, index) {
 }
 onBeforeUnmount(() => { artTween?.kill(); observer?.disconnect(); revealEffect?.cancel(); motionPreference?.removeEventListener('change', onMotionPreference) })
 onMounted(() => {
+  growth.refresh()
   observer = new IntersectionObserver(([entry]) => { inView.value = entry.isIntersecting }); observer.observe(surface.value)
   motionPreference = matchMedia('(prefers-reduced-motion: reduce)'); motionPreference.addEventListener('change', onMotionPreference)
 })
@@ -64,10 +73,10 @@ defineExpose({ surface, capture, reveal })
 
 <template>
   <section class="mirror-composition" aria-label="镜面与历史画像">
-    <div ref="surface" class="mirror-surface" :class="{ 'is-shattering': shattering, 'in-view': inView }" @pointermove="moveArt" @pointerleave="resetArt">
+    <div ref="surface" class="mirror-surface has-growth" :class="{ 'is-shattering': shattering, 'in-view': inView }" @pointermove="moveArt" @pointerleave="resetArt">
       <div class="surface-art" aria-hidden="true" />
       <span class="surface-watermark" aria-hidden="true">REFLECT<br>YOURSELF.</span>
-      <div ref="mirrorArt" class="kinetic-mirror" aria-hidden="true">
+      <div ref="mirrorArt" class="kinetic-mirror" :class="{ 'mirror-returned': geometryVisible }" aria-hidden="true">
         <svg class="mirror-facets" viewBox="0 0 380 420" fill="none">
           <path class="mirror-orbit" d="M42 240C-40 54 294-34 342 127S154 443 55 324" stroke="#6ddcff" stroke-dasharray="80 12 3 12"/>
           <path d="M96 73L266 25L342 276L149 385L42 231Z" fill="#6af2ff"/>
@@ -87,6 +96,12 @@ defineExpose({ surface, capture, reveal })
         </svg>
         <span class="mirror-sticker">BE / YOU</span>
       </div>
+      <div ref="growthOrigin" class="growth-star-origin" :class="{ departed: starDeparted }">
+        <button ref="growthTrigger" type="button" class="growth-star-trigger" :aria-label="growthLabel" :aria-expanded="growthExpanded" aria-controls="mirror-growth-dock" :disabled="busy || shattering || growthFlying" @click="toggleGrowth">
+          <span class="growth-star-tilt"><GrowthRadar :axes="growth.axes" compact /></span>
+          <span class="growth-star-caption"><b>五维成长</b><small>{{ growth.loading && !growth.overview ? '正在读取…' : '停留看分数 · 点击展开' }}</small><i aria-hidden="true">↙</i></span>
+        </button>
+      </div>
       <div class="surface-copy">
         <span class="surface-date">{{ activeNode?.label || '属于你的生活切面' }}<i />{{ activeNode?.type === 'monthly' ? '月度画像' : '我的镜子' }}</span>
         <h2 v-if="profile"><span>这一面，</span><br><em>是此刻的你。</em></h2>
@@ -96,13 +111,19 @@ defineExpose({ surface, capture, reveal })
         <div v-else class="surface-signature"><span />每个阶段，都有自己的光。</div>
       </div>
       <div class="surface-edition" aria-hidden="true"><b>{{ month || 'M' }}</b><span>{{ activeNode?.type === 'monthly' ? '月的镜子' : '生活的切面' }}</span></div>
-      <button type="button" class="surface-replay" :disabled="busy || shattering" @click="reveal()" aria-label="重播镜面动效">↗ <span>重播动效</span></button>
       <div class="surface-metrics" aria-label="近 30 天统计">
         <div v-for="metric in metrics" :key="metric.label"><b>{{ metric.value }}</b><span>{{ metric.label }}</span></div>
         <small>近 30 天</small>
       </div>
     </div>
 
+    <div v-show="growthExpanded" id="mirror-growth-dock" ref="growthPanel" class="growth-dock" :aria-busy="growthFlying" :inert="growthFlying || !growthExpanded">
+      <div ref="growthInner" class="growth-dock-inner">
+        <GrowthPanel v-if="growthMounted" :active="growthExpanded && !growthFlying">
+          <template #actions><button ref="growthClose" type="button" class="growth-dock-close" :disabled="growthFlying || growth.saving" @click="toggleGrowth">收起五维 <span aria-hidden="true">↗</span></button></template>
+        </GrowthPanel>
+      </div>
+    </div>
     <div v-if="nodes.length" class="deck-section">
       <div class="deck-heading"><div><h3>挑选一个时刻</h3><p>翻开记录里的另一面自己</p></div><span>{{ nodes.length }} 份画像</span></div>
       <div ref="deck" class="memory-deck" role="tablist" aria-label="挑选历史画像">
@@ -227,11 +248,33 @@ defineExpose({ surface, capture, reveal })
 .surface-summary{font-size:12px;max-width:36ch;line-height:1.8;margin-top:25px;-webkit-line-clamp:3;color:#d3e8ff}
 .surface-signature{margin-top:14px;font-size:10px}.surface-edition{top:23px;right:22px}.surface-edition b{font-size:45px}.surface-edition span{font-size:9px}
 .surface-metrics{min-height:72px;background:#03132df2;padding:14px clamp(20px,3.2vw,40px);gap:24px}.surface-metrics b{font:italic 800 32px/1 var(--font-display);color:#6defff}.surface-metrics>div{gap:8px}.surface-metrics span{font-size:10px}
-.surface-replay{position:absolute;bottom:90px;right:22px;z-index:2;display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid #8fd8ff88;background:#041c42bd;color:#cdf6ff;font-size:14px;cursor:pointer}.surface-replay span{font-size:10px}.surface-replay:hover{background:#76edff;color:#03172e}.surface-replay:focus-visible{outline:3px solid #ff8abb;outline-offset:3px}.surface-replay:disabled{opacity:.5;cursor:wait}
+
 .deck-heading h3{font-weight:800}.deck-heading h3::before{content:'REWIND / ';font:italic 800 19px var(--font-display);color:#72eaff;margin-right:6px}.deck-heading{padding-top:22px}.deck-section{background:#06162f}.memory-card.selected{border-color:#c0faff;box-shadow:4px 5px 0 #49dcec,0 15px 24px #01081c99}.memory-card.selected .card-topline{color:#b8f8ff}.memory-card.selected .card-bottomline b{background:#70efff;color:#051632;padding:3px 6px}
 @keyframes mirror-orbit{to{transform:rotate(360deg)}}@keyframes mirror-drift{to{transform:translate(5px,-10px) rotate(4deg)}}@keyframes mirror-light{0%,100%{opacity:.25;transform:translateY(-6px)}50%{opacity:.85;transform:translateY(8px)}}
-@container(max-width:500px){.surface-copy{width:76%;padding-top:25px}.surface-copy h2{font-size:clamp(23px,7cqw,33px);margin-top:28px}.surface-summary{max-width:27ch;font-size:11px}.kinetic-mirror{width:65%;right:-21%;top:45px;opacity:.75}.surface-edition{top:20px;right:15px}.surface-edition b{font-size:34px}.surface-signature{max-width:200px}.surface-replay{right:12px;bottom:88px;padding:8px}.surface-watermark{top:54px;font-size:75px}.mirror-sticker{display:none}.surface-metrics{gap:22px}.surface-metrics>div{flex-direction:column;gap:5px}.surface-metrics small{display:none}.surface-metrics b{font-size:27px}}
+@container(max-width:500px){.surface-copy{width:76%;padding-top:25px}.surface-copy h2{font-size:clamp(23px,7cqw,33px);margin-top:28px}.surface-summary{max-width:27ch;font-size:11px}.kinetic-mirror{width:65%;right:-21%;top:45px;opacity:.75}.surface-edition{top:20px;right:15px}.surface-edition b{font-size:34px}.surface-signature{max-width:200px}.surface-watermark{top:54px;font-size:75px}.mirror-sticker{display:none}.surface-metrics{gap:22px}.surface-metrics>div{flex-direction:column;gap:5px}.surface-metrics small{display:none}.surface-metrics b{font-size:27px}}
 @container(max-width:350px){.surface-summary{max-width:75%}.surface-signature{max-width:78%;line-height:1.6}.kinetic-mirror{right:-24%}}
 @media(max-width:699px){.mirror-surface{height:430px}.surface-art{opacity:1}.deck-heading{flex-wrap:wrap}.deck-heading h3::before{font-size:17px}}
 @media(prefers-reduced-motion:reduce){.mirror-orbit,.mirror-float,.mirror-glint{animation:none}.kinetic-mirror{will-change:auto}}
+/* The hero star owns this slot until it lands in the growth panel. */
+.mirror-composition{container-type:inline-size}
+.kinetic-mirror{opacity:0;transition:opacity .55s ease,filter .55s ease;filter:blur(6px)}
+.kinetic-mirror.mirror-returned{opacity:1;filter:blur(0)}
+.mirror-composition{margin-top:38px}
+.mirror-surface.has-growth{overflow:clip;overflow-clip-margin:55px}
+.surface-art,.surface-watermark{clip-path:inset(0)}
+.surface-watermark{right:0}
+.growth-star-origin{position:absolute;z-index:4;right:-100px;top:-112px;width:61%;height:540px;max-width:680px}
+.growth-star-origin.departed{visibility:hidden;pointer-events:none}
+.growth-star-trigger{display:block;position:relative;width:100%;height:100%;padding:0;border:0;background:transparent;cursor:pointer;touch-action:pan-y;color:#eafbff}
+.growth-star-trigger:disabled{cursor:wait}.growth-star-trigger:focus-visible{outline:3px solid #f98cbc;outline-offset:-4px}
+.growth-star-tilt{display:block;width:100%;height:100%;transform:rotate(-12deg);transform-origin:50% 50%}
+.growth-star-caption{position:absolute;bottom:92px;left:6%;display:flex;align-items:center;gap:10px;width:max-content;max-width:100%;padding:9px 16px;background:#e9f5ea;color:#112d4b;box-shadow:4px 4px 0 #ed4c8a;transform:translateX(-50%) rotate(-7deg)}
+.growth-star-caption b{font-size:13px;white-space:nowrap}.growth-star-caption small{font-size:10px;white-space:nowrap}.growth-star-caption i{font-style:normal;font-size:22px;color:#1955b2}
+.growth-star-trigger:hover .growth-star-caption{background:#e6ff9c}.surface-edition{right:47%}
+.growth-dock{position:relative;background:#071b34;border-top:1px solid #6eaccd66;scroll-margin-top:16px}
+.growth-dock-inner{position:relative}.growth-dock-close{min-height:34px;padding:6px 11px;border:1px solid #8fb9ff70;background:transparent;color:#d3f7f4;font-size:12px;white-space:nowrap}.growth-dock-close span{margin-left:8px}.growth-dock-close:disabled{opacity:.5;cursor:wait}.growth-dock-close:focus-visible{outline:3px solid #f883b3;outline-offset:3px}
+.growth-dock :deep(.growth-panel){margin:0}
+@container(max-width:700px){.growth-star-origin{right:-72px;width:66%;top:-64px;height:460px}.growth-star-caption small{display:none}.growth-star-caption{padding:7px 13px}}
+@container(max-width:500px){.mirror-surface.has-growth{height:510px;overflow-clip-margin:16px}.surface-edition{right:15px}.surface-copy{width:95%;padding-top:24px}.surface-copy h2{font-size:29px;margin-top:25px}.surface-summary{max-width:34%;font-size:11px;-webkit-line-clamp:4;margin-top:22px}.surface-signature{max-width:44%;font-size:9px}.growth-star-origin{right:-50px;top:151px;width:350px;height:330px}.growth-star-caption{bottom:95px;left:20%}.growth-star-caption b{font-size:11px}.growth-star-caption i{font-size:18px}.kinetic-mirror{top:195px;height:230px;right:0;width:58%;opacity:0}.kinetic-mirror.mirror-returned{opacity:1}}
+@media(prefers-reduced-motion:reduce){.kinetic-mirror,.growth-star-origin{transition:none}}
 </style>

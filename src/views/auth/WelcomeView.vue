@@ -1,11 +1,14 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { loginEntranceKey } from '@/motion/loginEntrance'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const enterMirror = inject(loginEntranceKey, navigate => navigate())
+const entering = ref(false)
 
 const mode = ref('login')
 const username = ref('')
@@ -75,12 +78,14 @@ const isValid = computed(() => {
 })
 
 async function handleSubmit() {
+  if (auth.loading || entering.value) return
   clearErrors()
   const uValid = validateUsername()
   const pValid = validatePassword()
   const cValid = validateConfirmPassword()
   if (!uValid || !pValid || !cValid) return
 
+  entering.value = true
   try {
     if (mode.value === 'login') {
       await auth.login(username.value, password.value)
@@ -89,13 +94,16 @@ async function handleSubmit() {
     }
     const candidate = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     const redirect = candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : null
-    router.push(redirect || (localStorage.getItem('mirror.home-page') === 'chat'
+    const destination = redirect || (localStorage.getItem('mirror.home-page') === 'chat'
       ? '/chat'
       : localStorage.getItem('mirror.home-page') === 'records'
         ? '/records'
-        : (localStorage.getItem('mirror.presentation-mode') === 'mobile' || (localStorage.getItem('mirror.presentation-mode') !== 'desktop' && window.innerWidth < 900) ? '/chat' : '/records')))
+        : (localStorage.getItem('mirror.presentation-mode') === 'mobile' || (localStorage.getItem('mirror.presentation-mode') !== 'desktop' && window.innerWidth < 900) ? '/chat' : '/records'))
+    await enterMirror(() => router.push(destination))
   } catch (err) {
     errorMsg.value = err.message || '操作失败，请重试'
+  } finally {
+    entering.value = false
   }
 }
 
@@ -117,8 +125,8 @@ function switchMode(newMode) {
 
     <div class="auth-body">
       <div class="auth-tabs">
-        <button :class="['auth-tab', { active: mode === 'login' }]" @click="switchMode('login')">登录</button>
-        <button :class="['auth-tab', { active: mode === 'register' }]" @click="switchMode('register')">注册</button>
+        <button type="button" :disabled="auth.loading || entering" :aria-pressed="mode === 'login'" :class="['auth-tab', { active: mode === 'login' }]" @click="switchMode('login')">登录</button>
+        <button type="button" :disabled="auth.loading || entering" :aria-pressed="mode === 'register'" :class="['auth-tab', { active: mode === 'register' }]" @click="switchMode('register')">注册</button>
       </div>
 
       <div v-if="errorMsg" class="auth-error" role="alert">{{ errorMsg }}</div>
@@ -166,9 +174,9 @@ function switchMode(newMode) {
           <div v-if="fieldErrors.confirmPassword" class="form-error show">{{ fieldErrors.confirmPassword }}</div>
         </div>
 
-        <button type="submit" class="btn" :disabled="!isValid || auth.loading">
+        <button type="submit" class="btn" :disabled="!isValid || auth.loading || entering">
           <span v-if="auth.loading" class="btn-loading" />
-          {{ mode === 'login' ? '登录' : '注册' }}
+          {{ auth.loading || entering ? '正在进入…' : mode === 'login' ? '回到我的日常' : '开始我的故事' }}
         </button>
       </form>
     </div>
@@ -176,7 +184,7 @@ function switchMode(newMode) {
     <div class="auth-footer">
       <p class="auth-footer-text">
         {{ mode === 'login' ? '还没有账号？' : '已有账号？' }}
-        <button class="auth-link" @click="switchMode(mode === 'login' ? 'register' : 'login')">
+        <button class="auth-link" :disabled="auth.loading || entering" @click="switchMode(mode === 'login' ? 'register' : 'login')">
           {{ mode === 'login' ? '立即注册' : '去登录' }}
         </button>
       </p>
@@ -185,126 +193,26 @@ function switchMode(newMode) {
 </template>
 
 <style scoped>
-/* 晨纸浅色（与全站统一 token）：暖白纸底 + 墨蓝 accent */
-.auth-page {
-  min-height: 100dvh;
-  display: flex; flex-direction: column;
-  background: var(--ink);
-  color: var(--text-hi);
-}
-
-.auth-header { padding: 60px 32px 0; text-align: center; }
-
-.auth-logo {
-  width: 64px; height: 64px; border-radius: 16px;
-  background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 20px;
-  box-shadow: 0 4px 14px rgba(44,95,232,.28);
-}
-.auth-logo svg { width: 32px; height: 32px; }
-
-.auth-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { font-size: 14px; color: var(--text-mid); }
-
-.auth-body {
-  flex: 1; padding: 32px;
-  max-width: 400px; margin: 0 auto; width: 100%;
-}
-
-.auth-tabs {
-  display: flex; margin-bottom: 24px;
-  border-radius: 12px; background: var(--ink-2); padding: 4px;
-}
-.auth-tab {
-  flex: 1; padding: 10px 16px;
-  border: none; background: transparent;
-  font-size: 14px; font-weight: 600; color: var(--text-mid);
-  cursor: pointer; border-radius: 9px; transition: all .2s ease;
-}
-.auth-tab.active {
-  background: var(--card); color: var(--text-hi);
-  box-shadow: 0 1px 3px rgba(20,20,15,.08);
-}
-
-.auth-error {
-  padding: 12px 16px; margin-bottom: 20px;
-  background: var(--danger-bg); border-radius: 12px;
-  color: var(--danger); font-size: 13px; text-align: center;
-}
-
-.auth-form { display: flex; flex-direction: column; gap: 20px; }
-
-.form-group { position: relative; }
-.form-label {
-  display: block; font-size: 13px; font-weight: 600;
-  color: var(--text-mid); margin-bottom: 8px;
-}
-
-.form-input {
-  width: 100%; padding: 14px 16px;
-  border: 1.5px solid var(--line); border-radius: 12px;
-  font-size: 16px; color: var(--text-hi); background: var(--card);
-  outline: none; transition: all .2s ease;
-}
-.form-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.form-input.error { border-color: var(--danger); }
-.form-input::placeholder { color: var(--text-low); }
-
-.form-error { font-size: 12px; color: var(--danger); margin-top: 6px; display: none; }
-.form-error.show { display: block; }
-
-.btn {
-  width: 100%; padding: 14px 24px;
-  border: none; border-radius: 12px;
-  font-size: 16px; font-weight: 600; cursor: pointer;
-  transition: all .2s ease;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(44,95,232,.25);
-}
-.btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(44,95,232,.3); }
-.btn:active:not(:disabled) { transform: scale(.98); }
-.btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-
-.btn-loading {
-  width: 16px; height: 16px;
-  border: 2px solid rgba(255,255,255,.3); border-top-color: white;
-  border-radius: 50%; animation: spin .6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.auth-footer {
-  padding: 20px 32px; text-align: center;
-  border-top: 0.5px solid var(--line);
-}
-.auth-footer-text { font-size: 13px; color: var(--text-mid); }
-.auth-link {
-  background: none; border: none;
-  color: var(--accent); font-weight: 600; cursor: pointer; font-size: 13px; padding: 0;
-}
-.auth-link:hover { text-decoration: underline; }
-
-@media (min-width: 768px) {
-  .auth-header { padding: 80px 40px 0; }
-  .auth-body { padding: 40px; }
-}
-
-.auth-page { min-height:0; background:transparent; color:white; width:100%; max-width:380px; }
-.auth-header { text-align:left; padding:0 0 26px; }
-.auth-eyebrow { display:block; color:var(--cyan); font:italic 800 25px/1 var(--font-display); margin-bottom:18px; }
-.auth-title { font-family:var(--font); font-size:29px; font-weight:900; margin:0 0 10px; letter-spacing:-.04em; }
-.auth-subtitle { font-size:12px; color:#a9c3eb; }
-.auth-body { padding:0; max-width:none; }
-.auth-tabs { padding:0; background:transparent; border-radius:0; border-bottom:1px solid #5278bc70; gap:12px; margin:4px 0 26px; }
-.auth-tab { border-radius:0; padding:12px; color:#9bb8e6; border-bottom:3px solid transparent; }
-.auth-tab.active { color:var(--cyan); background:transparent; border-bottom-color:var(--cyan); box-shadow:none; }
-.form-label { color:#c1d6f6; font-size:12px; }.form-input { border:1px solid #526da0; border-radius:2px; background:#0a1d50; color:white; padding:13px 14px; font-size:14px; }.form-input::placeholder{color:#89a2ce;font-size:12px}.form-input:focus{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan)}
-.auth-form { gap:20px; }.btn { border-radius:2px; background:var(--cyan); color:var(--night); font-size:14px; font-weight:900; box-shadow:4px 4px 0 var(--electric); margin-top:8px; }.btn:hover:not(:disabled){background:white;box-shadow:4px 4px 0 var(--electric)}.btn:disabled{opacity:.4}
-.auth-footer { padding:26px 0 0; margin-top:28px; border-top:1px solid #47639750; }.auth-footer-text{color:#aac4ed;font-size:11px}.auth-link{color:var(--cyan);font-size:11px}.auth-error{border-radius:2px;text-align:left;background:#f5236b20;border:1px solid #f879a0;color:#ffb9cf;font-size:12px}
-@media(max-width:899px){.auth-header{padding-bottom:20px}.auth-eyebrow{font-size:21px;margin-bottom:12px}.auth-title{font-size:25px}.auth-form{gap:16px}.auth-footer{margin-top:25px;padding-top:20px}}
+.auth-page{width:100%;max-width:370px;color:#f2f8f4}
+.auth-header{padding-bottom:27px}
+.auth-eyebrow{display:block;font:italic 900 34px/.95 var(--font-display);color:#8de2e8;transform:rotate(-3deg);margin:0 0 23px}
+.auth-title{font-size:29px;font-weight:900;letter-spacing:-.04em;line-height:1.4;margin-bottom:10px}
+.auth-subtitle{font-size:12px;color:#abc2d0;line-height:1.8}
+.auth-tabs{display:flex;gap:6px;margin-bottom:28px;border-bottom:1px solid #64839555;padding-bottom:9px}
+.auth-tab{min-height:43px;padding:10px 28px;background:transparent;color:#b4c7d6;font-size:14px;font-weight:800;border:0;cursor:pointer;transition:transform .22s,background .22s}
+.auth-tab.active{background:#e8f1eb;color:#102c46;transform:skew(-9deg) rotate(-2deg);box-shadow:4px 4px 0 #1555d9}
+.auth-tab:not(.active):hover{color:#8feaf0;transform:translateX(3px)}
+.auth-form{display:grid;gap:22px}.form-label{display:block;color:#bdcfd9;font-size:12px;margin-bottom:9px}
+.form-input{width:100%;padding:14px 13px;background:#0d2944;border:1px solid #476581;border-left:3px solid #719aa8;border-radius:0;color:#f1f9ff;font:14px var(--font);outline:none;transition:background .2s,border-color .2s}
+.form-input::placeholder{font-size:12px;color:#92adbd}.form-input:focus{border-color:#93edf0;background:#103756;box-shadow:3px 3px 0 #1b53b7}
+.form-input.error{border-color:#f488ad}.form-error{font-size:12px;color:#ffaec9;margin-top:7px}
+.btn{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:53px;padding:14px 24px;margin-top:8px;border:0;border-radius:0;background:#8ee8ea;color:#0c2942;font-size:15px;font-weight:900;box-shadow:6px 6px 0 #1b51c1;transform:skew(-6deg);cursor:pointer;transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .2s,box-shadow .2s}
+.btn:after{content:'↗';font-size:25px;line-height:1}.btn:hover:not(:disabled){background:#e7f6ec;transform:skew(-6deg) translate(-3px,-3px);box-shadow:10px 10px 0 #1b51c1}.btn:active:not(:disabled){transform:skew(-6deg) translate(3px,3px);box-shadow:2px 2px 0 #1b51c1}.btn:disabled{opacity:.45;cursor:not-allowed}
+.auth-footer{margin-top:35px;padding-top:20px;border-top:1px solid #64839555}.auth-footer-text{font-size:12px;color:#a6bccb}.auth-link{border:0;padding:7px;background:transparent;color:#99ebec;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
+.auth-error{margin-bottom:20px;padding:12px;background:#592b4555;border-left:3px solid #ed77a4;color:#ffbdd3;font-size:12px;line-height:1.7}
+.btn-loading{width:16px;height:16px;border:2px solid #0c294244;border-top-color:#0c2942;border-radius:50%;animation:auth-spin .7s linear infinite}
+button:focus-visible,a:focus-visible{outline:3px solid #f688b2;outline-offset:5px}
+@keyframes auth-spin{to{rotate:360deg}}
+@media(max-width:699px){.auth-page{max-width:430px}.auth-eyebrow{font-size:28px;margin-bottom:17px}.auth-title{font-size:25px}.auth-header{padding-bottom:20px}.auth-form{gap:18px}.auth-footer{margin-top:28px}.form-input{font-size:16px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>

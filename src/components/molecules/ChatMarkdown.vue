@@ -69,32 +69,32 @@ function onClick(event) {
 
 <style scoped>
 .chat-md { white-space: normal; }
-.chat-md > :first-child { margin-top: 0; }
-.chat-md > :last-child { margin-bottom: 0; }
-.chat-md p { margin: 0 0 .7em; }
-.chat-md ul, .chat-md ol { margin: .35em 0 .8em; padding-left: 1.45em; }
-.chat-md li { margin: .22em 0; }
-.chat-md strong { font-weight: 800; }
-.chat-md em { font-style: italic; }
-.chat-md h1, .chat-md h2, .chat-md h3, .chat-md h4, .chat-md h5, .chat-md h6 {
+.chat-md :deep(> :first-child){ margin-top: 0; }
+.chat-md :deep(> :last-child){ margin-bottom: 0; }
+.chat-md :deep(p) { margin: 0 0 .7em; }
+.chat-md :deep(ul), .chat-md :deep(ol) { margin: .35em 0 .8em; padding-left: 1.45em; }
+.chat-md :deep(li) { margin: .22em 0; }
+.chat-md :deep(strong) { font-weight: 800; }
+.chat-md :deep(em) { font-style: italic; }
+.chat-md :deep(h1), .chat-md :deep(h2), .chat-md :deep(h3), .chat-md :deep(h4), .chat-md :deep(h5), .chat-md :deep(h6) {
   margin: .75em 0 .45em; line-height: 1.4; font-weight: 800;
 }
-.chat-md h1 { font-size: 1.3em; }
-.chat-md h2 { font-size: 1.2em; }
-.chat-md h3 { font-size: 1.1em; }
-.chat-md code {
+.chat-md :deep(h1) { font-size: 1.3em; }
+.chat-md :deep(h2) { font-size: 1.2em; }
+.chat-md :deep(h3) { font-size: 1.1em; }
+.chat-md :deep(code) {
   padding: 1px 5px; border-radius: 4px; background: #0f2b6610;
   font-family: var(--font-mono); font-size: .88em;
 }
-.chat-md pre {
+.chat-md :deep(pre) {
   margin: .6em 0; padding: 10px 12px; overflow-x: auto; border-radius: 6px;
   background: #0b1b3d; color: #e8f1ff; line-height: 1.6;
 }
-.chat-md pre code { padding: 0; background: none; color: inherit; }
-.chat-md blockquote {
+.chat-md :deep(pre code) { padding: 0; background: none; color: inherit; }
+.chat-md :deep(blockquote) {
   margin: .6em 0; padding: 6px 12px; border-left: 3px solid var(--cyan);
   background: #0f2b6608; color: var(--text-mid);
 }
-.chat-md hr { margin: .9em 0; border: 0; border-top: 1px solid var(--line); }
-.chat-md a { color: var(--accent); text-decoration: underline; }
+.chat-md :deep(hr) { margin: .9em 0; border: 0; border-top: 1px solid var(--line); }
+.chat-md :deep(a) { color: var(--accent); text-decoration: underline; }
 </style>

@@ -26,7 +26,7 @@ import { createMotionScope, duration, gsap, prefersReducedMotion } from '@/motio
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import { useSceneActivity } from '@/motion/useSceneActivity'
-import ChatMarkdown from '@/components/molecules/ChatMarkdown.vue'
+import ChatMessageContent from '@/components/molecules/ChatMessageContent.vue'
 
 /**
  * 对话页（T-F-R6 + 六轮任务 B：会话栏常驻 + 十一轮 vault 文件卡/上传入口）
@@ -61,8 +61,13 @@ const orderedMessages = computed(() => {
   for (const userMessage of list) {
     if (userMessage.role !== 'user') continue
     out.push(userMessage)
+    // 实时消息的本地 id 与 meta 下发/历史回放的 serverMessageId 不是同一个值：
+    // 发送时 AI 气泡先绑本地 id，meta 到达后改成服务端 id；只比 id 会导致配对失败，
+    // 所有 AI 气泡被兜底追加到末尾。两个 id 都接受，刷新前后顺序才一致。
+    const userIds = new Set([String(userMessage.id)])
+    if (userMessage.serverMessageId) userIds.add(String(userMessage.serverMessageId))
     for (const reply of list) {
-      if (reply.role !== 'ai' || String(reply.actionSourceMessage) !== String(userMessage.id)) continue
+      if (reply.role !== 'ai' || !userIds.has(String(reply.actionSourceMessage))) continue
       out.push(reply)
       consumed.add(reply)
     }
@@ -571,9 +576,10 @@ async function onRemoveSession(id) {
                 <ToolTrail v-if="msg.role === 'ai'" :tools="msg.toolsUsed" />
                 <span v-if="msg.typing" class="typing-dots"><i /><i /><i /></span>
                 <template v-else-if="!msg.typing">
-                  <ChatMarkdown
+                  <ChatMessageContent
                     v-if="msg.role === 'ai'"
                     :content="msg.content"
+                    :streaming="chat.sending"
                     :sources="msg.sources"
                     :vault-refs="msg.vaultRefs"
                     @open-source="openSource"
