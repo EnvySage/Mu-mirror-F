@@ -76,7 +76,7 @@ useTodoPolling({
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
-  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', settings: '设置' }
+  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', settings: '设置' }
   return names[route.name] || ''
 })
 
@@ -128,7 +128,7 @@ watch(() => route.name, () => {
       </PresentationLayout>
       <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
-        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[renderedPage] }}</span>
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[renderedPage] }}</span>
       </div>
       <DetailPanel />
     </main>

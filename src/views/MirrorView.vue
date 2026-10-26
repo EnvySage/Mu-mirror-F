@@ -1,4 +1,5 @@
 <script setup>
+import TarotEntry from '@/components/tarot/TarotEntry.vue'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMirrorStore } from '@/stores/mirror'
@@ -471,6 +472,7 @@ onBeforeUnmount(() => {
         <span class="period-caption">近 30 天</span>
         <button class="p3-button" :disabled="mirrorBusy || mirror.loading" @click="onGenerate">{{ preparingGeneration || mirror.generating ? '正在显影…' : '生成新快照' }}<span aria-hidden="true">↗</span></button>
       </PageMasthead>
+      <TarotEntry />
       <MirrorStage
         ref="mirrorStage" :profile="mirror.profile" :nodes="timeline" :current-id="mirror.currentSnapshotId"
         :busy="mirrorBusy || mirror.loading"

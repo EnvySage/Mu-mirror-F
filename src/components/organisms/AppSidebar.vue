@@ -15,6 +15,7 @@ const today = new Date()
 const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit' }).format(today)
 const weekday = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', weekday: 'short' }).format(today)
 const nav = [
+ { page:'tarot', label:'偶然回声', en:'TAROT', path:'M6 2h12v20H6zM12 6l3 6-3 6-3-6z' },
  { page:'records', label:'日常记录', en:'RECORDS', path:'M4 5h16M4 12h16M4 19h10' },
  { page:'calendar', label:'时间日历', en:'CALENDAR', path:'M8 2v5M16 2v5M3 10h18M4 5h16v16H4z' },
  { page:'mirror', label:'我的镜子', en:'MIRROR', path:'M12 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 19v3M8 22h8M8 10l3-3' },

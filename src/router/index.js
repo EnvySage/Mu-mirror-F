@@ -24,6 +24,7 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: '', redirect: preferredHome },
+        { path: 'tarot', name: 'tarot', component: () => import('@/views/TarotView.vue') },
         {
           path: 'records/:date?',
           name: 'records',
