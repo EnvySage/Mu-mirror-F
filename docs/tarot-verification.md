@@ -1,0 +1,52 @@
+# 塔罗首版验收（2026-10-27）
+
+状态：正式功能已实现，位于三仓 codex/tarot-20261026 分支；未推送、未部署。上线前仍需使用目标模型进行语气验收。
+
+## 已完成
+
+- 12 张原创牌面、每日随机且同日不可替换、上海零点换日。
+- 每日抽牌才解锁收藏；问一问只抽单张、不解锁收藏。
+- 日记 7/30/90 天、未完成待办、已有镜子可独立配置；没有问题不读取私人材料。
+- 解读持久化、刷新恢复、超时失败可重新解读同一张牌；来源失效隐藏旧解读。
+- 日牌只进入聊天最终答复，规划和画像不带牌义；闲聊同会话每天最多预留一次机会，支持停用。
+- 桌面侧栏及镜子页入口，375/768/1440 布局、减少动画、放大鉴赏、锁定牌背和账号隔离。
+
+## 验证证据
+
+| 检查 | 结果 |
+| --- | --- |
+| F npm test | 50 通过 |
+| F npm run build | 通过 |
+| F tests/browser/tarot.mjs | 375/768/1440 全通过：网络响应丢失重试、同日不可换、失败解读保留牌、资料配置、刷新恢复、跨日更新、鉴赏、无横向溢出 |
+| B 3 个 Tarot 数据库体验测试类 | 8 通过，无跳过；包括 20 次并发日牌、跨日请求别名、两端聊天额度 |
+| B 全量 mvnw test（完整独立 PG 库） | 497 项，488 通过、9 失败、0 错误、0 跳过 |
+| B 改动前 abe7ea2 的 ChatRetrievalTest / ToolsTest | 同样 9 项断言失败，确认为原有基线问题 |
+| A pytest tests/ | 715 通过、15 跳过；塔罗相关检查未跳过 |
+| A upload 同步 | 已运行同步脚本，运行时产物一致 |
+| 完整 schema + v12 | PostgreSQL 18.6 / pgvector 0.8.7 独立库应用成功 |
+| B scripts/tarot_e2e.py | 真实 HTTP / PostgreSQL / Python gRPC / OpenAI 兼容本地桩闭环通过：并发抽取、无模型错误、账号隔离、幂等、三类引用、撤回失效、同牌重试 |
+| F tests/browser/tarot-live.mjs | 不拦截 API：恢复真实结果、打开三类原始资料、运行中换账号后结果与收藏清空，通过 |
+
+本地模型桩仅验证协议和产品行为，不代表真实模型措辞质量。测试使用合成账号和日记，没有读取真实用户日记，也没有使用真实模型密钥。AI/tests/fixtures/tarot-evaluation.json 留有 20 条目标模型语气验收样例。
+
+## 运行浏览器验收
+
+在普通 Vite 开发服务上运行（不要使用 preview mock 模式）。安装 Playwright/Chrome，或通过 PLAYWRIGHT_MODULE 指向现有 Playwright 模块。
+
+```powershell
+$env:TAROT_UI_URL='http://127.0.0.1:5179'
+$env:TAROT_CATALOG='../B/src/main/resources/tarot/catalog-v1.json'
+node tests/browser/tarot.mjs
+```
+
+真实链路先启动独立测试库和 B 服务、A 的 build_legacy_server(port=18003)、A/scripts/tarot_stub_model.py。B 的模型 RPC 地址指向 127.0.0.1:18003；前端 VITE_API_TARGET 指向测试 B 的端口。设置 MIRROR_TAROT_TEST_DSN 和 MIRROR_TAROT_TEST_OUTPUT 后运行 B/scripts/tarot_e2e.py，再运行 F/tests/browser/tarot-live.mjs。输出目录中的测试登录信息只用于本地验收，不提交仓库。
+
+## 实施取舍
+
+- 按用户要求保留用户能感知的集成与浏览器测试，没有扩张为大量内部实现测试。
+- 使用 JdbcTemplate 显式事务与原子 SQL，复用现有依赖。
+- 短问题的日记/待办相关性采用有限候选集上的关键词匹配，避免额外向量模型调用；可能漏掉语义相近但不重词的材料，页面显示这一限制。
+- 保留已确认的原始 PNG，收藏图按需加载；首张图片下载比 WebP 缩略图大。
+- Docker 不可用时使用隔离 PostgreSQL；完整 schema 联调最终使用 WSL 内独立解包的 PostgreSQL/pgvector，未触碰现有业务库。
+
+发布和回退见后端 docs/tarot-operations.md。当前无真实模型可用于语气评审，此项明确保留为上线前检查。

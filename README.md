@@ -120,3 +120,7 @@ server: { proxy: { '/api': { target: 'http://localhost:9050', changeOrigin: true
 - `docs/2026-09-03-system-design-v2.md` — 系统设计 v2.3（前端契约见第八章）
 - `HANDOVER.md` — 前端交接文档
 - `docs/prototype/` — 早期 HTML 原型
+
+### 塔罗首版
+
+新增 `/tarot`：每日牌、问一问、每日解锁收藏。实现与验收见 [塔罗验收记录](docs/tarot-verification.md)，卡面来源见 [资产说明](docs/tarot-assets.md)。
