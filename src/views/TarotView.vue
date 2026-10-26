@@ -2,6 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useTarotStore } from '@/stores/tarot'
 import { useAuthStore } from '@/stores/auth'
+import { tarotDate } from '@/utils/tarotProtocol'
 import TarotCard from '@/components/tarot/TarotCard.vue'
 import TarotGalleryDialog from '@/components/tarot/TarotGalleryDialog.vue'
 import TarotReferenceSettings from '@/components/tarot/TarotReferenceSettings.vue'
@@ -62,11 +63,11 @@ onBeforeUnmount(() => { mounted = false; clearInterval(timer); document.removeEv
         </div>
         <section v-if="tarot.analysis" class="tarot-reading" aria-label="问题解读" aria-live="polite">
           <h3>这张牌，想起了什么</h3><p class="reading-question">{{ tarot.analysis.question }}</p><p v-if="terminalMessage" class="reading-status">{{ terminalMessage }}</p><p v-else-if="tarot.analyzing">正在结合你的问题整理启发…</p><p v-else class="reading-text">{{ tarot.analysis.text }}</p>
-          <div v-if="tarot.analysis.status === 'completed' && tarot.analysis.sources?.length" class="tarot-sources"><span>参考了这些生活片段</span><button v-for="item in tarot.analysis.sources" :key="item.ref" @click="source = item"><b>[{{ item.ref }}]</b> {{ item.title }}<small>{{ item.date?.slice(0, 10) }} ↗</small></button></div>
+          <div v-if="tarot.analysis.status === 'completed' && tarot.analysis.sources?.length" class="tarot-sources"><span>参考了这些生活片段</span><button v-for="item in tarot.analysis.sources" :key="item.ref" @click="source = item"><b>[{{ item.ref }}]</b> {{ item.title }}<small>{{ tarotDate(item.date) }} ↗</small></button></div>
           <p v-for="(item, i) in tarot.analysis.notices" :key="i" class="tarot-fine">{{ item }}</p>
         </section>
       </section>
-      <section v-else class="tarot-collection" aria-labelledby="collection-title"><header><h2 id="collection-title">慢慢遇见，<br />一张张收藏。</h2><p>只有每日抽到的牌会在这里亮起。<br />重复相遇，也算今天的一段缘分。</p></header><div class="collection-grid"><figure v-for="(card, i) in tarot.cards" :key="card.id" :style="{ '--tilt': `${i % 2 ? 2 : -2}deg` }"><TarotCard :card="card" compact :locked="!tarot.unlocked.has(card.id)" @open="showCard($event, true)" /><figcaption v-if="tarot.unlocked.has(card.id)">{{ tarot.collection.entries.find(e => e.card_id === card.id)?.first_obtained_at?.slice(0, 10) }} 初次相遇</figcaption><figcaption v-else>尚未相遇</figcaption></figure></div></section>
+      <section v-else class="tarot-collection" aria-labelledby="collection-title"><header><h2 id="collection-title">慢慢遇见，<br />一张张收藏。</h2><p>只有每日抽到的牌会在这里亮起。<br />重复相遇，也算今天的一段缘分。</p></header><div class="collection-grid"><figure v-for="(card, i) in tarot.cards" :key="card.id" :style="{ '--tilt': `${i % 2 ? 2 : -2}deg` }"><TarotCard :card="card" compact :locked="!tarot.unlocked.has(card.id)" @open="showCard($event, true)" /><figcaption v-if="tarot.unlocked.has(card.id)">{{ tarotDate(tarot.collection.entries.find(e => e.card_id === card.id)?.first_obtained_at) }} 初次相遇</figcaption><figcaption v-else>尚未相遇</figcaption></figure></div></section>
       <footer class="tarot-footer">牌提供一个视角，生活由你决定。</footer>
     </template>
     <TarotGalleryDialog :card="gallery" :cards="galleryCards" @close="gallery = null" @select="gallery = $event" />
