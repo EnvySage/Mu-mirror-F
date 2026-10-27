@@ -13,6 +13,7 @@ const tab = ref('daily'), gallery = ref(null), galleryCards = ref([]), source = 
 const tabs = [{ id: 'daily', name: '每日运势' }, { id: 'question', name: '问一问' }, { id: 'collection', name: '收藏册' }]
 const todayDrawn = computed(() => tarot.daily?.draw?.draw_date === tarot.daily?.server_date)
 const ownedCards = computed(() => tarot.cards.filter(c => tarot.unlocked.has(c.id)))
+const recoveredCard = computed(() => tarot.cards.find(c => c.id === tarot.recoveredDaily?.card_id))
 const terminalMessage = computed(() => tarot.analysis?.status === 'stale' ? '参考资料已变更或撤回，旧解读已隐藏。可以用当前资料重新解读。' : tarot.analysis?.status === 'failed' ? '这次解读没有完成。牌已保留，可以重新解读。' : '')
 function showCard(card, collection = false) { if (!card) return; gallery.value = card; galleryCards.value = collection ? ownedCards.value : [card] }
 function switchTab(id) { tab.value = id; tarot.error = ''; tarot.notice = '' }
@@ -42,6 +43,10 @@ onBeforeUnmount(() => { mounted = false; clearInterval(timer); document.removeEv
     <nav class="tarot-tabs" aria-label="塔罗功能"><button v-for="item in tabs" :key="item.id" :class="{ active: tab === item.id }" :aria-current="tab === item.id ? 'page' : undefined" @click="switchTab(item.id)">{{ item.name }}<small v-if="item.id === 'collection' && tarot.collection">{{ tarot.collection.unlocked_count }} / {{ tarot.collection.active_count }}</small></button></nav>
     <div v-if="tarot.error" class="tarot-alert" role="alert"><p>{{ tarot.error }}</p><button v-if="!tarot.cards.length" @click="tarot.load">重新加载</button><RouterLink v-if="/配置|模型/.test(tarot.error)" to="/settings">前往模型设置</RouterLink></div>
     <p v-if="tarot.notice" class="tarot-notice" role="status">{{ tarot.notice }}</p>
+    <section v-if="tab === 'daily' && recoveredCard" class="recovered-draw" aria-label="找回的抽牌">
+      <button :aria-label="`放大找回的${recoveredCard.name}`" @click="showCard(recoveredCard)"><img :src="recoveredCard.image_url" :alt="recoveredCard.name" width="80" height="120" /></button>
+      <div><small>{{ tarot.recoveredDaily.draw_date }} 的抽牌已找回</small><h2>{{ recoveredCard.name }} / {{ recoveredCard.keyword }}</h2><p>{{ recoveredCard.headline }}</p><small>这张牌已保留在收藏册。今天的新牌仍由你主动抽取。</small></div>
+    </section>
     <div v-if="tarot.loading && !tarot.cards.length" class="tarot-loading" role="status">正在展开牌桌…</div>
     <template v-else-if="tarot.cards.length">
       <section v-if="tab === 'daily'" class="tarot-stage" aria-labelledby="daily-title">
@@ -81,4 +86,5 @@ onBeforeUnmount(() => { mounted = false; clearInterval(timer); document.removeEv
 @container(max-width:400px){.tarot-masthead h1{font-size:32px}.mobile-break{display:block}.tarot-masthead p{font-size:12px}.collection-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:25px 20px}.tarot-tabs button{padding:10px 8px;font-size:14px}}
 @media(prefers-reduced-motion:reduce){.card-reveal-enter-active{animation:none}.card-reveal-leave-active{transition:none}}
 .tarot-page button:focus-visible,.tarot-page textarea:focus-visible{outline:3px solid #fff;outline-offset:4px}
+.recovered-draw{display:flex;align-items:center;gap:18px;margin-top:20px;padding:16px;background:#092e6b;border-left:3px solid #50edfa}.recovered-draw button{flex:none;width:80px;padding:0}.recovered-draw img{display:block;width:100%;height:auto}.recovered-draw h2{font-size:19px;margin:8px 0}.recovered-draw p{font-size:14px;margin:8px 0}.recovered-draw small{font-size:12px;line-height:1.8;color:#b4cff0}
 </style>

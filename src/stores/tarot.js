@@ -7,7 +7,7 @@ import { newTarotRequestId, referenceOptions, isAnalyzing } from '@/utils/tarotP
 export const useTarotStore = defineStore('tarot', () => {
   const auth = useAuthStore()
   const cards = ref([]), daily = ref(null), collection = ref(null), preferences = ref(null)
-  const reading = ref(null), analysis = ref(null), question = ref('')
+  const reading = ref(null), analysis = ref(null), question = ref(''), recoveredDaily = ref(null)
   const loading = ref(false), busy = ref(false), saving = ref(false), error = ref(''), notice = ref('')
   let epoch = 0, pendingAnalysis = null, polling = false
   const owner = () => auth.user?.id || ''
@@ -17,7 +17,7 @@ export const useTarotStore = defineStore('tarot', () => {
   const analyzing = computed(() => isAnalyzing(analysis.value))
   const unlocked = computed(() => new Set((collection.value?.entries || []).map(c => c.card_id)))
   watch(() => auth.user?.id, () => {
-    epoch++; cards.value = []; daily.value = collection.value = preferences.value = reading.value = analysis.value = null
+    epoch++; cards.value = []; daily.value = collection.value = preferences.value = reading.value = analysis.value = recoveredDaily.value = null
     question.value = error.value = notice.value = ''; loading.value = busy.value = saving.value = false
     pendingAnalysis = null; polling = false
   }, { flush: 'sync' })
@@ -56,6 +56,7 @@ export const useTarotStore = defineStore('tarot', () => {
       if (!active(token)) return
       sessionStorage.removeItem(key)
       daily.value = result
+      recoveredDaily.value = result.draw?.draw_date !== result.server_date ? result.draw : null
       notice.value = result.draw?.draw_date !== result.server_date ? '已找回上次抽牌。今天的新牌可以继续抽取。' : result.newly_collected ? '新牌已收入收藏册。' : '今天的牌已确定，明天再来。'
       await refreshDaily()
     } catch (e) { if (active(token)) error.value = `${e.message}。再点一次会找回同一次抽牌。` }
@@ -113,6 +114,6 @@ export const useTarotStore = defineStore('tarot', () => {
     } catch (e) { if (active(token)) error.value = `${e.message}。连接恢复后会继续读取结果。` }
     finally { if (active(token)) polling = false }
   }
-  return { cards, daily, collection, preferences, reading, analysis, question, loading, busy, saving, error, notice,
+  return { cards, daily, recoveredDaily, collection, preferences, reading, analysis, question, loading, busy, saving, error, notice,
     dailyCard, questionCard, analyzing, unlocked, load, refreshDaily, drawDaily, drawQuestion, savePreferences, analyze, poll }
 })

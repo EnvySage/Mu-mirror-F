@@ -23,7 +23,7 @@ try {
     let day = '2026-10-27', draw = null, reading = null, analysis = null, analysisCount = 0
     let unlocked = false, lostDrawResponse = true
     let preferences = { diaryEnabled: true, diaryDays: 7, todosEnabled: false, mirrorEnabled: false, version: 0 }
-    const dailyRequests = [], payloads = []
+    const dailyRequests = [], payloads = [], drawRequests = new Map()
     await page.route(/\/api\//, async route => {
       const req = route.request(), path = new URL(req.url()).pathname
       if (!path.startsWith('/api/')) return route.continue()
@@ -35,12 +35,17 @@ try {
       }
       if (path === '/api/tarot/daily/draw') {
         dailyRequests.push(req.postDataJSON().clientRequestId)
-        draw ||= { id: 'draw-1', drawDate: day, cardId: cards[0].id, createdAt: `${day}T12:00:00+08:00` }
+        const requestId = req.postDataJSON().clientRequestId
+        if (!drawRequests.has(requestId)) {
+          if (draw?.drawDate !== day) draw = { id: `draw-${day}`, drawDate: day, cardId: cards[0].id, createdAt: `${day}T12:00:00+08:00` }
+          drawRequests.set(requestId, draw)
+        }
+        const returned = drawRequests.get(requestId)
         unlocked = true
-        if (lostDrawResponse) { lostDrawResponse = false; return route.abort('failed') }
-        data = { serverDate: day, draw, newlyCollected: true }
+        if (lostDrawResponse) { lostDrawResponse = false; if (width === 768) day = '2026-10-28'; return route.abort('failed') }
+        data = { serverDate: day, draw: returned, newlyCollected: true }
       }
-      if (path === '/api/tarot/daily') data = { serverDate: day, draw }
+      if (path === '/api/tarot/daily') data = { serverDate: day, draw: draw?.drawDate === day ? draw : null }
       if (path === '/api/tarot/collection') data = { activeCount: 12, unlockedCount: unlocked ? 1 : 0, entries: unlocked ? [{ cardId: cards[0].id, firstObtainedAt: `${day}T12:00:00+08:00`, dailyDrawCount: 1 }] : [] }
       if (path === '/api/tarot/readings' && req.method() === 'POST') {
         reading = { readingId: 'reading-1', cardId: cards[1].id, latestAnalysisId: null }; data = reading
@@ -58,8 +63,14 @@ try {
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).click()
     await page.getByRole('alert').waitFor()
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).click()
+    if (width === 768) {
+      await page.getByRole('region', { name: '找回的抽牌' }).waitFor()
+      assert.ok((await page.getByRole('region', { name: '找回的抽牌' }).innerText()).includes('2026-10-27'))
+      assert.ok((await page.getByRole('region', { name: '找回的抽牌' }).innerText()).includes(cards[0].name))
+      await page.getByRole('button', { name: '抽取今日牌', exact: true }).click()
+    }
     await page.getByText('今天已抽取', { exact: true }).waitFor()
-    assert.equal(dailyRequests.length, 2)
+    assert.equal(dailyRequests.length, width === 768 ? 3 : 2)
     assert.equal(dailyRequests[0], dailyRequests[1], 'lost draw response must reuse request ID')
     await page.reload()
     await page.getByText('今天已抽取', { exact: true }).waitFor()
@@ -95,7 +106,7 @@ try {
     await page.getByRole('button', { name: '每日运势', exact: true }).click()
     await page.screenshot({ path: `${output}/daily-${width}.png` })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal overflow')
-    day = '2026-10-28'; draw = null
+    day = '2026-10-29'; draw = null
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).waitFor()
     assert.deepEqual(errors, [])
