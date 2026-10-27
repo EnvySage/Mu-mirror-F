@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { gsap, prefersReducedMotion } from '@/motion/core'
+import TarotFractures from './TarotFractures.vue'
 const props = defineProps({ card: { type: Object, required: true }, variant: { type: String, default: 'collection' } })
 const emit = defineEmits(['zoom', 'ready'])
 const root = ref(null)
@@ -19,6 +20,7 @@ onMounted(() => {
     timeline.from(root.value, { opacity: 0, duration: .3 }, 0)
       .from('.spotlight-haze', { scale: .6, opacity: 0, duration: 1.3, ease: 'power2.out' }, 0)
       .from('.spotlight-echoes', { scale: .85, rotation: -15, opacity: 0, duration: 1.3, ease: 'power2.out' }, .1)
+      .from('.tarot-fractures polygon', { x: i => i % 2 ? 45 : -45, y: i => i % 3 ? -30 : 30, rotation: i => i % 2 ? 7 : -7, opacity: 0, duration: 1.3, stagger: .035, ease: 'power3.out' }, .08)
       .from('.spotlight-orbit', { scale: 1.2, rotation: -55, opacity: 0, duration: 1.3, ease: 'power2.out' }, .08)
       .from('.spotlight-card-flight', { scale: props.variant === 'collection' ? .85 : 1.4, xPercent: 12, yPercent: -8, rotation: -22, duration: 1.2, ease: 'power3.out' }, .12)
       .fromTo('.spotlight-flip', { rotationY: -180 }, { rotationY: 0, duration: 1.05, ease: 'power3.inOut' }, .12)
@@ -33,6 +35,7 @@ onBeforeUnmount(() => context?.revert())
 <template>
   <div ref="root" class="tarot-spotlight" :class="`spotlight-${variant}`">
     <div class="spotlight-haze" aria-hidden="true" />
+    <TarotFractures class="spotlight-fractures" />
     <div class="spotlight-echoes" aria-hidden="true"><img v-for="n in 2" :key="n" src="/art/tarot/v1/back.png" alt="" /></div>
     <div class="spotlight-orbit" aria-hidden="true"><span>{{ card.number }}</span><i /></div>
     <span class="spotlight-word" aria-hidden="true">{{ card.en }}</span>
@@ -60,6 +63,7 @@ onBeforeUnmount(() => context?.revert())
 <style scoped>
 .tarot-spotlight{position:relative;isolation:isolate;width:100%;height:100%;min-height:0;overflow:hidden;perspective:1200px;color:#fff}
 .spotlight-haze{position:absolute;inset:0;z-index:-2;background:radial-gradient(ellipse at 30% 45%,#89cbd329,transparent 55%),radial-gradient(ellipse at 75% 60%,#48688714,transparent 60%);pointer-events:none}
+.spotlight-fractures{z-index:-1}.spotlight-edition{clip-path:polygon(10% 0,100% 8%,92% 88%,0 100%)}.spotlight-collected{clip-path:polygon(0 8%,94% 0,100% 74%,86% 100%,3% 92%)}
 .spotlight-echoes{position:absolute;left:17%;top:50%;width:clamp(210px,28vw,350px);aspect-ratio:2/3;transform:translateY(-50%);z-index:-1;pointer-events:none}
 .spotlight-echoes img{position:absolute;width:100%;height:100%;object-fit:cover;opacity:.09;transform:translate(-22%,-3%) rotate(-19deg);animation:card-echo-drift 10s ease-in-out infinite alternate}
 .spotlight-echoes img+img{opacity:.055;transform:translate(30%,2%) rotate(13deg);animation-delay:-5s;animation-direction:alternate-reverse}
