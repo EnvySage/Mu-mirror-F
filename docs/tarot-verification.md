@@ -1,6 +1,6 @@
 # 塔罗首版验收（2026-10-27）
 
-状态：正式功能已实现，位于三仓 codex/tarot-20261026 分支；未推送、未部署。上线前仍需使用目标模型进行语气验收。
+状态：正式功能已实现，位于三仓 codex/tarot-20261026 分支；未推送、未部署。上线前仍需使用目标模型进行语气验收。独立代码审查的两项问题已修复并完成失败→通过的回归验证。
 
 ## 已完成
 
@@ -23,7 +23,7 @@
 | B 改动前 abe7ea2 的 ChatRetrievalTest / ToolsTest | 同样 9 项断言失败，确认为原有基线问题 |
 | A pytest tests/ | 715 通过、15 跳过；塔罗相关检查未跳过 |
 | A upload 同步 | 已运行同步脚本，运行时产物一致 |
-| 完整 schema + v12 | PostgreSQL 18.6 / pgvector 0.8.7 独立库应用成功 |
+| 完整 schema、旧基线升级 + v12 重放 | PostgreSQL 18.6 / pgvector 0.8.7 独立库应用成功 |
 | B scripts/tarot_e2e.py | 真实 HTTP / PostgreSQL / Python gRPC / OpenAI 兼容本地桩闭环通过：并发抽取、无模型错误、账号隔离、幂等、三类引用、撤回失效、同牌重试 |
 | F tests/browser/tarot-live.mjs | 不拦截 API：恢复真实结果、打开三类原始资料、运行中换账号后结果与收藏清空，通过 |
 
@@ -50,3 +50,15 @@ node tests/browser/tarot.mjs
 - Docker 不可用时使用隔离 PostgreSQL；完整 schema 联调最终使用 WSL 内独立解包的 PostgreSQL/pgvector，未触碰现有业务库。
 
 发布和回退见后端 docs/tarot-operations.md。当前无真实模型可用于语气评审，此项明确保留为上线前检查。
+
+## 最终审查与回档点
+
+两项审查问题已修复：跨零点找回旧牌时单独显示原日期结果，用户再主动抽今天；停止提牌后支持“可以再提”恢复。
+
+- F 页面首版：ce48696；真实来源/日期修复：407d920；演示模式：b87d99b；跨日恢复：见本仓后续 fix(tarot) 提交。
+- B 抽牌持久化：86774a6；资料范围：11597a6；异步分析：65c3cd1；聊天限制：e60276c；语义恢复：见本仓 fix(tarot) 提交。
+- AI 解读：28d66b4；聊天隔离：4a23e74；最终文档：96f7c9e。
+
+[完整实施取舍](tarot-implementation-decisions.md)。截图：[手机每日牌](tarot-evidence/daily-375.png)、[桌面收藏册](tarot-evidence/collection-1440.png)、[真实接口的问题解读](tarot-evidence/live-question-1440.png)。
+
+开发时使用了共享依赖目录与独立 worktree，原工作目录未合并。功能分支为三个仓库的 codex/tarot-20261026，实际工作目录为 own/worktrees/tarot-20261026/F、B、AI。未推送或部署。
