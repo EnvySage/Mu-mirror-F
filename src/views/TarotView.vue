@@ -4,25 +4,42 @@ import { useTarotStore } from '@/stores/tarot'
 import { useAuthStore } from '@/stores/auth'
 import { tarotDate } from '@/utils/tarotProtocol'
 import TarotCard from '@/components/tarot/TarotCard.vue'
+import TarotRitual from '@/components/tarot/TarotRitual.vue'
 import TarotGalleryDialog from '@/components/tarot/TarotGalleryDialog.vue'
 import TarotReferenceSettings from '@/components/tarot/TarotReferenceSettings.vue'
 import TarotSourceDialog from '@/components/tarot/TarotSourceDialog.vue'
 
 const tarot = useTarotStore(), auth = useAuthStore()
-const tab = ref('daily'), gallery = ref(null), galleryCards = ref([]), source = ref(null)
+const tab = ref('daily'), gallery = ref(null), galleryCards = ref([]), source = ref(null), ritual = ref(null)
 const tabs = [{ id: 'daily', name: '每日运势' }, { id: 'question', name: '问一问' }, { id: 'collection', name: '收藏册' }]
 const todayDrawn = computed(() => tarot.daily?.draw?.draw_date === tarot.daily?.server_date)
 const ownedCards = computed(() => tarot.cards.filter(c => tarot.unlocked.has(c.id)))
 const recoveredCard = computed(() => tarot.cards.find(c => c.id === tarot.recoveredDaily?.card_id))
 const terminalMessage = computed(() => tarot.analysis?.status === 'stale' ? '参考资料已变更或撤回，旧解读已隐藏。可以用当前资料重新解读。' : tarot.analysis?.status === 'failed' ? '这次解读没有完成。牌已保留，可以重新解读。' : '')
 function showCard(card, collection = false) { if (!card) return; gallery.value = card; galleryCards.value = collection ? ownedCards.value : [card] }
+function openRitual(mode) {
+  if (tarot.busy || (mode === 'question' && tarot.analyzing)) return
+  ritual.value = { mode, result: null, error: '' }
+}
+async function confirmRitual() {
+  const current = ritual.value, user = auth.user?.id
+  if (!current || tarot.busy) return
+  current.error = ''
+  const result = current.mode === 'daily' ? await tarot.drawDaily() : await tarot.drawQuestion()
+  if (ritual.value !== current || auth.user?.id !== user) return
+  if (!result) { current.error = tarot.error || '暂时无法抽取，请返回牌桌确认上次操作。'; return }
+  const cardId = current.mode === 'daily' ? result.draw?.card_id : result.card_id
+  const card = tarot.cards.find(item => item.id === cardId)
+  if (!card) { current.error = '牌面暂未加载，请返回牌桌重新加载。'; return }
+  current.result = { card, newlyCollected: current.mode === 'daily' && !!result.newly_collected, drawDate: result.draw?.draw_date }
+}
 function switchTab(id) { tab.value = id; tarot.error = ''; tarot.notice = '' }
 let timer, dailyTick = 0, mounted = true
 async function refresh() {
   if (document.hidden) return
   try { await tarot.refreshDaily(); if (tarot.analysis) await tarot.poll() } catch (e) { tarot.error = `暂时无法刷新：${e.message}` }
 }
-watch(() => auth.user?.id, () => { gallery.value = source.value = null; tarot.load() })
+watch(() => auth.user?.id, () => { gallery.value = source.value = ritual.value = null; tarot.load() })
 onMounted(async () => {
   await tarot.load()
   if (!mounted) return
@@ -53,13 +70,13 @@ onBeforeUnmount(() => { mounted = false; clearInterval(timer); document.removeEv
         <div class="card-stage"><div class="card-orbit" aria-hidden="true" /><Transition name="card-reveal" mode="out-in"><TarotCard :key="tarot.dailyCard?.id || 'back'" :card="todayDrawn ? tarot.dailyCard : null" :disabled="!todayDrawn" @open="showCard" /></Transition><span class="stage-note">{{ todayDrawn ? '点击卡牌，放大欣赏' : '一天一张，留住今天的偶然' }}</span></div>
         <div class="tarot-copy"><span class="date-ticket">{{ tarot.daily?.server_date?.replaceAll('-', '.') }} <small>今日牌签</small></span>
           <template v-if="todayDrawn && tarot.dailyCard"><h2 id="daily-title">{{ tarot.dailyCard.headline }}</h2><p class="card-meaning">{{ tarot.dailyCard.meaning }}</p><p class="small-action"><span>今天的小尝试</span>{{ tarot.dailyCard.action }}</p><div class="drawn-label">{{ tarot.dailyCard.name }} / {{ tarot.dailyCard.keyword }}<span>今天已抽取</span></div><p class="tarot-fine">每天 00:00（北京时间）迎来新牌。抽到的牌会收入收藏。</p><button class="tarot-text-button" @click="switchTab('collection')">去收藏册看看 ↗</button></template>
-          <template v-else><h2 id="daily-title">今天的故事，<br />从哪一面开始？</h2><p class="card-meaning">停一小会儿，翻开属于今天的一张牌。<br />把它当作一句鼓励，或闲聊的新话题。</p><button class="tarot-cta" :disabled="tarot.busy" @click="tarot.drawDaily">{{ tarot.busy ? '正在翻开…' : '抽取今日牌' }}<span aria-hidden="true">✦</span></button><p class="tarot-fine">每天随机一张，抽取后不可更换。只有每日牌解锁收藏。</p></template>
+          <template v-else><h2 id="daily-title">今天的故事，<br />从哪一面开始？</h2><p class="card-meaning">停一小会儿，翻开属于今天的一张牌。<br />把它当作一句鼓励，或闲聊的新话题。</p><button class="tarot-cta" :disabled="tarot.busy" @click="openRitual('daily')">{{ tarot.busy ? '正在翻开…' : '抽取今日牌' }}<span aria-hidden="true">✦</span></button><p class="tarot-fine">每天随机一张，抽取后不可更换。只有每日牌解锁收藏。</p></template>
         </div>
       </section>
       <section v-else-if="tab === 'question'" class="tarot-stage question-stage" aria-labelledby="question-title">
-        <div class="card-stage"><div class="card-orbit" aria-hidden="true" /><Transition name="card-reveal" mode="out-in"><TarotCard :key="tarot.reading?.reading_id || 'back'" :card="tarot.questionCard" :disabled="!tarot.questionCard" @open="showCard" /></Transition><span class="stage-note">{{ tarot.questionCard ? `${tarot.questionCard.name} / ${tarot.questionCard.keyword}` : '把问题留在心里，也可以' }}</span><button v-if="tarot.reading" class="tarot-text-button" :disabled="tarot.busy || tarot.analyzing" @click="tarot.drawQuestion">为另一个问题抽牌 ↗</button></div>
+        <div class="card-stage"><div class="card-orbit" aria-hidden="true" /><Transition name="card-reveal" mode="out-in"><TarotCard :key="tarot.reading?.reading_id || 'back'" :card="tarot.questionCard" :disabled="!tarot.questionCard" @open="showCard" /></Transition><span class="stage-note">{{ tarot.questionCard ? `${tarot.questionCard.name} / ${tarot.questionCard.keyword}` : '把问题留在心里，也可以' }}</span><button v-if="tarot.reading" class="tarot-text-button" :disabled="tarot.busy || tarot.analyzing" @click="openRitual('question')">为另一个问题抽牌 ↗</button></div>
         <div class="tarot-copy"><h2 id="question-title">问一问，<br />另一种可能。</h2>
-          <template v-if="!tarot.reading"><p class="card-meaning">心里想一个问题，再翻一张牌。<br />不必说出来，也能看看它带来的启发。</p><button class="tarot-cta" :disabled="tarot.busy" @click="tarot.drawQuestion">{{ tarot.busy ? '正在翻开…' : '心里有个问题，抽一张' }}<span aria-hidden="true">✦</span></button><p class="tarot-fine">单张牌，轻巧直接。这里的抽牌不会解锁收藏。</p></template>
+          <template v-if="!tarot.reading"><p class="card-meaning">心里想一个问题，再翻一张牌。<br />不必说出来，也能看看它带来的启发。</p><button class="tarot-cta" :disabled="tarot.busy" @click="openRitual('question')">{{ tarot.busy ? '正在翻开…' : '心里有个问题，抽一张' }}<span aria-hidden="true">✦</span></button><p class="tarot-fine">单张牌，轻巧直接。这里的抽牌不会解锁收藏。</p></template>
           <template v-else><p class="question-meaning">{{ tarot.questionCard?.meaning }}</p><label class="question-label" for="tarot-question">愿意说说你的问题吗？<small>可选</small></label><textarea id="tarot-question" v-model="tarot.question" maxlength="500" rows="3" :disabled="tarot.busy || tarot.analyzing" placeholder="比如：想学画画，又有点担心坚持不下去…" /><span class="question-count">{{ [...tarot.question].length }} / 500</span>
             <TarotReferenceSettings :preferences="tarot.preferences" :saving="tarot.saving" :disabled="tarot.busy || tarot.analyzing" @save="tarot.savePreferences" />
             <button class="tarot-cta" :disabled="!tarot.question.trim() || tarot.busy || tarot.analyzing || tarot.saving" @click="tarot.analyze">{{ tarot.analyzing ? '正在整理这份启发…' : tarot.busy ? '正在提交…' : tarot.analysis ? '重新解读这张牌' : '看看这张牌的启发' }}<span aria-hidden="true">↗</span></button>
@@ -75,6 +92,7 @@ onBeforeUnmount(() => { mounted = false; clearInterval(timer); document.removeEv
       <section v-else class="tarot-collection" aria-labelledby="collection-title"><header><h2 id="collection-title">慢慢遇见，<br />一张张收藏。</h2><p>只有每日抽到的牌会在这里亮起。<br />重复相遇，也算今天的一段缘分。</p></header><div class="collection-grid"><figure v-for="(card, i) in tarot.cards" :key="card.id" :style="{ '--tilt': `${i % 2 ? 2 : -2}deg` }"><TarotCard :card="card" compact :locked="!tarot.unlocked.has(card.id)" @open="showCard($event, true)" /><figcaption v-if="tarot.unlocked.has(card.id)">{{ tarotDate(tarot.collection.entries.find(e => e.card_id === card.id)?.first_obtained_at) }} 初次相遇</figcaption><figcaption v-else>尚未相遇</figcaption></figure></div></section>
       <footer class="tarot-footer">牌提供一个视角，生活由你决定。</footer>
     </template>
+    <TarotRitual v-if="ritual" :mode="ritual.mode" :result="ritual.result" :error="ritual.error" @confirm="confirmRitual" @close="ritual = null" @inspect="showCard" />
     <TarotGalleryDialog :card="gallery" :cards="galleryCards" @close="gallery = null" @select="gallery = $event" />
     <TarotSourceDialog :source="source" :analysis-id="tarot.analysis?.analysis_id" @close="source = null" @refresh="tarot.poll" />
   </div></div>

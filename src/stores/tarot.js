@@ -58,7 +58,9 @@ export const useTarotStore = defineStore('tarot', () => {
       daily.value = result
       recoveredDaily.value = result.draw?.draw_date !== result.server_date ? result.draw : null
       notice.value = result.draw?.draw_date !== result.server_date ? '已找回上次抽牌。今天的新牌可以继续抽取。' : result.newly_collected ? '新牌已收入收藏册。' : '今天的牌已确定，明天再来。'
-      await refreshDaily()
+      try { await refreshDaily() }
+      catch { if (active(token)) notice.value += ' 收藏列表暂未刷新，稍后会继续同步。' }
+      if (active(token)) return result
     } catch (e) { if (active(token)) error.value = `${e.message}。再点一次会找回同一次抽牌。` }
     finally { if (active(token)) busy.value = false }
   }
@@ -69,6 +71,7 @@ export const useTarotStore = defineStore('tarot', () => {
       const result = await api.reading(requestId('question'))
       if (!active(token)) return
       sessionStorage.removeItem(key); reading.value = result; analysis.value = null; pendingAnalysis = null
+      return result
     } catch (e) { if (active(token)) error.value = `${e.message}。重试会找回同一张牌。` }
     finally { if (active(token)) busy.value = false }
   }
