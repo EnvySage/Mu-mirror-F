@@ -81,8 +81,9 @@ try {
     assert.equal(await page.getByRole('button', { name: '尚未获得', exact: true }).count(), 11)
     await page.getByRole('button', { name: `放大欣赏${cards[0].name}` }).click()
     await page.getByRole('dialog').waitFor()
-    await page.getByRole('button', { name: '放大卡牌细节', exact: true }).click()
+    await page.getByRole('dialog').getByRole('img', { name: cards[0].name, exact: true }).waitFor()
     await page.keyboard.press('Escape')
+    await page.locator('.tarot-gallery').waitFor({ state: 'hidden' })
     assert.equal(await page.getByRole('dialog').count(), 0)
     await page.getByRole('button', { name: '问一问', exact: true }).click()
     await page.getByRole('button', { name: '心里有个问题，抽一张', exact: true }).click()
@@ -114,7 +115,7 @@ try {
     day = '2026-10-29'; draw = null
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).waitFor()
-    // A returning collector can browse only owned cards in the new staggered fan.
+    // Fullscreen viewing cycles only through owned cards.
     await page.route('**/api/tarot/collection', route => route.fulfill({ json: { code: 200, data: {
       activeCount: 12, unlockedCount: 3,
       entries: cards.slice(0, 3).map(card => ({ cardId: card.id, firstObtainedAt: '2026-10-27T12:00:00+08:00', dailyDrawCount: 1 })),
@@ -122,13 +123,12 @@ try {
     await page.reload()
     await page.getByRole('button', { name: /^收藏册/ }).click()
     await page.getByRole('button', { name: `放大欣赏${cards[0].name}` }).click()
-    const fan = page.getByRole('navigation', { name: '已收藏卡牌' })
-    assert.equal(await fan.getByRole('button').count(), 3)
+    assert.equal(await page.locator('.gallery-count').innerText(), '1 / 3')
     await page.getByRole('button', { name: '下一张', exact: true }).click()
     await page.getByRole('dialog', { name: `欣赏${cards[1].name}`, exact: true }).waitFor()
     await page.keyboard.press('ArrowLeft')
     await page.getByRole('dialog', { name: `欣赏${cards[0].name}`, exact: true }).waitFor()
-    await page.screenshot({ path: `${output}/gallery-fan-${width}.png` })
+    await page.screenshot({ path: `${output}/gallery-image-${width}.png` })
     await page.keyboard.press('Escape')
     assert.deepEqual(errors, [])
     await context.close()
