@@ -114,6 +114,22 @@ try {
     day = '2026-10-29'; draw = null
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).waitFor()
+    // A returning collector can browse only owned cards in the new staggered fan.
+    await page.route('**/api/tarot/collection', route => route.fulfill({ json: { code: 200, data: {
+      activeCount: 12, unlockedCount: 3,
+      entries: cards.slice(0, 3).map(card => ({ cardId: card.id, firstObtainedAt: '2026-10-27T12:00:00+08:00', dailyDrawCount: 1 })),
+    } } }))
+    await page.reload()
+    await page.getByRole('button', { name: /^收藏册/ }).click()
+    await page.getByRole('button', { name: `放大欣赏${cards[0].name}` }).click()
+    const fan = page.getByRole('navigation', { name: '已收藏卡牌' })
+    assert.equal(await fan.getByRole('button').count(), 3)
+    await page.getByRole('button', { name: '下一张', exact: true }).click()
+    await page.getByRole('dialog', { name: `欣赏${cards[1].name}`, exact: true }).waitFor()
+    await page.keyboard.press('ArrowLeft')
+    await page.getByRole('dialog', { name: `欣赏${cards[0].name}`, exact: true }).waitFor()
+    await page.screenshot({ path: `${output}/gallery-fan-${width}.png` })
+    await page.keyboard.press('Escape')
     assert.deepEqual(errors, [])
     await context.close()
     console.log(`PASS ${width}px: lost-response retry, immutable daily card, collection lock, gallery, preferences, same-card analysis retry, refresh recovery, midnight, no overflow`)
