@@ -11,6 +11,7 @@ import { useTodoPolling } from '@/composables/useTodoPolling'
 import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
+import MobileExploreSheet from '@/components/organisms/MobileExploreSheet.vue'
 import PersonaBackdrop from '@/components/atoms/PersonaBackdrop.vue'
 import MobileHeader from '@/components/organisms/MobileHeader.vue'
 import WriteModal from '@/components/organisms/WriteModal.vue'
@@ -34,6 +35,8 @@ const settingsStore = useSettingsStore()
 const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
 const presentation = usePresentationMode()
+const mobileExploreOpen = ref(false)
+watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false })
 const pageComponent = shallowRef(null)
 const renderedPage = ref(route.name)
 const renderedDate = ref(route.params.date)
@@ -84,7 +87,7 @@ onMounted(() => {
   settingsStore.fetchSettings()
   // 有记录数据才拉取（各 view 也会自行拉取，这里做导航条计数兜底）
   if (recordsStore.records.length === 0) recordsStore.fetchRecords()
-  // 词典三组：设置图标角标数据源（AppSidebar / MobileHeader 共用，失败静默不打断导航）
+  // 词典三组：设置/探索角标数据源（失败静默不打断导航）
   glossary.fetch()
 })
 
@@ -132,7 +135,8 @@ watch(() => route.name, () => {
       </div>
       <DetailPanel />
     </main>
-    <BottomNav />
+    <BottomNav :explore-open="mobileExploreOpen" @explore="mobileExploreOpen = true" />
+    <MobileExploreSheet :open="mobileExploreOpen" @close="mobileExploreOpen = false" />
     <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <ToastContainer />

@@ -3,20 +3,26 @@ import { computed, ref } from 'vue'
 import { useNavIndicatorMotion } from '@/motion/useNavIndicatorMotion'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
+import { useGlossaryStore } from '@/stores/glossary'
+
+const props = defineProps({ exploreOpen: Boolean })
+const emit = defineEmits(['explore'])
+const glossary = useGlossaryStore()
 
 const router = useRouter()
 const route = useRoute()
 const ui = useUIStore()
 
-// The middle slot is an action; the four destinations stay in a stable order.
+// Three frequent destinations, one create action, and one expandable directory.
 const NAV = [
   { page: 'records', label: '记录', slot: 0, icon: 'M5 6h14M5 12h14M5 18h9' },
-  { page: 'calendar', label: '日历', slot: 1, icon: 'M8 3v4M16 3v4M4 10h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z' },
+  { page: 'chat', label: '对话', slot: 1, icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
   { slot: 2 },
   { page: 'mirror', label: '镜子', slot: 3, icon: 'M16.5 16.5 20 20M7.5 16.5 4 20M9 21h6M12 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM12 7v4l2 2' },
-  { page: 'chat', label: '对话', slot: 4, icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
+  { action: 'explore', label: '探索', slot: 4, icon: 'm12 2 3.2 6.8L22 12l-6.8 3.2L12 22l-3.2-6.8L2 12l6.8-3.2ZM12 9v6M9 12h6' },
 ]
-const activeSlot = computed(() => NAV.find(item => item.page === route.name)?.slot ?? -1)
+const exploreActive = computed(() => props.exploreOpen || ['tarot', 'calendar', 'vault', 'settings'].includes(route.name))
+const activeSlot = computed(() => exploreActive.value ? 4 : NAV.find(item => item.page === route.name)?.slot ?? -1)
 const navEl = ref(null), selectionEl = ref(null)
 useNavIndicatorMotion(navEl, selectionEl, activeSlot, '.nav-item.active .nav-icon', { skewX: -10 })
 
@@ -35,14 +41,18 @@ function handleNav(item) {
       <span ref="selectionEl" class="nav-selection" aria-hidden="true" />
       <template v-for="item in NAV" :key="item.slot">
         <button
-          v-if="item.page"
-          :class="['nav-item', { active: route.name === item.page }]"
+          v-if="item.page || item.action"
+          :class="['nav-item', { active: activeSlot === item.slot }]"
           :style="{ gridColumn: item.slot + 1 }"
           :aria-current="route.name === item.page ? 'page' : undefined"
-          @click="handleNav(item)"
+          :aria-expanded="item.action ? exploreOpen : undefined"
+          :aria-haspopup="item.action ? 'dialog' : undefined"
+          :aria-controls="item.action ? 'mobile-explore' : undefined"
+          @click="item.action ? emit('explore') : handleNav(item)"
         >
           <span class="nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path :d="item.icon" /></svg>
+            <i v-if="item.action && glossary.pendingCount" class="explore-badge" aria-label="设置中有待处理项" />
           </span>
           <span class="nav-label">{{ item.label }}</span>
         </button>
@@ -77,6 +87,7 @@ function handleNav(item) {
   transition: color .18s ease, transform .18s ease;
 }
 .nav-icon { width: 44px; height: 30px; display: grid; place-items: center; }
+.explore-badge{position:absolute;top:2px;right:calc(50% - 17px);width:5px;height:5px;background:var(--pink);border-radius:50%}
 .nav-icon svg { width: 21px; height: 21px; }
 .nav-label { font-size: 11px; line-height: 16px; }
 .nav-item.active { color: #f8fbff; }
