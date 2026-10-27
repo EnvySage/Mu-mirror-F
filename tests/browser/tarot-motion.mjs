@@ -45,6 +45,7 @@ try {
     // The clock itself is clickable, not only the prompt in its center.
     await page.getByRole('button', { name: '默念好了，揭开这张牌' }).click({ position: { x: 35, y: height * .7 } })
     await page.locator('.ritual-footer button:enabled').waitFor()
+    assert.ok(await page.locator('.ritual-result .spotlight-flip').evaluate(e => new DOMMatrixReadOnly(getComputedStyle(e).transform).m33 > 0), 'reveal finishes facing forward, not on the card back')
     assert.equal(await page.getByText('问一问的牌，不计入收藏', { exact: true }).count(), 1)
     await page.locator('.ritual-footer button').click()
     await page.getByRole('button', { name: /^收藏册/ }).click()
@@ -53,6 +54,7 @@ try {
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).click()
     await page.locator('.ritual-footer button:enabled').waitFor()
     await page.getByText('初次相遇 / 新收藏', { exact: true }).waitFor()
+    assert.ok(await page.locator('.ritual-result .spotlight-flip').evaluate(e => new DOMMatrixReadOnly(getComputedStyle(e).transform).m33 > 0), 'first acquisition shows the actual card face')
     const copyRect = await page.locator('.ritual-result .spotlight-copy').boundingBox()
     const stageRect = await page.locator('.ritual-result').boundingBox()
     assert.ok(copyRect.y >= stageRect.y && copyRect.y + copyRect.height <= stageRect.y + stageRect.height, 'acquisition text stays visible even in landscape')

@@ -19,7 +19,7 @@ onMounted(() => {
     timeline.from('.spotlight-cut', { scaleX: 0, xPercent: -50, duration: .55, ease: 'power4.out' }, 0)
       .from('.spotlight-orbit', { scale: 2.3, rotation: -105, opacity: 0, duration: 1.15, ease: 'expo.out' }, .08)
       .from('.spotlight-card-flight', { scale: props.variant === 'collection' ? .6 : 2.1, xPercent: 25, yPercent: -12, rotation: -32, duration: 1.2, ease: 'expo.out' }, .12)
-      .from('.spotlight-flip', { rotationY: -180, duration: 1.05, ease: 'power3.inOut' }, .12)
+      .fromTo('.spotlight-flip', { rotationY: -180 }, { rotationY: 0, duration: 1.05, ease: 'power3.inOut' }, .12)
       .from('.spotlight-copy > *', { x: 100, opacity: 0, stagger: .09, duration: .6, ease: 'power3.out' }, .65)
       .from('.spotlight-word', { xPercent: -35, opacity: 0, duration: .85, ease: 'expo.out' }, .25)
       .fromTo('.spotlight-shard', { scale: 0, opacity: 0 }, { scale: 1, opacity: .8, duration: .8, stagger: .025, ease: 'expo.out' }, .5)
@@ -61,7 +61,9 @@ onBeforeUnmount(() => context?.revert())
 .spotlight-word{position:absolute;left:-3%;bottom:3%;z-index:-1;white-space:nowrap;font:italic 900 clamp(100px,20vw,330px)/.8 var(--font-display);text-transform:uppercase;letter-spacing:-.055em;color:#030a248c;transform:rotate(-11deg);pointer-events:none}
 .spotlight-card-flight{position:absolute;left:20%;top:50%;width:clamp(210px,28vw,350px);aspect-ratio:2/3;transform:translateY(-50%) rotate(-9deg);perspective:1200px}
 .spotlight-tilt{position:relative;width:100%;height:100%;transform:rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg));transform-style:preserve-3d;transition:transform .2s ease-out}
-.spotlight-flip{position:relative;display:block;width:100%;height:100%;padding:0;transform-style:preserve-3d;border:0;background:transparent;cursor:zoom-in;outline-offset:9px}
+/* GSAP owns this transform: the global button transition otherwise corrupts its starting matrix. */
+.spotlight-flip{position:relative;display:block;width:100%;height:100%;padding:0;transform:rotateY(0deg);transform-style:preserve-3d;transition:none;border:0;background:transparent;cursor:zoom-in;outline-offset:9px}
+.spotlight-flip:active{transform:rotateY(0deg)}
 .spotlight-face{position:absolute;inset:0;display:block;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:18px 25px 0 #010a3c65,0 0 50px #1589ff45}
 .spotlight-front{transform:translateZ(1px)}.spotlight-back{transform:rotateY(180deg)}.spotlight-face img{display:block;width:100%;height:100%;object-fit:cover;border:1px solid #a5e9ff99}.spotlight-shadow{position:absolute;bottom:-16%;left:-10%;width:130%;height:9%;background:#02071f88;filter:blur(14px);border-radius:50%;z-index:-1;transform:rotate(7deg)}
 .spotlight-copy{position:absolute;left:58%;top:30%;max-width:36%;transform:rotate(-6deg)}.spotlight-edition{display:inline-block;padding:9px 23px;background:#02091c;color:#b8daff;font-size:13px;font-weight:700;clip-path:polygon(6% 0,100% 0,94% 100%,0 100%)}.spotlight-new .spotlight-edition{background:#50edfa;color:#001637}.spotlight-name{display:flex;gap:17px;align-items:baseline;margin:20px 0 5px}.spotlight-name>span{font:italic 900 clamp(45px,8vw,110px)/1 var(--font-display);color:#010b35}.spotlight-name h2{margin:0;font-size:clamp(34px,5.8vw,76px);font-weight:950;letter-spacing:-.055em;line-height:1.1;color:#50edfa;text-shadow:4px 5px #002267}.spotlight-keyword{font-size:17px;letter-spacing:.25em;margin:14px 0 24px}.spotlight-headline{font-size:clamp(16px,2.1vw,26px);font-weight:800;line-height:1.6;margin:0 0 22px;max-width:17em}.spotlight-copy small{display:block;font-size:12px;line-height:1.8;color:#accbef}.spotlight-collected{display:inline-block;padding:9px 15px;border:1px solid #8beeff;font-size:13px;background:#031b5980;color:#8bf7ff}
