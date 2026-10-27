@@ -1,3 +1,4 @@
+import { tarotFixtureRoute } from './tarotFixtures'
 import { vaultFixtureRoute } from './vaultFixtures'
 
 const userId = 'demo-visitor'
@@ -312,6 +313,7 @@ function route(config) {
     }
     return result(config, growthOverview())
   }
+  if (path.startsWith('/api/tarot/')) return tarotFixtureRoute(config, path, method, body, result)
   if (path === '/api/todos/pending-suggestions') return result(config, { suggestions: [] })
   if (path === '/api/todos/open-chain') return result(config, { chains: clone(todos) })
   if (path === '/api/todos') return result(config, { todos: clone(todos) })
