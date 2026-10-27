@@ -1,11 +1,11 @@
 <script setup>
-defineProps({ card: Object, locked: Boolean, compact: Boolean, disabled: Boolean })
+defineProps({ card: Object, locked: Boolean, compact: Boolean, disabled: Boolean, drawLabel: String })
 defineEmits(['open'])
 </script>
 
 <template>
   <button class="tarot-card" :class="{ compact, locked }" :disabled="disabled || locked"
-    :aria-label="locked ? '尚未获得' : card ? `放大欣赏${card.name}` : '等待抽牌'" @click="$emit('open', card)">
+    :aria-label="locked ? '尚未获得' : card ? `放大欣赏${card.name}` : drawLabel || '等待抽牌'" @click="$emit('open', card)">
     <img :src="!locked && card ? card.image_url : '/art/tarot/v1/back.png'" :alt="!locked && card ? card.name : '塔罗牌背'"
       :loading="compact ? 'lazy' : 'eager'" width="1024" height="1536" />
     <span v-if="card && !locked" class="card-caption"><b>{{ card.number }}</b><span>{{ card.name }}<small>{{ card.en }}</small></span><i aria-hidden="true">↗</i></span>
