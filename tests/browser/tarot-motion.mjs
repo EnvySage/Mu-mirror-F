@@ -25,7 +25,7 @@ try {
     await page.close()
     console.log(`PASS ${width}px: all tarot tabs scroll inside the app`)
   }
-  for (const [width, height, motion] of [[375, 600, 'no-preference'], [768, 700, 'reduce'], [1440, 1000, 'no-preference']]) {
+  for (const [width, height, motion] of [[375, 600, 'no-preference'], [768, 700, 'reduce'], [1440, 1000, 'no-preference'], [844, 390, 'reduce']]) {
     const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: true })
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
@@ -53,6 +53,9 @@ try {
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).click()
     await page.locator('.ritual-footer button:enabled').waitFor()
     await page.getByText('初次相遇 / 新收藏', { exact: true }).waitFor()
+    const copyRect = await page.locator('.ritual-result .spotlight-copy').boundingBox()
+    const stageRect = await page.locator('.ritual-result').boundingBox()
+    assert.ok(copyRect.y >= stageRect.y && copyRect.y + copyRect.height <= stageRect.y + stageRect.height, 'acquisition text stays visible even in landscape')
     await page.getByRole('button', { name: '放大卡牌细节', exact: true }).click()
     await page.keyboard.press('Escape')
     assert.equal(await page.getByRole('dialog').count(), 1, 'closing the nested gallery preserves the acquisition display')
