@@ -25,7 +25,7 @@ export function useTodoPolling({ interval = 15000, onChange } = {}) {
 
   async function tick() {
     if (document.visibilityState === 'visible' && !todoStore.loading && !todoStore.removingId) {
-      await todoStore.fetch()
+      await Promise.all([todoStore.fetch(), todoStore.fetchChains()])
       const n = todoStore.pendingSuggestions.length
       if (lastCount >= 0 && n !== lastCount && onChange) onChange(n, lastCount)
       lastCount = n

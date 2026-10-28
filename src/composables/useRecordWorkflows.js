@@ -6,6 +6,7 @@ import { useStatsStore } from '@/stores/stats'
 import { useGrowthStore } from '@/stores/growth'
 import { useToastStore } from '@/stores/toast'
 import { useUIStore } from '@/stores/ui'
+import { useTodoStore } from '@/stores/todo'
 import { recordWorkflowState, recordIdOf } from '@/utils/recordWorkflow'
 
 export function useRecordWorkflows() {
@@ -30,6 +31,7 @@ export function useRecordWorkflows() {
           if (id != null && previous && previous !== 'SUCCEEDED') await records.fetchRecord(id, { isCurrent })
           if (previous && previous !== 'SUCCEEDED') {
             toast.success('记录已保存，后台整理完成')
+            useTodoStore().refreshAfterAction().catch(() => {})
             stats.fetchStats(30, true).catch(() => {})
             growth.refresh().catch(() => {})
           }

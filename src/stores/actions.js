@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRecordsStore } from '@/stores/records'
+import { useTodoStore } from '@/stores/todo'
 import { listActions, listRecordWorkflows, getAction, editAction, confirmAction, cancelAction, prepareAction as apiPrepareAction } from '@/api/actions'
 
 const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'STALE'])
@@ -36,6 +37,7 @@ export const useActionsStore = defineStore('assistantActions', () => {
       const card = byId.value[id]
       const recordId = card?.result?.recordId ?? card?.result?.record_id
       if (recordId != null) await useRecordsStore().fetchRecord(recordId)
+      if (recordId != null) await useTodoStore().refreshAfterAction().catch(() => {})
       delete submittingRecords.value[id]
     }
   }

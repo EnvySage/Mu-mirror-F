@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { CONTENT_TYPES, ALL_MOODS, normalizeContentType } from '@/constants/tags'
 import { useGrowthStore } from '@/stores/growth'
+import RecordTodoLinks from './RecordTodoLinks.vue'
 
 const props = defineProps({ proposal: { type: Object, required: true }, expanded: Boolean, hideActions: Boolean })
 const emit = defineEmits(['save', 'cancel', 'dirty'])
@@ -71,6 +72,7 @@ function updateSegment(index, key, value) {
   if (props.expanded) emit('dirty')
   const next = clone(payload.value)
   next.recordDraft.segments[index][key] = value
+  if (key === 'contentType') next.recordDraft.segments[index].todoEnabled = value === 'todo'
   if (key === 'text') next.recordDraft.finalContent = next.recordDraft.segments.map(segment => segment.text).join('\n')
   payload.value = next
 }
@@ -82,6 +84,13 @@ function updateFinalContent(value) {
   payload.value = next
 }
 function tagsText(tags) { return Array.isArray(tags) ? tags.join(', ') : '' }
+function setTodoLinks(resolutions) {
+  const next = clone(payload.value)
+  next.todoResolutions = resolutions
+  if (resolutions.length) (next.recordDraft.segments || []).forEach(s => { s.todoEnabled = false })
+  payload.value = next
+  if (props.expanded) emit('dirty')
+}
 function setTags(index, value) {
   tagDrafts.value[index] = value
   updateSegment(index, 'tags', value.split(/[,，\n]/).map(tag => tag.trim()).filter(Boolean))
@@ -109,6 +118,7 @@ function updateGrowthSuggestion(dimensionId, key, value) {
 function submit() {
   if (running.value || growthDefinitionChanged.value) return
   const next = clone(payload.value)
+  if (Array.isArray(next.todoResolutions)) next.todoResolutions = next.todoResolutions.map(({ todoId, suggestionId, action, status }) => ({ todoId, suggestionId, action, status }))
   if (next.recordDraft.mode === 'ONLY_SAVE') {
     next.recordDraft.growthSuggestions = []
     delete next.recordDraft.growth_suggestions
@@ -143,6 +153,7 @@ defineExpose({ submit })
       <label v-if="expanded" class="record-field">摘要<textarea :value="segment.summary" maxlength="500" rows="3" :disabled="running" @input="updateSegment(index, 'summary', $event.target.value)" /></label>
       <label class="record-field">分类<select :value="segment.contentType || 'note'" :disabled="running" @change="updateSegment(index, 'contentType', $event.target.value)"><option v-for="item in CONTENT_TYPES" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
       <label class="record-field">自由标签<input :value="tagDrafts[index]" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
+      <label v-if="segment.contentType === 'todo' && draft.mode === 'AI_ASSISTED'" class="record-todo-consent"><input type="checkbox" :checked="!!segment.todoEnabled" :disabled="running" @change="updateSegment(index, 'todoEnabled', $event.target.checked)"><span><b>保存后加入侧栏待办</b><small>取消勾选则只保留记录，不登记为待办。</small></span></label>
       <div v-if="expanded" class="record-moods"><span>情绪</span><button v-for="mood in ALL_MOODS" :key="mood.key" type="button" :aria-pressed="(segment.moods || []).includes(mood.key)" @click="updateSegment(index, 'moods', (segment.moods || []).includes(mood.key) ? segment.moods.filter(m => m !== mood.key) : [...(segment.moods || []), mood.key])">{{ mood.label }}</button></div>
     </fieldset>
     </details>
@@ -156,7 +167,8 @@ defineExpose({ submit })
         <textarea :value="item.reason" rows="2" maxlength="500" :disabled="running || growthDefinitionChanged" :aria-label="`${item.name}贡献原因`" placeholder="说明这条记录里的具体进展" @input="updateGrowthSuggestion(item.dimensionId, 'reason', $event.target.value)" />
       </label>
     </fieldset>
-    <div v-for="(resolution, index) in todoResolutions" :key="resolution.suggestionId || resolution.todoId || index" class="record-todo-resolution">
+    <RecordTodoLinks v-if="expanded && draft.mode === 'AI_ASSISTED'" :suggestions="draft.todoSuggestions || []" :resolutions="todoResolutions" @change="setTodoLinks" />
+    <div v-for="(resolution, index) in (expanded ? [] : todoResolutions)" :key="resolution.suggestionId || resolution.todoId || index" class="record-todo-resolution">
       <b>{{ resolution.todoTitle || resolution.title || '关联待办' }}</b>
       <span>{{ resolution.action === 'dismissed' ? '本次忽略' : `确认状态：${resolution.status || '维持当前状态'}` }}</span>
     </div>
@@ -165,6 +177,7 @@ defineExpose({ submit })
 </template>
 
 <style scoped>
+.record-todo-consent{grid-column:1/-1;display:flex;align-items:flex-start;gap:12px;padding:15px;background:#dfff4e35;border-left:3px solid #1757c9;color:#16395c;font-size:12px}.record-todo-consent input{accent-color:#1854cc;width:18px;height:18px;flex-shrink:0}.record-todo-consent span{display:grid;gap:6px}.record-todo-consent small{line-height:1.6}
 .record-source summary,.record-segments summary{cursor:pointer;font-size:12px;color:#3b5e77;min-height:36px;padding:10px 0}.record-segments summary span{float:right;color:#627c8e}.record-segments .record-segment{margin-top:10px}.record-source summary:focus-visible,.record-segments summary:focus-visible{outline:2px solid #1854cc;outline-offset:3px}
 
 .record-action-form{display:grid;gap:11px;margin-top:14px;padding-top:13px;border-top:1px solid #8794ad33}.record-form-label{margin:0;color:var(--text-mid);font-size:12px;font-weight:700}.record-original{max-height:140px;overflow:auto;margin:0;padding:10px;background:#68708012;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;font-size:12px;line-height:1.6;color:var(--text,#18213a)}.record-preparing{margin:0;color:var(--text-mid);font-size:12px}.record-field{display:grid;gap:5px;color:var(--text-mid);font-size:12px}.record-field input,.record-field textarea,.record-field select{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #8794ad55;border-radius:7px;background:var(--surface,#fff);color:var(--text,#18213a);font:inherit}.record-segment,.record-growth{display:grid;gap:9px;margin:0;padding:10px;border:1px solid #8794ad55;border-radius:7px}.record-segment legend,.record-growth legend{padding:0 5px;color:var(--text-mid);font-size:12px}.record-memory{display:flex;gap:8px;align-items:center;color:var(--text-mid);font-size:12px}.record-form-actions{display:flex;justify-content:flex-end;gap:8px}.record-form-actions button{padding:7px 12px;border:0;border-radius:6px;cursor:pointer}.record-form-actions button:last-child{background:var(--accent,#4765db);color:#fff}.record-todo-resolution{display:flex;justify-content:space-between;gap:10px;padding:8px;background:#68708012;font-size:12px}.record-growth-note,.record-growth-stale{margin:0;color:var(--text-mid);font-size:12px;line-height:1.5}.record-growth-stale{color:#ad3027}.record-growth-row{display:grid;grid-template-columns:minmax(130px,1fr) 82px minmax(140px,1fr);align-items:center;gap:10px;padding:8px 0;border-top:1px solid #8794ad22}.record-growth-row span{display:grid;gap:3px}.record-growth-row strong{font-size:12px}.record-growth-row small{font-size:10px;color:var(--text-low)}.record-growth-row input,.record-growth-row textarea{box-sizing:border-box;width:100%;padding:7px;border:1px solid #8794ad55;border-radius:6px;background:var(--surface,#fff);color:var(--text,#18213a);font:inherit}.record-growth-row input{height:36px}.record-growth-row textarea{resize:vertical}@media(max-width:560px){.record-growth-row{grid-template-columns:minmax(90px,1fr) 70px}.record-growth-row textarea{grid-column:1/-1}}

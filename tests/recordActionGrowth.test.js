@@ -10,6 +10,7 @@ const compiled = compileScript(descriptor, { id: 'record-growth-regression' }).c
   .replace(/from (['"])vue\1/g, `from ${JSON.stringify(import.meta.resolve('vue'))}`)
   .replace(/from '@\/constants\/tags'/g, `from ${JSON.stringify(new URL('../src/constants/tags.js', import.meta.url).href)}`)
   .replace("import { useGrowthStore } from '@/stores/growth'", 'const useGrowthStore = () => globalThis.__recordGrowthTestStore')
+  .replace("import RecordTodoLinks from './RecordTodoLinks.vue'", 'const RecordTodoLinks = {}')
 const { default: Form } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 
 function form({ mode = 'ONLY_SAVE', version = 0, suggestions = [] } = {}) {
