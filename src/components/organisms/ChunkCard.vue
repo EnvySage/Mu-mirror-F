@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, computed, watch, ref, nextTick, onBeforeUnmount } from 'vue'
-import { CONTENT_TYPES, ALL_MOODS, TASK_STATUSES, typeMap, taskStatusMap } from '@/constants/tags'
+import { CONTENT_TYPES, ALL_MOODS, TASK_STATUSES, typeMap, taskStatusMap, normalizeContentType } from '@/constants/tags'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { useRecordsStore } from '@/stores/records'
 import { useToastStore } from '@/stores/toast'
@@ -61,7 +61,7 @@ function resetFrom(chunk) {
   const segment = chunk.segment || ''
   textDraft.value = createChunkDraft(segment)
   edit.segment = segment
-  edit.contentType = chunk.metadata?.contentType || ''
+  edit.contentType = normalizeContentType(chunk.metadata?.contentType) || ''
   edit.mood = [...(chunk.metadata?.mood || [])]
   edit.taskStatus = chunk.metadata?.taskStatus || ''
   edit.keywords = (chunk.metadata?.keywords || []).join('，')
@@ -79,7 +79,7 @@ watch(() => props.chunk.segment, (segment) => {
   }
 })
 watch(() => props.chunk.metadata, (metadata) => {
-  edit.contentType = metadata?.contentType || ''
+  edit.contentType = normalizeContentType(metadata?.contentType) || ''
   edit.mood = [...(metadata?.mood || [])]
   edit.taskStatus = metadata?.taskStatus || ''
   edit.keywords = (metadata?.keywords || []).join('，')

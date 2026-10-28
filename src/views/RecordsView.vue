@@ -10,6 +10,9 @@ import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap, typeMap, taskStatusMap } from '@/constants/tags'
 import { dateLabel, formatFullDate } from '@/utils/time'
 import RecordCard from '@/components/molecules/RecordCard.vue'
+import RecordWorkflowCard from '@/components/molecules/RecordWorkflowCard.vue'
+import { useActionsStore } from '@/stores/actions'
+import { recordDraftOf, recordIdOf, recordWorkflowState } from '@/utils/recordWorkflow'
 import ActionCard from '@/components/organisms/ActionCard.vue'
 import RecordsSidebar from '@/components/organisms/RecordsSidebar.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
@@ -29,10 +32,19 @@ const statsStore = useStatsStore()
 const todoStore = useTodoStore()
 const toast = useToastStore()
 const deleteProposal = ref(null)
+const actions = useActionsStore()
+const workflowCards = computed(() => actions.recordWorkflows.filter(card => {
+  if (card.state === 'SUCCEEDED') return false
+  const date = dateKey(card.created_at || card.createdAt)
+  if (filterDate.value && date !== filterDate.value) return false
+  if (selectedTag.value && !(recordDraftOf(card).segments || []).some(s => s.tags?.includes(selectedTag.value))) return false
+  return true
+}))
 
 const recordFilter = ref('all')
 const selectedTag = ref('')
 const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
+const filterDate = computed(() => props.date || (ui.sidebarSelectedDate ? formatDateStr(ui.sidebarSelectedDate) : null))
 const listRoot = ref(null)
 let viewAlive = true
 let highlightTimer = null
@@ -46,7 +58,11 @@ const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:
 /** 按日期分组（倒序） */
 const grouped = computed(() => {
   const groups = {}
-  recordsStore.records.forEach(r => {
+  const replaced = new Set(workflowCards.value.map(recordIdOf).filter(id => id != null).map(String))
+  const entries = [...recordsStore.records.filter(r => !replaced.has(String(r.id))), ...workflowCards.value.map(card => ({
+    id: `action:${card.id}`, _action: card, status: recordWorkflowState(card).key === 'review' ? 'reviewing' : 'processing', created_at: card.created_at || card.createdAt,
+  }))]
+  entries.forEach(r => {
     if (recordFilter.value !== 'all' && r.status !== recordFilter.value) return
     const key = dateKey(r.created_at)
     if (!groups[key]) groups[key] = []
@@ -55,7 +71,7 @@ const grouped = computed(() => {
   return Object.keys(groups)
     .sort()
     .reverse()
-    .map(k => ({ dateKey: k, label: dateLabel(groups[k][0].created_at), items: groups[k] }))
+    .map(k => ({ dateKey: k, label: dateLabel(groups[k][0].created_at), items: groups[k].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))) }))
 })
 useListMotion(listRoot, () => JSON.stringify(grouped.value.map(group => [group.dateKey, group.items.map(record => [record.id, record.status])])))
 
@@ -82,8 +98,6 @@ const countText = computed(() => {
   const todayCount = recordsStore.records.filter(r => dateKey(r.created_at) === dateKey(new Date().toISOString())).length
   return `${n} 条记录 · 今天 ${todayCount} 条`
 })
-
-const filterDate = computed(() => props.date || (ui.sidebarSelectedDate ? formatDateStr(ui.sidebarSelectedDate) : null))
 
 const subtitle = computed(() => {
   if (filterDate.value) return formatFullDate(new Date(filterDate.value + 'T00:00:00'))
@@ -306,9 +320,10 @@ function onRetryRecord(record) {
               <section v-for="group in grouped" :key="group.dateKey" :class="['records-day', stableVariant(group.dateKey, 2) ? 'rail-offset-b' : 'rail-offset-a']" :aria-label="group.label">
                 <aside class="date-rail"><span class="date-rail-dot" /><time>{{ group.label }}</time><small>{{ group.items.length }} 条</small></aside>
                 <div class="records-day-flow">
+                  <template v-for="record in group.items" :key="record.id">
+                  <RecordWorkflowCard v-if="record._action" :proposal="record._action" @open="ui.openRecordReview(record._action.id)" />
                   <RecordCard
-                    v-for="record in group.items"
-                    :key="record.id"
+                    v-else
                     :record="record"
                     editorial
                     :active="ui.selectedRecordId === record.id"
@@ -319,6 +334,7 @@ function onRetryRecord(record) {
                     @delete="onDeleteRecord"
                     @retry="onRetryRecord"
                   />
+                  </template>
                 </div>
               </section>
           </div>

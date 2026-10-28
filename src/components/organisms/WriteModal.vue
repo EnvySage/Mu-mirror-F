@@ -7,9 +7,7 @@ import { useRecordsStore } from '@/stores/records'
 import { useSettingsStore } from '@/stores/settings'
 import { useToastStore } from '@/stores/toast'
 import { useActionsStore } from '@/stores/actions'
-import ActionCard from '@/components/organisms/ActionCard.vue'
 import { createPrepareKey } from '@/api/actions'
-import { completeCreatedRecordAction, createActionStatusPoller } from '@/utils/writeActionPolling'
 
 const props = defineProps({
   show: Boolean,
@@ -21,10 +19,6 @@ const recordsStore = useRecordsStore()
 const settingsStore = useSettingsStore()
 const toast = useToastStore()
 const actionsStore = useActionsStore()
-const actionPoller = createActionStatusPoller({
-  refresh: id => actionsStore.refresh(id),
-  onUpdate: card => onActionUpdated(card),
-})
 
 const content = ref('')
 const saveMode = ref('ONLY_SAVE')
@@ -62,7 +56,6 @@ const count = computed(() => content.value.length)
 const enabled = computed(() => content.value.trim().length > 0 && !loading.value && !preparedAction.value)
 
 watch(() => props.show, (val) => {
-  actionPoller.stop()
   if (val) {
     pendingNavigation = null
     focusOpen.value = true
@@ -110,7 +103,9 @@ async function handleSubmit() {
       preparedAction.value = action
       pendingPrepareKey = null
       pendingPrepareFingerprint = ''
-      toast.info('整理候选已准备，确认后才会创建记录')
+      pendingNavigation = { name: 'records' }
+      emit('close')
+      toast.info('已交给 AI 整理，进度会显示在记录列表')
       return action
     }
     const record = await recordsStore.createRecord(content.value.trim(), false)
@@ -131,30 +126,10 @@ async function handleSubmit() {
 
 function onClose() {
   prepareGeneration += 1
-  actionPoller.stop()
   if (loading.value && !preparingAction.value) return
   if (loading.value && preparingAction.value && !preparedAction.value) { emit('close'); return }
-  if (preparedAction.value?.state === 'PENDING') {
-    if (!window.confirm('关闭会取消这张待确认卡。继续吗？')) return
-    actionsStore.cancel(preparedAction.value.id).catch(() => {})
-  } else if (!preparedAction.value && content.value.trim() && !window.confirm('这段日记还没有保存。放弃并关闭吗？')) return
+  if (!preparedAction.value && content.value.trim() && !window.confirm('这段日记还没有保存。放弃并关闭吗？')) return
   emit('close')
-}
-
-async function onActionUpdated(card) {
-  if (!card) return
-  preparedAction.value = card
-  const state = String(card.state || '').toUpperCase()
-  if (state === 'PENDING' || state === 'EXECUTING') {
-    actionPoller.start(card.id, state)
-    return
-  }
-  actionPoller.stop()
-  await completeCreatedRecordAction(card, {
-    fetchRecords: () => recordsStore.fetchRecords(),
-    records: recordsStore.records,
-    emit,
-  })
 }
 
 // ---- 桌面/移动形态切换（2a）：≥900px 居中 modal，<900px 底部抽屉 ----
@@ -174,7 +149,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  actionPoller.stop()
   desktopMq?.removeEventListener?.('change', onMqChange)
 })
 </script>
@@ -213,11 +187,10 @@ onBeforeUnmount(() => {
               </label>
               <label :class="['permission-option', { selected: saveMode === 'AI_ASSISTED' }]">
                 <input v-model="saveMode" type="radio" value="AI_ASSISTED" :disabled="loading || !!preparedAction">
-                <span><b>AI 帮我整理</b><small>先生成可编辑候选；每条记忆仍需你确认后才生效</small></span>
+                <span><b>AI 帮我整理</b><small>先回列表，AI 在后台整理；你确认后再保存</small></span>
               </label>
             </div>
-            <ActionCard v-if="preparedAction" :proposal="preparedAction" @updated="onActionUpdated" />
-            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : 'AI 会先准备候选；你确认后才创建记录。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '生成待确认候选' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">{{ preparedAction.state === 'PENDING' ? '关闭' : '完成' }}</button></div>
+            <div class="write-footer-main"><div><p id="write-hint" class="write-hint">{{ saveMode === 'ONLY_SAVE' ? '仅保存不调用 AI 整理；聊天里选择仅保存时，聊天本身仍已发送给 AI。' : '进度会留在列表里。整理完成后，打开修改并确认保存。' }}</p><span class="write-shortcut">Ctrl / ⌘ + Enter 保存</span></div><span class="write-counter" :class="{ full: count === MAX }" aria-live="off"><b>{{ count }}</b> / {{ MAX }}</span><button v-if="!preparedAction" :class="['write-submit', { enabled }]" :disabled="!enabled" @click="handleSubmit">{{ loading ? '准备中…' : saveMode === 'ONLY_SAVE' ? '仅保存' : '交给 AI，返回列表' }} <span aria-hidden="true">↗</span></button><button v-else class="write-submit" :disabled="loading" @click="onClose">{{ preparedAction.state === 'PENDING' ? '关闭' : '完成' }}</button></div>
           </footer>
         </div>
       </section>

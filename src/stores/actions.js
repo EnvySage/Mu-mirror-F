@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { listActions, getAction, editAction, confirmAction, cancelAction, prepareAction as apiPrepareAction } from '@/api/actions'
+import { ref, computed } from 'vue'
+import { useRecordsStore } from '@/stores/records'
+import { listActions, listRecordWorkflows, getAction, editAction, confirmAction, cancelAction, prepareAction as apiPrepareAction } from '@/api/actions'
 
 const terminal = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'STALE'])
 const camelize = value => Array.isArray(value) ? value.map(camelize) : value && typeof value === 'object'
@@ -11,6 +12,33 @@ export const useActionsStore = defineStore('assistantActions', () => {
   const byId = ref({})
   const sessionIds = ref({})
   const busy = ref({})
+  const recordErrors = ref({})
+  const submittingRecords = ref({})
+  const recordWorkflows = computed(() => Object.values(byId.value)
+    .filter(card => ['record.create', 'record.organize'].includes(card.kind) && card.state !== 'CANCELLED')
+    .sort((a, b) => String(b.created_at || b.createdAt || '').localeCompare(String(a.created_at || a.createdAt || ''))))
+
+  async function loadRecordWorkflows({ isCurrent = () => true } = {}) {
+    const response = await listRecordWorkflows()
+    if (isCurrent()) (response.data || []).forEach(upsert)
+    return response.data || []
+  }
+  function clear() { byId.value = {}; sessionIds.value = {}; busy.value = {}; recordErrors.value = {}; submittingRecords.value = {} }
+  async function submitRecord(id) {
+    if (submittingRecords.value[id]) return
+    submittingRecords.value[id] = true
+    delete recordErrors.value[id]
+    try { return await confirm(id) }
+    catch (error) {
+      if (!['SUCCEEDED', 'EXECUTING'].includes(byId.value[id]?.state)) recordErrors.value[id] = error.message || '保存结果暂时无法确认，请打开记录查看。'
+    }
+    finally {
+      const card = byId.value[id]
+      const recordId = card?.result?.recordId ?? card?.result?.record_id
+      if (recordId != null) await useRecordsStore().fetchRecord(recordId)
+      delete submittingRecords.value[id]
+    }
+  }
 
   function upsert(proposal) {
     if (!proposal?.id) return false
@@ -94,5 +122,5 @@ export const useActionsStore = defineStore('assistantActions', () => {
   function canConfirm(card) { return canEdit(card) }
   function canCancel(card) { return card?.state === 'PENDING' }
 
-  return { byId, busy, upsert, prepare, loadForSession, inSession, edit, confirm, cancel, refresh, canEdit, canConfirm, canCancel, terminal }
+  return { byId, busy, recordErrors, submittingRecords, recordWorkflows, loadRecordWorkflows, clear, submitRecord, upsert, prepare, loadForSession, inSession, edit, confirm, cancel, refresh, canEdit, canConfirm, canCancel, terminal }
 })

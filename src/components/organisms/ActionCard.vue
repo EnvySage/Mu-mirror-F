@@ -11,12 +11,28 @@ import DetailSheet from './DetailSheet.vue'
 import ActionPreview from './ActionPreview.vue'
 import { typeMap } from '@/constants/tags'
 import { getActionLabel } from '@/utils/actionLabel'
+import RecordWorkflowCard from '@/components/molecules/RecordWorkflowCard.vue'
+import { useUIStore } from '@/stores/ui'
 
 const props = defineProps({ proposal: { type: Object, required: true }, hideEdit: { type: Boolean, default: false } })
 const emit = defineEmits(['updated'])
 const actions = useActionsStore()
 const growth = useGrowthStore()
 const records = useRecordsStore()
+const ui = useUIStore()
+const isRecordCandidate = computed(() => ['record.create', 'record.organize'].includes(props.proposal.kind))
+function openRecordWorkspace() {
+  actions.upsert(props.proposal)
+  const latest = actions.byId[props.proposal.id]
+  const savedId = latest?.result?.recordId ?? latest?.result?.record_id
+  if (latest?.state === 'SUCCEEDED' && savedId != null) {
+    records.fetchRecord(savedId)
+    ui.selectedRecordId = savedId
+    ui.showDetail = true
+    return
+  }
+  ui.openRecordReview(props.proposal.id)
+}
 const editing = ref(false)
 const detailsOpen = ref(false)
 const excerpt = computed(() => recordDraft.value?.finalContent || props.proposal.payload?.memoryDraft?.content || props.proposal.preview?.memoryDraft?.content || props.proposal.payload?.notes || '')
@@ -33,7 +49,7 @@ function closeDetails() {
 watch(() => props.proposal.state, state => { if (state !== 'PENDING') editing.value = false })
 const error = ref('')
 const busy = computed(() => !!actions.busy[props.proposal.id])
-const title = computed(() => props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind === 'record.memory.disable' ? '永久移除记忆' : props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
+const title = computed(() => recordDraft.value?.segments?.find(segment => segment.title?.trim())?.title || props.proposal.payload?.title || props.proposal.payload?.content?.slice(0, 72) || props.proposal.payload?.memoryDraft?.content?.slice(0, 72) || props.proposal.preview?.memoryDraft?.content?.slice(0, 72) || props.proposal.payload?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.recordDraft?.rawContent?.slice(0, 72) || props.proposal.preview?.dimension_name || props.proposal.preview?.dimensionName || props.proposal.preview?.after?.title || props.proposal.preview?.before?.title || (props.proposal.kind === 'record.memory.disable' ? '永久移除记忆' : props.proposal.kind?.startsWith('growth.') ? '成长贡献' : props.proposal.kind?.startsWith('memory.') ? '记忆候选' : '待办操作'))
 const stateLabel = computed(() => ({ PENDING:'等待你确认', EXECUTING:'正在执行', SUCCEEDED:'已完成', FAILED:'执行失败', CANCELLED:'已取消', STALE:'目标已变化' }[props.proposal.state] || props.proposal.state || '状态未知'))
 const canEdit = computed(() => actions.canEdit(props.proposal))
 const hasGrowthSuggestions = computed(() => {
@@ -94,6 +110,7 @@ function stopPreparationPoll() {
 }
 watch(isPreparingRecord, running => {
   stopPreparationPoll()
+  if (isRecordCandidate.value) return
   if (!running) return
   preparationPoll = setInterval(() => {
     if (actions.busy[props.proposal.id]) return
@@ -165,7 +182,8 @@ async function refreshStatus() {
 </script>
 
 <template>
-  <section class="action-card" :class="{ 'action-danger': (proposal.preview?.afterMemoryState ?? proposal.preview?.after_memory_state) === 'DISABLED' || proposal.kind?.endsWith('.delete') || proposal.kind === 'memory.forget' }" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡" :aria-busy="busy">
+  <RecordWorkflowCard v-if="isRecordCandidate" :proposal="actions.byId[proposal.id] || proposal" compact @open="openRecordWorkspace" />
+  <section v-else class="action-card" :class="{ 'action-danger': (proposal.preview?.afterMemoryState ?? proposal.preview?.after_memory_state) === 'DISABLED' || proposal.kind?.endsWith('.delete') || proposal.kind === 'memory.forget' }" :data-action-id="proposal.id" :data-action-version="proposal.version" aria-label="操作确认卡" :aria-busy="busy">
     <header class="action-card-header"><span class="action-kind"><i aria-hidden="true">✦</i>{{ actionLabel }}</span><span class="action-state" :class="'state-' + String(proposal.state || '').toLowerCase()">{{ candidateNeedsRecheck ? '需要核对' : isPreparingRecord ? '整理中…' : stateLabel }}</span></header>
     <strong class="action-title">{{ title }}</strong>
     <p v-if="excerpt && excerpt !== title" class="action-excerpt">{{ excerpt }}</p>

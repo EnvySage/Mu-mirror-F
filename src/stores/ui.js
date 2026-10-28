@@ -24,6 +24,12 @@ export const useUIStore = defineStore('ui', () => {
   const isMobile = ref(window.innerWidth < 900)
 
   const showWriteModal = ref(false)
+  const selectedRecordActionId = ref(null)
+  function openRecordReview(id) {
+    selectedRecordId.value = null
+    showDetail.value = false
+    selectedRecordActionId.value = id
+  }
 
   /** 每日总结 sheet（数据源 GET /api/summaries） */
   const showSummarySheet = ref(false)
@@ -89,6 +95,8 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   return {
+    selectedRecordActionId,
+    openRecordReview,
     currentPage,
     registerNavigationGuard,
     confirmNavigationDrafts,

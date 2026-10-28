@@ -432,10 +432,12 @@ async function organizeSavedRecord() {
       return
     }
     preparedRecordAction.value = action
-    if (['PENDING', 'EXECUTING'].includes(action?.state)) pollRecordAction(action.id)
     pendingRecordPrepareKey = null
     pendingRecordPrepareFingerprint = ''
-    toast.info('整理候选已准备，确认后才会更新这条记录')
+    authorizationDirty.value = false
+    ui.detailDraftDirty = false
+    close()
+    toast.info('已交给 AI 整理，可以在列表查看进度')
   } catch (err) {
     actionError.value = err.message || '准备整理候选失败'
   } finally {

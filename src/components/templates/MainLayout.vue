@@ -17,6 +17,8 @@ import MobileHeader from '@/components/organisms/MobileHeader.vue'
 import WriteModal from '@/components/organisms/WriteModal.vue'
 import SummarySheet from '@/components/organisms/SummarySheet.vue'
 import DetailPanel from '@/components/organisms/DetailPanel.vue'
+import RecordReviewWorkspace from '@/components/organisms/RecordReviewWorkspace.vue'
+import { useRecordWorkflows } from '@/composables/useRecordWorkflows'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
 import { useRouteMotion } from '@/motion/useRouteMotion'
 import { cancelMirrorShatter } from '@/composables/useMirrorShatter'
@@ -36,6 +38,7 @@ const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
 const presentation = usePresentationMode()
 const mobileExploreOpen = ref(false)
+useRecordWorkflows()
 watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false })
 const pageComponent = shallowRef(null)
 const renderedPage = ref(route.name)
@@ -139,6 +142,7 @@ watch(() => route.name, () => {
     <MobileExploreSheet :open="mobileExploreOpen" @close="mobileExploreOpen = false" />
     <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
+    <RecordReviewWorkspace />
     <ToastContainer />
   </div>
 </template>

@@ -3,14 +3,15 @@ export const CONTENT_TYPES = [
   { key: 'todo', label: '待办' },
   { key: 'thought', label: '感想' },
   { key: 'learning', label: '学习' },
-  { key: 'plan', label: '计划' },
   { key: 'note', label: '随记' },
   { key: 'work', label: '工作' },
   { key: 'social', label: '社交' },
   { key: 'health', label: '健康' },
 ]
 
-export const typeMap = Object.fromEntries(CONTENT_TYPES.map(t => [t.key, t.label]))
+// 旧记录仍可带 plan；界面与新写入统一使用 todo。
+export const normalizeContentType = value => value === 'plan' ? 'todo' : value
+export const typeMap = { ...Object.fromEntries(CONTENT_TYPES.map(t => [t.key, t.label])), plan: '待办' }
 
 // 情绪分组
 export const MOOD_GROUPS = {

@@ -12,6 +12,7 @@ export function createPrepareKey() {
 }
 
 export const listActions = (sessionId) => request.get('/assistant/actions', { params: { sessionId } })
+export const listRecordWorkflows = () => request.get('/assistant/actions/records')
 export const prepareAction = (kind, payload, prepareKey) => request.post('/assistant/actions/prepare', { kind, payload, prepareKey }, rawJson)
 export const getAction = (id) => request.get(`/assistant/actions/${id}`)
 export const editAction = (id, body) => request.patch(`/assistant/actions/${id}`, body, rawJson)

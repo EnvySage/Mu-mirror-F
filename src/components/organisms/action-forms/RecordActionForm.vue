@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { CONTENT_TYPES } from '@/constants/tags'
+import { CONTENT_TYPES, ALL_MOODS, normalizeContentType } from '@/constants/tags'
 import { useGrowthStore } from '@/stores/growth'
 
-const props = defineProps({ proposal: { type: Object, required: true } })
-const emit = defineEmits(['save', 'cancel'])
+const props = defineProps({ proposal: { type: Object, required: true }, expanded: Boolean, hideActions: Boolean })
+const emit = defineEmits(['save', 'cancel', 'dirty'])
 const growth = useGrowthStore()
 const payload = ref({})
+const tagDrafts = ref([])
 const rawContent = computed(() => payload.value.recordDraft?.rawContent || '')
 const draft = computed(() => payload.value.recordDraft || {})
 const segments = computed(() => draft.value.segments || [])
@@ -46,15 +47,20 @@ function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
 // 只在换卡或准备状态变化时重建本地草稿：准备轮询会用同一张卡的新对象刷新 proposal，
 // 若按对象深度监听，会把用户刚勾选的记忆开关/改过的字段重置回服务端值。
 watch(
-  () => [
-    props.proposal?.id,
-    props.proposal?.preparationStatus,
-    props.proposal?.preparation_status,
-    props.proposal?.payload?.recordDraft?.preparationStatus,
+  [
+    () => props.proposal?.id,
+    () => props.proposal?.preparationStatus,
+    () => props.proposal?.preparation_status,
+    () => props.proposal?.payload?.recordDraft?.preparationStatus,
+    () => props.proposal?.preview?.recordDraft?.preparationStatus,
   ],
   () => {
     payload.value = clone(props.proposal?.payload)
     payload.value.recordDraft ||= clone(props.proposal?.preview?.recordDraft)
+    for (const segment of payload.value.recordDraft?.segments || []) {
+      segment.contentType = normalizeContentType(segment.contentType)
+    }
+    tagDrafts.value = (payload.value.recordDraft?.segments || []).map(segment => tagsText(segment.tags))
   },
   { immediate: true },
 )
@@ -62,11 +68,14 @@ watch(
 growth.fetchAxes().catch(() => {})
 
 function updateSegment(index, key, value) {
+  if (props.expanded) emit('dirty')
   const next = clone(payload.value)
   next.recordDraft.segments[index][key] = value
+  if (key === 'text') next.recordDraft.finalContent = next.recordDraft.segments.map(segment => segment.text).join('\n')
   payload.value = next
 }
 function updateFinalContent(value) {
+  if (props.expanded) emit('dirty')
   const next = clone(payload.value)
   next.recordDraft.finalContent = value
   if (next.recordDraft.segments?.length === 1) next.recordDraft.segments[0].text = value
@@ -74,10 +83,12 @@ function updateFinalContent(value) {
 }
 function tagsText(tags) { return Array.isArray(tags) ? tags.join(', ') : '' }
 function setTags(index, value) {
+  tagDrafts.value[index] = value
   updateSegment(index, 'tags', value.split(/[,，\n]/).map(tag => tag.trim()).filter(Boolean))
 }
 function updateGrowthSuggestion(dimensionId, key, value) {
   if (!supportsGrowthReview.value || running.value || growthDefinitionChanged.value) return
+  if (props.expanded) emit('dirty')
   const next = clone(payload.value)
   const draft = next.recordDraft
   const current = draft.growthSuggestions || draft.growth_suggestions || []
@@ -115,20 +126,24 @@ function submit() {
   }
   emit('save', next)
 }
+defineExpose({ submit })
 </script>
 
 <template>
-  <form class="record-action-form" @submit.prevent="submit">
+  <form class="record-action-form" :class="{ 'record-editor-expanded': expanded }" @submit.prevent="submit">
     <details class="record-source"><summary>原始输入 · 保留为来源</summary><pre class="record-original">{{ rawContent }}</pre></details>
     <p v-if="running" class="record-preparing" role="status">正在准备整理结果…</p>
     <div v-else-if="preparationStatus === 'SAVE_ONLY'" class="record-preparing" role="status">{{ fallbackReason }}。本次建议仅保存，仍需你确认；确认后不会加入记忆。</div>
-    <label class="record-field">最终正文<textarea :value="draft.finalContent" maxlength="2000" rows="4" :disabled="running" @input="updateFinalContent($event.target.value)" /></label>
-    <details v-if="segments.length" class="record-segments"><summary>分类、标签与片段 <span>{{ segments.length }} 个片段</span></summary>
+    <label v-if="segments.length <= 1" class="record-field record-body-field">最终正文<textarea :value="draft.finalContent" maxlength="2000" :rows="expanded ? 8 : 4" :disabled="running" @input="updateFinalContent($event.target.value)" /></label>
+    <details v-if="segments.length" class="record-segments" :open="expanded"><summary>分类、标签与片段 <span>{{ segments.length }} 个片段</span></summary>
     <fieldset v-for="(segment, index) in segments" :key="segment.draftId || index" class="record-segment">
       <legend>片段 {{ index + 1 }}</legend>
-      <label class="record-field">片段文字<textarea :value="segment.text" maxlength="2000" rows="3" :disabled="running" @input="updateSegment(index, 'text', $event.target.value)" /></label>
+      <label v-if="expanded" class="record-field">标题<input :value="segment.title" maxlength="100" :disabled="running" @input="updateSegment(index, 'title', $event.target.value)"></label>
+      <label v-if="!expanded || segments.length > 1" class="record-field">片段文字<textarea :value="segment.text" maxlength="2000" rows="5" :disabled="running" @input="updateSegment(index, 'text', $event.target.value)" /></label>
+      <label v-if="expanded" class="record-field">摘要<textarea :value="segment.summary" maxlength="500" rows="3" :disabled="running" @input="updateSegment(index, 'summary', $event.target.value)" /></label>
       <label class="record-field">分类<select :value="segment.contentType || 'note'" :disabled="running" @change="updateSegment(index, 'contentType', $event.target.value)"><option v-for="item in CONTENT_TYPES" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
-      <label class="record-field">自由标签<input :value="tagsText(segment.tags)" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
+      <label class="record-field">自由标签<input :value="tagDrafts[index]" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
+      <div v-if="expanded" class="record-moods"><span>情绪</span><button v-for="mood in ALL_MOODS" :key="mood.key" type="button" :aria-pressed="(segment.moods || []).includes(mood.key)" @click="updateSegment(index, 'moods', (segment.moods || []).includes(mood.key) ? segment.moods.filter(m => m !== mood.key) : [...(segment.moods || []), mood.key])">{{ mood.label }}</button></div>
     </fieldset>
     </details>
     <fieldset v-if="supportsGrowthReview" class="record-growth">
@@ -145,7 +160,7 @@ function submit() {
       <b>{{ resolution.todoTitle || resolution.title || '关联待办' }}</b>
       <span>{{ resolution.action === 'dismissed' ? '本次忽略' : `确认状态：${resolution.status || '维持当前状态'}` }}</span>
     </div>
-    <div class="record-form-actions"><button type="button" @click="emit('cancel')">返回</button><button type="submit" :disabled="running || growthDefinitionChanged">保存修改并重新确认</button></div>
+    <div v-if="!hideActions" class="record-form-actions"><button type="button" @click="emit('cancel')">返回</button><button type="submit" :disabled="running || growthDefinitionChanged">保存修改并重新确认</button></div>
   </form>
 </template>
 
