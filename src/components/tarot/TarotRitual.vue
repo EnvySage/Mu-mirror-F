@@ -85,7 +85,7 @@ onBeforeUnmount(() => { alive = false; context?.revert() })
       </div>
       <div class="ritual-iris" aria-hidden="true" />
       <div v-if="phase === 'revealed' && result?.card" class="ritual-result">
-        <TarotSpotlight :card="result.card" :variant="variant" @ready="ready = true" @zoom="!dismissing && $emit('inspect', result.card)" />
+        <TarotSpotlight :card="result.card" :orientation="result.orientation" :variant="variant" @ready="ready = true" @zoom="!dismissing && $emit('inspect', result.card, result.orientation)" />
       </div>
       <header class="ritual-header"><span>{{ phase === 'revealed' && result?.newlyCollected ? '一张新牌，加入你的故事。' : mode === 'question' ? '问一问' : '今日牌签' }}</span><button class="ritual-close" :disabled="dismissing" @click="dismiss">{{ phase === 'waiting' ? '稍后再抽' : '返回牌桌' }} ×</button></header>
       <div v-if="phase === 'drawing'" class="ritual-progress" role="status">正在揭开这次相遇…</div>

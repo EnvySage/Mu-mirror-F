@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { usePresentationMode } from '@/composables/usePresentationMode'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
 import { useSummariesStore } from '@/stores/summaries'
@@ -26,6 +28,8 @@ const props = defineProps({
 })
 
 const ui = useUIStore()
+const router = useRouter()
+const presentation = usePresentationMode()
 const recordsStore = useRecordsStore()
 const summariesStore = useSummariesStore()
 const statsStore = useStatsStore()
@@ -290,6 +294,7 @@ function onRetryRecord(record) {
   <div class="page records-page">
     <div class="page-content">
       <PageMasthead title="日常记录" english="DAILY RECORDS" :description="subtitle"><button class="p3-button secondary" @click="openSummarySheet">每日总结</button></PageMasthead>
+      <button v-if="presentation.mode.value === 'mobile'" class="record-chat-entry" @click="router.push({ name: 'chat' })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5" /></svg><span>和另一个自己聊聊</span><b aria-hidden="true">↗</b></button>
       <ActionCard v-if="deleteProposal" :proposal="deleteProposal" @updated="onDeleteActionUpdated" />
       <section class="record-intro" aria-label="记录此刻">
         <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
@@ -388,6 +393,7 @@ function onRetryRecord(record) {
 </template>
 
 <style scoped>
+.record-chat-entry { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:9px 13px; margin:0 0 10px; color:#e7faff; background:#102e63; border:1px solid #75d5e359; text-align:left; font-size:13px; }.record-chat-entry svg { width:20px; height:20px; color:var(--cyan); }.record-chat-entry b { margin-left:auto; color:var(--cyan); }.record-chat-entry:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .page-header {

@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright')
+const browser = await chromium.launch({ channel:'chrome', headless:true })
+try {
+ const page = await browser.newPage({ viewport:{width:390,height:844},reducedMotion:'reduce' })
+ const errors=[];page.on('pageerror',e=>errors.push(e.message))
+ await page.goto(process.env.CHAT_PREVIEW_URL || 'http://127.0.0.1:5192/chat')
+ await page.getByLabel('对话内容',{exact:true}).fill('今天想试试新的聊天界面。')
+ await page.getByRole('button',{name:'发送消息',exact:true}).click()
+ await page.locator('.chat-msg-ai').waitFor()
+ await page.getByRole('button',{name:'添加文件',exact:true}).waitFor({state:'visible'})
+ await page.waitForFunction(()=>!document.querySelector('.chat-input').disabled)
+ await page.getByLabel('对话内容',{exact:true}).fill('这张截图怎么样？')
+ await page.locator('.chat-input').evaluate(async el=>{
+  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=220
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#095dcb';ctx.fillRect(0,0,320,220);ctx.fillStyle='#eaff81';ctx.font='bold italic 48px sans-serif';ctx.fillText('MAKE IT',20,85);ctx.fillStyle='#f04186';ctx.fillRect(25,105,270,65);ctx.fillStyle='white';ctx.fillText('YOURS!',30,155)
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve))
+  const data=new DataTransfer();data.items.add(new File([blob],'clipboard.png',{type:'image/png'}));el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}))
+ })
+ await page.getByRole('button',{name:'放大图片 1',exact:true}).waitFor()
+ assert.equal(await page.getByRole('button',{name:'发送消息',exact:true}).isDisabled(),true)
+ assert.equal(await page.getByLabel('对话内容',{exact:true}).inputValue(),'这张截图怎么样？')
+ await page.getByRole('button',{name:'放大图片 1',exact:true}).click()
+ await page.getByRole('dialog',{name:'图片放大预览'}).waitFor()
+ await page.keyboard.press('Escape')
+ await page.getByRole('dialog',{name:'图片放大预览'}).waitFor({state:'hidden'})
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+ if(process.env.CHAT_REMIX_SCREENSHOT) await page.screenshot({path:process.env.CHAT_REMIX_SCREENSHOT})
+ await page.getByRole('button',{name:'移除图片 1',exact:true}).click()
+ await page.locator('.image-draft').waitFor({state:'hidden'})
+ assert.equal(await page.getByRole('button',{name:'发送消息',exact:true}).isEnabled(),true)
+ assert.deepEqual(errors,[])
+ console.log('PASS remix: text chat, paste preview, text retained, image-only prototype guarded, fullsize/Escape/remove, no overflow/errors')
+} finally { await browser.close() }

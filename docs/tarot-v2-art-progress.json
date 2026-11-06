@@ -1,0 +1,290 @@
+{
+  "tool": "native image_gen",
+  "updated": "2026-11-04",
+  "jobs": [
+    {
+      "id": "05-hierophant",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-8d2ab713-91ec-4a0f-ac3f-c1b6b9d69168.png"
+    },
+    {
+      "id": "11-justice",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-dfa266f3-d949-473f-8a1f-8de6740eade9.png"
+    },
+    {
+      "id": "12-hanged-man",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-f9811ac3-df71-4a91-bdb6-1203a9b544f6.png"
+    },
+    {
+      "id": "13-death",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-d6099e19-c8a1-4d47-831a-33183fa851b5.png"
+    },
+    {
+      "id": "14-temperance",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-062faed1-3a4b-4d74-ab5b-24399cd3b429.png"
+    },
+    {
+      "id": "15-devil",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-37ba79c4-daf8-4cb2-8464-f8d3226c1d8e.png"
+    },
+    {
+      "id": "16-tower",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-7f863cb0-01a4-4345-a512-d375f1d6413f.png"
+    },
+    {
+      "id": "18-moon",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-79ea2fa5-e022-4a7f-bc57-95e32324df90.png"
+    },
+    {
+      "id": "20-judgement",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-bd61f3b0-5700-4821-bda9-567fb13aadac.png"
+    },
+    {
+      "id": "21-world",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-da2af1e0-9826-40d6-ad32-c6fab15fb3c7.png"
+    },
+    {
+      "id": "wands-02",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-47aeb184-3a4f-4592-af23-85f8a44d7ca4.png"
+    },
+    {
+      "id": "wands-03",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-06fad63b-c0ac-46e8-845c-2be39dd3f598.png"
+    },
+    {
+      "id": "wands-04",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-cbec41c3-7717-422c-964b-412ed3738a98.png"
+    },
+    {
+      "id": "wands-05",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-2ed9c574-9e90-467d-ba19-9d42d9f3f49f.png"
+    },
+    {
+      "id": "wands-06",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-48487d4c-3f0e-4b64-b622-10ea77235437.png"
+    },
+    {
+      "id": "wands-07",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-d7ee61af-5e3d-45e8-b55f-9484efe14370.png"
+    },
+    {
+      "id": "wands-08",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-24987c4d-c776-4bf3-b560-7cbfe985f471.png"
+    },
+    {
+      "id": "wands-09",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-5582801a-8a15-4276-882c-3fe9d6ebe45e.png"
+    },
+    {
+      "id": "wands-10",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-e960c241-8991-4bd5-bf92-51f23a8a91c4.png"
+    },
+    {
+      "id": "wands-page",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-e1b0e470-669a-47f5-becd-6ed90b1f8447.png"
+    },
+    {
+      "id": "wands-knight",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-ce895325-5273-4416-adce-fe157a6b4358.png"
+    },
+    {
+      "id": "wands-queen",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-6011a0e3-9606-4021-9d08-46ebec54702d.png"
+    },
+    {
+      "id": "wands-king",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-98e40262-b485-4f38-97e5-ba221652becf.png"
+    },
+    {
+      "id": "cups-02",
+      "status": "pending"
+    },
+    {
+      "id": "cups-03",
+      "status": "pending"
+    },
+    {
+      "id": "cups-04",
+      "status": "pending"
+    },
+    {
+      "id": "cups-05",
+      "status": "pending"
+    },
+    {
+      "id": "cups-06",
+      "status": "pending"
+    },
+    {
+      "id": "cups-07",
+      "status": "pending"
+    },
+    {
+      "id": "cups-08",
+      "status": "pending"
+    },
+    {
+      "id": "cups-09",
+      "status": "pending"
+    },
+    {
+      "id": "cups-10",
+      "status": "pending"
+    },
+    {
+      "id": "cups-page",
+      "status": "pending"
+    },
+    {
+      "id": "cups-knight",
+      "status": "pending"
+    },
+    {
+      "id": "cups-queen",
+      "status": "pending"
+    },
+    {
+      "id": "cups-king",
+      "status": "pending"
+    },
+    {
+      "id": "swords-02",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-afe0aecf-9936-4869-a06b-a11b5e0e1a1d.png"
+    },
+    {
+      "id": "swords-03",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-75e98ea4-8a51-4dd4-8321-f12c55ddcc78.png"
+    },
+    {
+      "id": "swords-04",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-bc89518a-6d16-4a3e-83f6-08ad45a8bbfd.png"
+    },
+    {
+      "id": "swords-05",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-6baf5ae9-6f34-4940-b5b8-cf6d6b002791.png"
+    },
+    {
+      "id": "swords-06",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-6d891787-b49c-4fb6-a5cd-48eb177919c4.png"
+    },
+    {
+      "id": "swords-07",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-478a1b77-de53-4313-bae5-61d9db2f706e.png"
+    },
+    {
+      "id": "swords-08",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-574cda08-89af-4f2f-bb9e-85bc4a445530.png"
+    },
+    {
+      "id": "swords-09",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-704a85e7-3017-4aad-8a1d-29ca251f3865.png"
+    },
+    {
+      "id": "swords-10",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-24f88740-75aa-4058-8b72-aca7847645f7.png"
+    },
+    {
+      "id": "swords-page",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-11425c93-91e1-4f32-a5ff-7cf1e36931f3.png"
+    },
+    {
+      "id": "swords-knight",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-5fa38d78-a0aa-4050-8ba4-fdf572725556.png"
+    },
+    {
+      "id": "swords-queen",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-c3f0f76e-606e-4849-b9be-19663a5d93c1.png"
+    },
+    {
+      "id": "swords-king",
+      "status": "saved",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a18b8a-6d31-7cc3-8485-b2c0d722938c\\exec-e510796a-bcbb-4181-b7c0-2bba5468260f.png"
+    },
+    {
+      "id": "pentacles-02",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-03",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-04",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-05",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-06",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-07",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-08",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-09",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-10",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-page",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-knight",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-queen",
+      "status": "pending"
+    },
+    {
+      "id": "pentacles-king",
+      "status": "pending"
+    }
+  ]
+}

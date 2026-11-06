@@ -15,7 +15,7 @@ try {
     const explore = nav.getByRole('button', { name: '探索', exact: true })
     await explore.waitFor()
     assert.equal(await nav.getByRole('button').count(), 5, 'the navigation bar stays at five controls')
-    assert.deepEqual(await nav.locator('.nav-label').allTextContents(), ['记录', '对话', '镜子', '探索'])
+    assert.deepEqual(await nav.locator('.nav-label').allTextContents(), ['记录', '日历', '镜子', '探索'])
     await explore.click()
     const sheet = page.getByRole('dialog', { name: '探索', exact: true })
     await sheet.waitFor()
@@ -28,13 +28,20 @@ try {
     await page.getByRole('button', { name: '点击牌背，抽取今日牌', exact: true }).waitFor()
     assert.equal(new URL(page.url()).pathname, '/tarot')
     assert.ok(await explore.evaluate(e => e.classList.contains('active')), 'Explore marks the current destination')
-    // The former calendar entry, assets and settings remain reachable from every page.
-    for (const [label, path] of [['日历', '/calendar'], ['记忆资产', '/vault'], ['设置', '/settings']]) {
+    // Assets and settings remain reachable; chat has its own fullscreen return path.
+    await nav.getByRole('button', { name: '日历', exact: true }).click()
+    await page.waitForURL(`${base}/calendar`)
+    for (const [label, path] of [['记忆资产', '/vault'], ['设置', '/settings']]) {
       await explore.click()
       await sheet.getByRole('button', { name: new RegExp(`^${label}`) }).click()
       await sheet.waitFor({ state: 'hidden' })
       await page.waitForURL(`${base}${path}`)
     }
+    await explore.click()
+    await sheet.getByRole('button', { name: /^对话/ }).click()
+    await page.getByRole('button', { name: '返回记录', exact: true }).waitFor()
+    await page.getByRole('button', { name: '返回记录', exact: true }).click()
+    await page.waitForURL(`${base}/records`)
     await explore.click()
     const close = sheet.getByRole('button', { name: '关闭探索' })
     await close.focus()
@@ -64,6 +71,6 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal overflow')
     assert.deepEqual(errors, [])
     await page.close()
-    console.log(`PASS ${width}x${height}: five-slot navigation, tarot entry, calendar/assets/settings, focus, scrolling and new record`)
+    console.log(`PASS ${width}x${height}: five-slot navigation, fullscreen chat return, tarot/calendar/assets/settings, focus, scrolling and new record`)
   }
 } finally { await browser.close() }

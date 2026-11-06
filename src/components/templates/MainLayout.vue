@@ -38,6 +38,24 @@ const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
 const presentation = usePresentationMode()
 const mobileExploreOpen = ref(false)
+const mobileChat = computed(() => presentation.mode.value === 'mobile' && route.name === 'chat')
+const chatViewportHeight = ref(null)
+const chatViewportTop = ref(0)
+function updateChatViewport() {
+  chatViewportHeight.value = window.visualViewport?.height || window.innerHeight
+  chatViewportTop.value = window.visualViewport?.offsetTop || 0
+}
+onMounted(() => {
+  updateChatViewport()
+  window.visualViewport?.addEventListener('resize', updateChatViewport)
+  window.visualViewport?.addEventListener('scroll', updateChatViewport)
+  window.addEventListener('resize', updateChatViewport)
+})
+onBeforeUnmount(() => {
+  window.visualViewport?.removeEventListener('resize', updateChatViewport)
+  window.visualViewport?.removeEventListener('scroll', updateChatViewport)
+  window.removeEventListener('resize', updateChatViewport)
+})
 useRecordWorkflows()
 watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false })
 const pageComponent = shallowRef(null)
@@ -82,7 +100,7 @@ useTodoPolling({
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
-  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', settings: '设置' }
+  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', settings: '设置', models: '模型设置' }
   return names[route.name] || ''
 })
 
@@ -112,16 +130,17 @@ watch(() => route.name, () => {
 </script>
 
 <template>
-  <div class="app" :class="`presentation-mode-${presentation.mode.value}`" :data-entry-ready="!!pageComponent">
+  <div class="app" :class="[`presentation-mode-${presentation.mode.value}`, { 'is-chat-fullscreen': mobileChat }]" :style="mobileChat ? { '--chat-viewport-height': `${chatViewportHeight}px`, '--chat-viewport-top': `${chatViewportTop}px` } : undefined" :data-entry-ready="!!pageComponent">
     <div class="app-water" aria-hidden="true" />
     <PersonaBackdrop />
     <DesktopLayout><AppSidebar /></DesktopLayout>
     <main class="main">
-      <div v-if="IS_DEMO_PREVIEW" class="preview-banner" role="note">
+      <div v-if="IS_DEMO_PREVIEW && !mobileChat" class="preview-banner" role="note">
         <span>PUBLIC PREVIEW</span><i />演示环境 · 虚构样例数据，不会保存
       </div>
       <MobileLayout>
         <MobileHeader
+          v-if="!mobileChat"
           :title="mobileTitle"
           @summary="ui.openSummarySheet()"
           @sessions="ui.requestChatSessions()"
@@ -134,11 +153,11 @@ watch(() => route.name, () => {
       </PresentationLayout>
       <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
-        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM' })[renderedPage] }}</span>
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM', models: 'MODELS' })[renderedPage] }}</span>
       </div>
       <DetailPanel />
     </main>
-    <BottomNav :explore-open="mobileExploreOpen" @explore="mobileExploreOpen = true" />
+    <BottomNav v-if="!mobileChat" :explore-open="mobileExploreOpen" @explore="mobileExploreOpen = true" />
     <MobileExploreSheet :open="mobileExploreOpen" @close="mobileExploreOpen = false" />
     <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
@@ -185,6 +204,9 @@ watch(() => route.name, () => {
   .presentation-mode-desktop :deep(.nav-row span) { display:none; }
   .presentation-mode-desktop :deep(.nav-row svg) { width:22px; height:22px; }
 }
+.presentation-mode-mobile.is-chat-fullscreen { position:fixed; top:var(--chat-viewport-top,0px); left:0; width:100%; height:var(--chat-viewport-height,100dvh); overflow:hidden; }
+.presentation-mode-mobile.is-chat-fullscreen .main { padding-bottom:0; }
+.presentation-mode-mobile.is-chat-fullscreen :deep(.chat-page > .page-content) { padding-bottom:0; }
 .preview-banner { position: relative; z-index: 5; flex: 0 0 auto; min-height: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 18px; color: #ddfaff; background: #062f73e8; border-bottom: 1px solid #68e8f58c; font-size: 10px; letter-spacing: .04em; }
 .preview-banner span { color: var(--cyan); font: italic 800 11px var(--font-display); letter-spacing: .08em; }
 .preview-banner i { width: 1px; height: 12px; background: #82ddeb80; }

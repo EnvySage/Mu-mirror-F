@@ -16,12 +16,12 @@ const ui = useUIStore()
 // Three frequent destinations, one create action, and one expandable directory.
 const NAV = [
   { page: 'records', label: '记录', slot: 0, icon: 'M5 6h14M5 12h14M5 18h9' },
-  { page: 'chat', label: '对话', slot: 1, icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
+  { page: 'calendar', label: '日历', slot: 1, icon: 'M8 3v4M16 3v4M4 10h16M5 5h14v15H5Z' },
   { slot: 2 },
   { page: 'mirror', label: '镜子', slot: 3, icon: 'M16.5 16.5 20 20M7.5 16.5 4 20M9 21h6M12 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM12 7v4l2 2' },
   { action: 'explore', label: '探索', slot: 4, icon: 'm12 2 3.2 6.8L22 12l-6.8 3.2L12 22l-3.2-6.8L2 12l6.8-3.2ZM12 9v6M9 12h6' },
 ]
-const exploreActive = computed(() => props.exploreOpen || ['tarot', 'calendar', 'vault', 'settings'].includes(route.name))
+const exploreActive = computed(() => props.exploreOpen || ['tarot', 'chat', 'vault', 'settings'].includes(route.name))
 const activeSlot = computed(() => exploreActive.value ? 4 : NAV.find(item => item.page === route.name)?.slot ?? -1)
 const navEl = ref(null), selectionEl = ref(null)
 useNavIndicatorMotion(navEl, selectionEl, activeSlot, '.nav-item.active .nav-icon', { skewX: -10 })

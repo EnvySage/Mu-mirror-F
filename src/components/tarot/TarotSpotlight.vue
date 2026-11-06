@@ -1,8 +1,11 @@
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { gsap, prefersReducedMotion } from '@/motion/core'
+import TarotArtwork from './TarotArtwork.vue'
+import { tarotPerspective, orientationLabel } from '@/utils/tarotPresentation'
 import TarotFractures from './TarotFractures.vue'
-const props = defineProps({ card: { type: Object, required: true }, variant: { type: String, default: 'collection' } })
+const props = defineProps({ card: { type: Object, required: true }, orientation: { type: String, default: 'upright' }, variant: { type: String, default: 'collection' } })
+const perspective = computed(() => tarotPerspective(props.card, props.orientation))
 const emit = defineEmits(['zoom', 'ready'])
 const root = ref(null)
 let context
@@ -43,7 +46,7 @@ onBeforeUnmount(() => context?.revert())
     <div class="spotlight-card-flight">
       <div class="spotlight-tilt" @pointermove="tilt" @pointerleave="clearTilt">
         <button class="spotlight-flip" :aria-label="`放大卡牌细节`" @click="emit('zoom')">
-          <span class="spotlight-face spotlight-front"><img :src="card.image_url" :alt="card.name" width="1024" height="1536" /></span>
+          <span class="spotlight-face spotlight-front"><TarotArtwork :card="card" :orientation="orientation" /></span>
           <span class="spotlight-face spotlight-back" aria-hidden="true"><img src="/art/tarot/v1/back.png" alt="" width="1024" height="1536" /></span>
         </button>
       </div>
@@ -52,8 +55,9 @@ onBeforeUnmount(() => context?.revert())
     <div class="spotlight-copy">
       <span class="spotlight-edition">{{ variant === 'new' ? '初次相遇 / 新收藏' : variant === 'reading' ? '这一刻的启发' : variant === 'daily' ? '今日相遇' : '牌面鉴赏' }}</span>
       <div class="spotlight-name"><span>{{ card.number }}</span><h2>{{ card.name }}</h2></div>
-      <p class="spotlight-keyword">{{ card.keyword }}</p>
-      <p class="spotlight-headline">{{ card.headline }}</p>
+      <p class="spotlight-keyword">{{ orientationLabel(orientation) }} · {{ perspective.keyword }}</p>
+      <p class="spotlight-headline">{{ perspective.meaning }}</p>
+      <p class="spotlight-action">{{ perspective.action }}</p>
       <span v-if="variant === 'new'" class="spotlight-collected">✦ 已收入你的收藏册</span>
       <small v-else>{{ variant === 'reading' ? '问一问的牌，不计入收藏' : '点击卡牌，放大欣赏细节' }}</small>
     </div>
@@ -88,4 +92,7 @@ onBeforeUnmount(() => context?.revert())
 @media(max-height:700px) and (max-width:700px){.spotlight-card-flight{top:3%;width:min(43vw,27vh)}.spotlight-copy{bottom:4%}.spotlight-keyword{display:none}.spotlight-name h2{font-size:29px}.spotlight-name>span{font-size:36px}.spotlight-headline{font-size:14px}.spotlight-copy small{font-size:10px}}
 @media(max-height:550px) and (min-width:701px){.spotlight-copy{top:10%}.spotlight-edition{padding:6px 16px;font-size:10px}.spotlight-name{margin:8px 0 0;gap:10px}.spotlight-name h2{font-size:34px}.spotlight-name>span{font-size:45px}.spotlight-keyword{font-size:12px;margin:6px 0 10px}.spotlight-headline{font-size:16px;line-height:1.5;margin-bottom:10px}.spotlight-copy small{font-size:10px}.spotlight-collected{font-size:10px;padding:5px 10px}}
 @media(prefers-reduced-motion:reduce){.spotlight-tilt{transition:none}}
+.spotlight-action{font-size:13px;line-height:1.7;color:#bbd8e2;margin:0 0 12px;max-width:28em;border-left:2px solid #b6dfd4;padding-left:10px}
+@media(max-width:700px){.spotlight-headline{font-size:14px;line-height:1.65;max-width:26em}.spotlight-action{font-size:11px;line-height:1.6;margin:0 0 8px}.spotlight-copy{max-width:85%}}
+@media(max-height:550px) and (min-width:701px){.spotlight-headline{font-size:13px;line-height:1.6;margin-bottom:8px}.spotlight-action{font-size:11px;line-height:1.6;margin-bottom:8px}}
 </style>

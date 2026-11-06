@@ -1,0 +1,558 @@
+{
+  "verifiedDate": "2026-11-04",
+  "cards": 78,
+  "uniqueImages": 78,
+  "dimensions": [
+    1024,
+    1536
+  ],
+  "totalBytes": 239299586,
+  "assets": [
+    {
+      "id": "00-fool",
+      "category": "major",
+      "image": "/art/tarot/v1/00-fool.png",
+      "bytes": 2488808,
+      "sha256": "036c96307474e2df0fa9cb56600b47655f85f28bf5a6e06c1f7d8f6c6f0aa2ce"
+    },
+    {
+      "id": "01-magician",
+      "category": "major",
+      "image": "/art/tarot/v1/01-magician.png",
+      "bytes": 2366051,
+      "sha256": "673c5203f82de6212a2dbf55c8657b5f48ca9e23ad4dda33a70311971d648c2b"
+    },
+    {
+      "id": "02-priestess",
+      "category": "major",
+      "image": "/art/tarot/v2/02-priestess.png",
+      "bytes": 2150935,
+      "sha256": "962b7e85f5e6db187df36d04d1db174290fbda5f3fd064bd279b65e652ad9074"
+    },
+    {
+      "id": "03-empress",
+      "category": "major",
+      "image": "/art/tarot/v1/03-empress.png",
+      "bytes": 2465716,
+      "sha256": "54ea7e1625dea34ce24c715412dcfaf37acf28fdf54ee7d0d3592ad7aebfb258"
+    },
+    {
+      "id": "04-emperor",
+      "category": "major",
+      "image": "/art/tarot/v1/04-emperor.png",
+      "bytes": 2475721,
+      "sha256": "954864c1b314a029d42d7baa94baa59dbb0ec8de80db42fa3477cd357ef97f36"
+    },
+    {
+      "id": "05-hierophant",
+      "category": "major",
+      "image": "/art/tarot/v2/05-hierophant.png",
+      "bytes": 3267891,
+      "sha256": "6662eaa56e94d9d732c3aa2810fb3b37b68bd9e7549d0301c3ace5280d2d0c35"
+    },
+    {
+      "id": "06-lovers",
+      "category": "major",
+      "image": "/art/tarot/v1/06-lovers.png",
+      "bytes": 2573182,
+      "sha256": "60979de5164b8ec998dd6970b06380fa9529c5dbcaa533597665766a8662a143"
+    },
+    {
+      "id": "07-chariot",
+      "category": "major",
+      "image": "/art/tarot/v1/07-chariot.png",
+      "bytes": 2560903,
+      "sha256": "f3fa864c8add0a07ed5308fabdb134be35efb2bdbfb09305ab8f73f8d2389a30"
+    },
+    {
+      "id": "08-strength",
+      "category": "major",
+      "image": "/art/tarot/v1/08-strength.png",
+      "bytes": 2487248,
+      "sha256": "9902cc8172c95b5e1f20ff34bcdb210c0a3165db777960a9aaee1b54b1e7a415"
+    },
+    {
+      "id": "09-hermit",
+      "category": "major",
+      "image": "/art/tarot/v1/09-hermit.png",
+      "bytes": 2418335,
+      "sha256": "c31c15a7b8e540d93641f73e777537c838599c2515a7cbac888755aca867db3f"
+    },
+    {
+      "id": "10-wheel",
+      "category": "major",
+      "image": "/art/tarot/v1/10-wheel.png",
+      "bytes": 2583524,
+      "sha256": "fc5ba02ea65248ad974f84d58448b327abea889bd7839233d56b68b6ac0ccdc6"
+    },
+    {
+      "id": "11-justice",
+      "category": "major",
+      "image": "/art/tarot/v2/11-justice.png",
+      "bytes": 3300687,
+      "sha256": "c02af349733515a755289b5e588b9259824a9c65fc9bafe8e46800fe6197f3d0"
+    },
+    {
+      "id": "12-hanged-man",
+      "category": "major",
+      "image": "/art/tarot/v2/12-hanged-man.png",
+      "bytes": 3352091,
+      "sha256": "a2da6ebd6213ca9908d65fe24995193ae875fdf2aaaf7ebf7b2000b8db5f4488"
+    },
+    {
+      "id": "13-death",
+      "category": "major",
+      "image": "/art/tarot/v2/13-death.png",
+      "bytes": 3377210,
+      "sha256": "9a03a2f46ce34382efaaac6511aaafc957c0575f70dd416fd81c321e4c039ce2"
+    },
+    {
+      "id": "14-temperance",
+      "category": "major",
+      "image": "/art/tarot/v2/14-temperance.png",
+      "bytes": 3484402,
+      "sha256": "429ef83f102fc09bec9b81a0883e9b6b21880b444457eb17f1e2329303067aae"
+    },
+    {
+      "id": "15-devil",
+      "category": "major",
+      "image": "/art/tarot/v2/15-devil.png",
+      "bytes": 3187632,
+      "sha256": "1aa00ccc72e3a39c060cfd24c46e1dcdc26f3f57cdab2ce9aad4248a544b879a"
+    },
+    {
+      "id": "16-tower",
+      "category": "major",
+      "image": "/art/tarot/v2/16-tower.png",
+      "bytes": 3386233,
+      "sha256": "bc87c8a484d0e8b8286d72e79c1a7fbfa1a65d2626c30659b673309c6678b674"
+    },
+    {
+      "id": "17-star",
+      "category": "major",
+      "image": "/art/tarot/v1/17-star.png",
+      "bytes": 2463862,
+      "sha256": "4dec5748c4011d9f7b3a6f01ce2b4992b06ebd8ba98807e6cb3aa2e274415667"
+    },
+    {
+      "id": "18-moon",
+      "category": "major",
+      "image": "/art/tarot/v2/18-moon.png",
+      "bytes": 3458225,
+      "sha256": "1ca512bbef1240b21d940d33f64900d04ecd398b3c04e39ec926e55c6e03eae7"
+    },
+    {
+      "id": "19-sun",
+      "category": "major",
+      "image": "/art/tarot/v1/19-sun.png",
+      "bytes": 2478286,
+      "sha256": "7d6d56f287c7479357b7fd4f4611228a69c137b6bd8e5aa9ece34532d73473db"
+    },
+    {
+      "id": "20-judgement",
+      "category": "major",
+      "image": "/art/tarot/v2/20-judgement.png",
+      "bytes": 3571395,
+      "sha256": "d40b9b9a9cabfdf2c5ed3eba562005974837c4c1728e3b38df297c6fd631bf48"
+    },
+    {
+      "id": "21-world",
+      "category": "major",
+      "image": "/art/tarot/v2/21-world.png",
+      "bytes": 3790594,
+      "sha256": "1947d4c84f8c8a0c90bb4f664443a45df8ad5a1b6091914f1aa6663f944ff860"
+    },
+    {
+      "id": "wands-ace",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-ace.png",
+      "bytes": 2316126,
+      "sha256": "71832135804dd58e3e9349798e6b3f10803851b529c5f6d64a79892e6b22b3da"
+    },
+    {
+      "id": "wands-02",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-02.png",
+      "bytes": 3132806,
+      "sha256": "e4f7a9fdca96ccd20ac55982460a045df4932bc15170ec68a6870661a20c0559"
+    },
+    {
+      "id": "wands-03",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-03.png",
+      "bytes": 2401178,
+      "sha256": "f99dd15e594fa8a18c164afee5eafa722873e798ff6422345d16e99ed97461cf"
+    },
+    {
+      "id": "wands-04",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-04.png",
+      "bytes": 3223758,
+      "sha256": "9ac8dd8feda1ab095be09f9aafec0a9b5414adff40368161bd6d3b56f73c828e"
+    },
+    {
+      "id": "wands-05",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-05.png",
+      "bytes": 2999643,
+      "sha256": "976e903b29cec35f7c00c1512b389491096590ed6088b71713bac2fb1ca4f907"
+    },
+    {
+      "id": "wands-06",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-06.png",
+      "bytes": 3010960,
+      "sha256": "913f5edb8992dd2da56925e3a64fdab06cdcad9c936372c0e2bc61207deb8f9e"
+    },
+    {
+      "id": "wands-07",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-07.png",
+      "bytes": 2984370,
+      "sha256": "fdfeac32be6370f41730ee60c492a0bbab9f7a2e0821eef982a5155ba63d570b"
+    },
+    {
+      "id": "wands-08",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-08.png",
+      "bytes": 2927108,
+      "sha256": "a98480ff55921ea8d0580d2bb0de5e46bd2fb402144aa0644ec66b1c5d2ed712"
+    },
+    {
+      "id": "wands-09",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-09.png",
+      "bytes": 2906091,
+      "sha256": "6006f20a005fdc2fe2f201960a4bcea869b79febad7f906f2aa2e2ff84ae2735"
+    },
+    {
+      "id": "wands-10",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-10.png",
+      "bytes": 3214236,
+      "sha256": "25f51a51060349144a7354220cbdd0321841b7217897575e433836b7489a1780"
+    },
+    {
+      "id": "wands-page",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-page.png",
+      "bytes": 3143083,
+      "sha256": "72bb9e5e1c99218731db4f8d137c63514072cde1cdbcdf306c209617baf72ad3"
+    },
+    {
+      "id": "wands-knight",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-knight.png",
+      "bytes": 3049274,
+      "sha256": "c63de4a8990acb8b268332eb32ecc6cbd0d6cfcef25f0c5b3f551199751917b5"
+    },
+    {
+      "id": "wands-queen",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-queen.png",
+      "bytes": 3138558,
+      "sha256": "bff311e7b7c02b19b6a816d26c2c725a3fded9a5834d559c1cc4bbc696ef260b"
+    },
+    {
+      "id": "wands-king",
+      "category": "wands",
+      "image": "/art/tarot/v2/wands-king.png",
+      "bytes": 3137177,
+      "sha256": "a6f87ef0be02dd12221a0bae6d5c4e14b4e084e8e86315692c32ef1aa82a8f50"
+    },
+    {
+      "id": "cups-ace",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-ace.png",
+      "bytes": 2384218,
+      "sha256": "ffc70b237e26843ac88f016594fcb205549e0bc66560b86d1d26be424bd7b162"
+    },
+    {
+      "id": "cups-02",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-02.png",
+      "bytes": 3394315,
+      "sha256": "8d359ccc37dc18719402f5a821a48864a0d4b930690b9dba77aea6e8be0f0dd8"
+    },
+    {
+      "id": "cups-03",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-03.png",
+      "bytes": 3270135,
+      "sha256": "7f5f180312ad90a796a3b5c88d86a1199f816212caca669060efab0cdbda7c4e"
+    },
+    {
+      "id": "cups-04",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-04.png",
+      "bytes": 3199356,
+      "sha256": "7b4aeac96e1f21b51aa45b5f7520065a2af055face07dc0dab06a78a513d717d"
+    },
+    {
+      "id": "cups-05",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-05.png",
+      "bytes": 2899540,
+      "sha256": "8e1278bb6d7d1843d7c0cf3e822f52ba8756d06cc74a9148db8038aca3ad8bc8"
+    },
+    {
+      "id": "cups-06",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-06.png",
+      "bytes": 3355257,
+      "sha256": "e03329b2bd0ceb654ee6acc6b5d191abbc186037ffb8a8f38fd1bb3d0a3ad680"
+    },
+    {
+      "id": "cups-07",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-07.png",
+      "bytes": 3362837,
+      "sha256": "c0df34b726c8e6e9f176e517a3f7d06905e4a8f08a0125a7c9ec491ed33dcac8"
+    },
+    {
+      "id": "cups-08",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-08.png",
+      "bytes": 3085205,
+      "sha256": "7b2b09f3801c8e8f3d46d0ce2bf04e48d521cee650292d0228a23ef27dc065ea"
+    },
+    {
+      "id": "cups-09",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-09.png",
+      "bytes": 3241992,
+      "sha256": "192d196886e7c9971898131eba08c2bcd0f78ee85df7f5c5d199937459218a26"
+    },
+    {
+      "id": "cups-10",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-10.png",
+      "bytes": 3354379,
+      "sha256": "2081ff8bec9e1e90cb76a6c377ced1150331b4d64da5253414c16ab50b2a572e"
+    },
+    {
+      "id": "cups-page",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-page.png",
+      "bytes": 3358297,
+      "sha256": "720f3a7ae218208c35ccffafcb77f97ff9eb4df48a4b6eed0859bb937a21a42b"
+    },
+    {
+      "id": "cups-knight",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-knight.png",
+      "bytes": 3179116,
+      "sha256": "147a291ba7bee3d9f7f76f40f469b73ff3a682b6caa67c197f4a49bcb41ba5a6"
+    },
+    {
+      "id": "cups-queen",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-queen.png",
+      "bytes": 3244440,
+      "sha256": "4ef665366ecb949f906a2b42677f482e7d9388b0916bef960bd22f3bbc7daca6"
+    },
+    {
+      "id": "cups-king",
+      "category": "cups",
+      "image": "/art/tarot/v2/cups-king.png",
+      "bytes": 3299534,
+      "sha256": "486d171cc7f870d78cc4a0c85d6d3983fc120975cbd7a3b9ef57051385670e99"
+    },
+    {
+      "id": "swords-ace",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-ace.png",
+      "bytes": 2347735,
+      "sha256": "02cadf11f291be44c401d8beb44618411a616267af39879f95a59284c1c99efc"
+    },
+    {
+      "id": "swords-02",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-02.png",
+      "bytes": 3265774,
+      "sha256": "49e2d75a3acc3d1105ce23b11267b6c118c3309ccade44ce0aa853d7a01fd96f"
+    },
+    {
+      "id": "swords-03",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-03.png",
+      "bytes": 3399672,
+      "sha256": "4f0a67b261522cb3ff287967f190855fa201c38c71d7c740e07d8a6b2813ab3f"
+    },
+    {
+      "id": "swords-04",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-04.png",
+      "bytes": 3191183,
+      "sha256": "19e7caac5d15e2d41fc65ecd1223cb853e8dc0dc9bd7e909608b088503e7ac38"
+    },
+    {
+      "id": "swords-05",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-05.png",
+      "bytes": 3392070,
+      "sha256": "f4129c1b0896923f0323df86e0f6bae9acf083e15685eafd4b7f0f89d8bcb4d4"
+    },
+    {
+      "id": "swords-06",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-06.png",
+      "bytes": 3452652,
+      "sha256": "aabcaeb89acd86bb94a9e631c7579c6860303f8cd4d2c4737e06e1c3b2460cca"
+    },
+    {
+      "id": "swords-07",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-07.png",
+      "bytes": 3207530,
+      "sha256": "39ce405ba1d49898c825191e2b75823456dcf20bd6dfdb519cc209f080c7e79a"
+    },
+    {
+      "id": "swords-08",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-08.png",
+      "bytes": 3060051,
+      "sha256": "0394817f84f948e87981df9dcc641dd51214ce0131f4467813949e24dd1b1759"
+    },
+    {
+      "id": "swords-09",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-09.png",
+      "bytes": 2915832,
+      "sha256": "f654453f8d52678167e6db90629ed70e33b9970f90799094cbbeba31578bea33"
+    },
+    {
+      "id": "swords-10",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-10.png",
+      "bytes": 3284544,
+      "sha256": "3eee710c79e9b8572940beab1e92a3034d4fec2740d996e8e82a647196166b04"
+    },
+    {
+      "id": "swords-page",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-page.png",
+      "bytes": 3497045,
+      "sha256": "5a07e10b44d39c82dbc041aa731568283c4a73f2baf04f0ce507881047b4ae93"
+    },
+    {
+      "id": "swords-knight",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-knight.png",
+      "bytes": 3330478,
+      "sha256": "aab1a06b559369c13c8567bc0486543201256becb0dc3670548014f6ce253595"
+    },
+    {
+      "id": "swords-queen",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-queen.png",
+      "bytes": 3490756,
+      "sha256": "463e97acdac045a4f5e29d6a71b889edd9db404bb39f712eb46517b556ca1357"
+    },
+    {
+      "id": "swords-king",
+      "category": "swords",
+      "image": "/art/tarot/v2/swords-king.png",
+      "bytes": 3294277,
+      "sha256": "fae97b8e5ea8fbe23c4f96d57d9138b5f96c228d96f25e7463710e334ac3d81d"
+    },
+    {
+      "id": "pentacles-ace",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-ace.png",
+      "bytes": 2576868,
+      "sha256": "b6a44fe20c8bbf4b494dee34e94720681731133fccd5b60cee81caec317f8ac5"
+    },
+    {
+      "id": "pentacles-02",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-02.png",
+      "bytes": 3217167,
+      "sha256": "f4dcace9f92cd41f7e1390766e52f827e1912e68b84fb36a72d2853a31ccedf6"
+    },
+    {
+      "id": "pentacles-03",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-03.png",
+      "bytes": 2814651,
+      "sha256": "95d436b086567f828e7656c1cf20b0d2854dd551bd12db0d5061b80af372493c"
+    },
+    {
+      "id": "pentacles-04",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-04.png",
+      "bytes": 3333721,
+      "sha256": "c586ac9193e3c3335f1105645bd1c1836232bddce9a94ae96a6cbf4ac9c8fc87"
+    },
+    {
+      "id": "pentacles-05",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-05.png",
+      "bytes": 3000684,
+      "sha256": "3768d39cf405d0f438069af124f1bcc8d0d479213d2861cd4259e60b3bc0efc6"
+    },
+    {
+      "id": "pentacles-06",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-06.png",
+      "bytes": 3365950,
+      "sha256": "6ccb95e7141f3a8af13cab7107676fe68ddbdc34455d6448157388132bdd6022"
+    },
+    {
+      "id": "pentacles-07",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-07.png",
+      "bytes": 2768871,
+      "sha256": "97ff94eeab88243a1c8136f6a899f3fe5b4ca2e3ccc95a47271a3df29d7b52f4"
+    },
+    {
+      "id": "pentacles-08",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-08.png",
+      "bytes": 3274501,
+      "sha256": "b1ad966e9669f0494c45f8054b46f23cb8fa53529d54169d461f53ff29363ea7"
+    },
+    {
+      "id": "pentacles-09",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-09.png",
+      "bytes": 3275260,
+      "sha256": "b503e5c439baac36542bfe52c744c22e6f20a5a90f68bb7a8c03fcac89bd366d"
+    },
+    {
+      "id": "pentacles-10",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-10.png",
+      "bytes": 3421986,
+      "sha256": "8455e87afe9106ec303bc41461a0a9af6a618551de3e154ae730bb69ae1927b7"
+    },
+    {
+      "id": "pentacles-page",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-page.png",
+      "bytes": 3259090,
+      "sha256": "70570aa4a934eb0ec06ac8c3d7ac00f8a753d95b5a655d6559bc06a9a079c44d"
+    },
+    {
+      "id": "pentacles-knight",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-knight.png",
+      "bytes": 3509289,
+      "sha256": "72e6a5cd489597354cc18bb0289592a512acffd4d2e69f20ef7bce4dce6b484d"
+    },
+    {
+      "id": "pentacles-queen",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-queen.png",
+      "bytes": 3127037,
+      "sha256": "b084d9942da334007f7b97c263d21e8c34e897482ba6b3f08a9fcc9572ce3dab"
+    },
+    {
+      "id": "pentacles-king",
+      "category": "pentacles",
+      "image": "/art/tarot/v2/pentacles-king.png",
+      "bytes": 3322992,
+      "sha256": "025df1bbf8f8593642adfa822de5c2eae50583045bde67c0ef4fa93f5765f7ed"
+    }
+  ]
+}

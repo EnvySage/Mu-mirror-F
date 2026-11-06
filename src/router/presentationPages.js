@@ -1,6 +1,7 @@
 import { defineAsyncComponent } from 'vue'
 
 const sharedPages = {
+  models: defineAsyncComponent(() => import('@/views/ModelsView.vue')),
   tarot: defineAsyncComponent(() => import('@/views/TarotView.vue')),
   chat: defineAsyncComponent(() => import('@/views/ChatView.vue')),
   records: defineAsyncComponent(() => import('@/views/RecordsView.vue')),

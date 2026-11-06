@@ -2,6 +2,8 @@ import request from './request'
 
 const data = promise => promise.then(res => res.data)
 export const tarotApi = {
+  history: (limit = 20, offset = 0) => data(request.get('/tarot/history', { params: { limit, offset } })),
+  versions: id => data(request.get(`/tarot/readings/${id}/analyses`)),
   cards: () => data(request.get('/tarot/cards')),
   daily: () => data(request.get('/tarot/daily')),
   draw: clientRequestId => data(request.post('/tarot/daily/draw', { clientRequestId })),

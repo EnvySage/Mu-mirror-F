@@ -51,7 +51,7 @@ try {
     await page.locator('.ritual-footer button').click()
     await page.locator('.tarot-ritual').waitFor({ state: 'hidden' })
     await page.getByRole('button', { name: /^收藏册/ }).click()
-    assert.equal(await page.getByRole('button', { name: '尚未获得', exact: true }).count(), 12)
+    assert.equal(await page.locator('.collection-grid .tarot-card.locked').count(), 78)
     await page.getByRole('button', { name: '每日运势', exact: true }).click()
     await page.getByRole('button', { name: '点击牌背，抽取今日牌', exact: true }).click()
     await page.locator('.ritual-footer button:enabled').waitFor()
@@ -75,7 +75,7 @@ try {
     }
     await page.locator('.tarot-ritual').waitFor({ state: 'hidden' })
     await page.getByRole('button', { name: /^收藏册/ }).click()
-    assert.equal(await page.getByRole('button', { name: '尚未获得', exact: true }).count(), 11)
+    assert.equal(await page.locator('.collection-grid .tarot-card.locked').count(), 77)
     await page.getByRole('button', { name: /^放大欣赏/ }).click()
     assert.equal(await page.getByText('初次相遇 / 新收藏', { exact: true }).count(), 0, 'viewing an owned card does not replay acquisition')
     const zoom = page.getByLabel('卡面原图，可双指或滚轮缩放、拖动查看', { exact: true })
@@ -89,7 +89,8 @@ try {
     assert.ok((await picture.boundingBox()).height > originalSize.height * 1.5, 'wheel zoom follows user input')
     await page.getByRole('button', { name: '还原', exact: true }).click()
     const cdp = await page.context().newCDPSession(page)
-    const centerX = width / 2, centerY = height / 2
+    const canvasRect = await zoom.boundingBox()
+    const centerX = canvasRect.x + canvasRect.width / 2, centerY = canvasRect.y + canvasRect.height / 2
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: centerX - 30, y: centerY, id: 1 }, { x: centerX + 30, y: centerY, id: 2 }] })
     for (let i = 1; i <= 6; i++) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: centerX - 30 - i * 10, y: centerY, id: 1 }, { x: centerX + 30 + i * 10, y: centerY, id: 2 }] })

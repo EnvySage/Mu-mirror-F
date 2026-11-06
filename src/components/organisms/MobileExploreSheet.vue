@@ -12,7 +12,7 @@ const dialog = ref(null), route = useRoute(), router = useRouter()
 const ui = useUIStore(), glossary = useGlossaryStore(), presentation = usePresentationMode()
 let tween
 const destinations = [
-  { page: 'calendar', label: '日历', note: '按日期找回一天', icon: 'M8 3v4M16 3v4M4 10h16M5 5h14v15H5Z' },
+  { page: 'chat', label: '对话', note: '和另一个自己聊聊', icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
   { page: 'vault', label: '记忆资产', note: '文档与素材', icon: 'M3 4h18v5H3ZM5 9v11h14V9M9 13h6' },
   { action: 'summary', label: '每日总结', note: '回看今天的片段', icon: 'M14 3H6v18h14V9ZM14 3v6h6M8 13h8M8 17h5' },
   { page: 'settings', label: '设置', note: '偏好与资料管理', icon: 'M4 7h6M14 7h6M4 17h10M18 17h2M10 5h4v4h-4ZM14 15h4v4h-4Z' },

@@ -4,7 +4,7 @@ import { readFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')
-const cards = JSON.parse(await readFile(process.env.TAROT_CATALOG || '../B/src/main/resources/tarot/catalog-v1.json', 'utf8'))
+const cards = JSON.parse(await readFile(process.env.TAROT_CATALOG || new URL('../../src/preview/tarotCatalog.json', import.meta.url), 'utf8'))
 const base = process.env.TAROT_UI_URL || 'http://127.0.0.1:5179'
 const output = process.env.TAROT_SCREENSHOTS || '.superpowers/sdd/2026-10-26-tarot'
 await mkdir(output, { recursive: true })
@@ -28,7 +28,7 @@ try {
       const req = route.request(), path = new URL(req.url()).pathname
       if (!path.startsWith('/api/')) return route.continue()
       let data = null
-      if (path === '/api/tarot/cards') data = { catalogVersion: 'v1', activeCount: 12, cards }
+      if (path === '/api/tarot/cards') data = { catalogVersion: 'v2', activeCount: cards.length, cards }
       if (path === '/api/tarot/preferences') {
         if (req.method() === 'PUT') preferences = { ...req.postDataJSON(), version: preferences.version + 1 }
         data = preferences
@@ -46,7 +46,7 @@ try {
         data = { serverDate: day, draw: returned, newlyCollected: true }
       }
       if (path === '/api/tarot/daily') data = { serverDate: day, draw: draw?.drawDate === day ? draw : null }
-      if (path === '/api/tarot/collection') data = { activeCount: 12, unlockedCount: unlocked ? 1 : 0, entries: unlocked ? [{ cardId: cards[0].id, firstObtainedAt: `${day}T12:00:00+08:00`, dailyDrawCount: 1 }] : [] }
+      if (path === '/api/tarot/collection') data = { activeCount: cards.length, unlockedCount: unlocked ? 1 : 0, entries: unlocked ? [{ cardId: cards[0].id, firstObtainedAt: `${day}T12:00:00+08:00`, dailyDrawCount: 1 }] : [] }
       if (path === '/api/tarot/readings' && req.method() === 'POST') {
         reading = { readingId: 'reading-1', cardId: cards[1].id, latestAnalysisId: null }; data = reading
       }
@@ -78,7 +78,7 @@ try {
     await page.getByText('今天已抽取', { exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: '抽取今日牌', exact: true }).count(), 0)
     await page.getByRole('button', { name: /^收藏册/ }).click()
-    assert.equal(await page.getByRole('button', { name: '尚未获得', exact: true }).count(), 11)
+    assert.equal(await page.locator('.collection-grid .tarot-card.locked').count(), cards.length - 1)
     await page.getByRole('button', { name: `放大欣赏${cards[0].name}` }).click()
     await page.getByRole('dialog').waitFor()
     await page.getByRole('dialog').getByRole('img', { name: cards[0].name, exact: true }).waitFor()
@@ -107,7 +107,7 @@ try {
     await page.getByRole('button', { name: '问一问', exact: true }).click()
     await page.getByText('先从十分钟的速写开始。', { exact: true }).waitFor()
     await page.getByRole('button', { name: /^收藏册/ }).click()
-    assert.equal(await page.getByRole('button', { name: '尚未获得', exact: true }).count(), 11)
+    assert.equal(await page.locator('.collection-grid .tarot-card.locked').count(), cards.length - 1)
     await page.screenshot({ path: `${output}/collection-${width}.png` })
     await page.getByRole('button', { name: '每日运势', exact: true }).click()
     await page.screenshot({ path: `${output}/daily-${width}.png` })
@@ -115,15 +115,15 @@ try {
     day = '2026-10-29'; draw = null
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
     await page.getByRole('button', { name: '抽取今日牌', exact: true }).waitFor()
-    // Fullscreen viewing cycles only through owned cards.
+    // V2 collection viewing cycles through every visible card, including uncollected cards.
     await page.route('**/api/tarot/collection', route => route.fulfill({ json: { code: 200, data: {
-      activeCount: 12, unlockedCount: 3,
+      activeCount: cards.length, unlockedCount: 3,
       entries: cards.slice(0, 3).map(card => ({ cardId: card.id, firstObtainedAt: '2026-10-27T12:00:00+08:00', dailyDrawCount: 1 })),
     } } }))
     await page.reload()
     await page.getByRole('button', { name: /^收藏册/ }).click()
     await page.getByRole('button', { name: `放大欣赏${cards[0].name}` }).click()
-    assert.equal(await page.locator('.gallery-count').innerText(), '1 / 3')
+    assert.equal(await page.locator('.gallery-count').innerText(), `1 / ${cards.length}`)
     await page.getByRole('button', { name: '下一张', exact: true }).click()
     await page.getByRole('dialog', { name: `欣赏${cards[1].name}`, exact: true }).waitFor()
     await page.keyboard.press('ArrowLeft')

@@ -10,9 +10,7 @@ function preferredHome(to = null) {
   if (deepLink) return deepLink
   const selected = window.localStorage.getItem('mirror.home-page')
   if (selected === 'chat' || selected === 'records') return `/${selected}`
-  const override = window.localStorage.getItem('mirror.presentation-mode')
-  const mobile = override === 'mobile' || (override !== 'desktop' && window.innerWidth < 900)
-  return mobile ? '/chat' : '/records'
+  return '/records'
 }
 
 const router = createRouter({
@@ -24,6 +22,7 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: '', redirect: preferredHome },
+        { path: 'models', name: 'models', component: () => import('@/views/ModelsView.vue') },
         { path: 'tarot', name: 'tarot', component: () => import('@/views/TarotView.vue') },
         {
           path: 'records/:date?',

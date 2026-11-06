@@ -1,6 +1,9 @@
 <script setup>
+import ChatImageDraft from '@/components/molecules/ChatImageDraft.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { usePresentationMode } from '@/composables/usePresentationMode'
 import { useUIStore } from '@/stores/ui'
 import { useChatStore } from '@/stores/chat'
 import { useActionsStore } from '@/stores/actions'
@@ -44,6 +47,9 @@ import ChatMessageContent from '@/components/molecules/ChatMessageContent.vue'
  * 后端未起时：历史加载失败走空态兜底文案，流式失败走"暂时无法回答"，不白屏。
  */
 const ui = useUIStore()
+const router = useRouter()
+const presentation = usePresentationMode()
+const isMobile = computed(() => presentation.mode.value === 'mobile')
 const chat = useChatStore()
 const actions = useActionsStore()
 const vault = useVaultStore()
@@ -90,8 +96,40 @@ const sessionsDialog = ref(null)
 const sessionsMotion = useOverlayMotion({ xPercent: -50, distance: 32 })
 useDialogFocus(() => showSessions.value, sessionsDialog, 'button', () => { showSessions.value = false })
 const showMemoryPanel = ref(false)
+const showMore = ref(false)
+const moreDialog = ref(null)
+watch(showMore, async open => {
+  await nextTick()
+  if (!moreDialog.value) return
+  if (open && !moreDialog.value.open) moreDialog.value.showModal()
+  else if (!open && moreDialog.value.open) moreDialog.value.close()
+})
+watch(isMobile, () => { showMore.value = false })
+function openMemory() {
+  showMore.value = false
+  moreDialog.value?.close()
+  showMemoryPanel.value = true
+}
+function openModels() {
+  showMore.value = false
+  router.push('/models')
+}
+function openHistory() {
+  chat.fetchSessions()
+  showSessions.value = true
+}
 
-const canSend = computed(() => input.value.trim().length > 0 && !chat.sending)
+const imageDraft = ref(null)
+const imageCount = ref(0)
+const removeImageGuard = ui.registerNavigationGuard('chat-images', () => !imageCount.value || window.confirm('离开后将清除尚未发送的图片预览，继续吗？'))
+onBeforeUnmount(removeImageGuard)
+function onPasteImages(event) {
+  const files = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'))
+  if (!files.length || chat.sending) return
+  event.preventDefault()
+  imageDraft.value?.addFiles(files)
+}
+const canSend = computed(() => input.value.trim().length > 0 && !chat.sending && imageCount.value === 0)
 const retryingSummaryId = ref(null)
 const visibleEndedSummaries = computed(() => chat.endedDaySummaries || [])
 
@@ -188,6 +226,7 @@ onMounted(() => {
   chat.fetchSessions()
   // vault store：附件入口 + 消化回执数据源
   vault.fetch()
+  nextTick(autoGrow)
 })
 
 // MobileHeader 历史按钮 → ui store 请求标志 → 打开抽屉（打开时刷新列表，恢复流程可能跳过了列表拉取）
@@ -244,7 +283,9 @@ function autoGrow() {
   const el = inputEl.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 110) + 'px'
+  const maxHeight = isMobile.value ? 112 : 110
+  el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px'
+  el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden'
   chatScroll.requestBottom()
 }
 
@@ -268,7 +309,7 @@ async function send() {
 }
 
 function onKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault()
     send()
   }
@@ -386,12 +427,16 @@ function onDragLeave() {
 
 function onDrop(e) {
   dragOver.value = false
-  const file = e.dataTransfer?.files?.[0]
-  if (file) acceptFile(file)
+  if (chat.sending) return
+  const files = [...(e.dataTransfer?.files || [])]
+  const images = files.filter(file => file.type.startsWith('image/'))
+  if (images.length) imageDraft.value?.addFiles(images)
+  else if (files[0]) acceptFile(files[0])
 }
 
 /** 前端校验（白名单 + 20MB + 拒绝类专属理由）→ 通过弹上传卡 */
 function acceptFile(file) {
+  if (file.type.startsWith('image/')) { imageDraft.value?.addFiles([file]); return }
   const v = validateVaultFile(file)
   if (!v.ok) {
     toast.error(v.reason, 4200)
@@ -506,8 +551,20 @@ async function onRemoveSession(id) {
 </script>
 
 <template>
-  <div ref="sceneEl" class="page chat-page" :class="{ 'motion-active': sceneActive }">
-    <div class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button></PageMasthead></div>
+  <div ref="sceneEl" class="page chat-page" :class="{ 'motion-active': sceneActive, 'mobile-chat': isMobile }">
+    <header v-if="isMobile" class="mobile-chat-toolbar" aria-label="对话操作">
+      <button type="button" class="mobile-chat-back" aria-label="返回记录" @click="router.push({ name: 'records' })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
+      <div class="mobile-chat-title"><strong>另一个我</strong><span role="status">{{ chat.sending ? '正在回复…' : '与我对话' }}</span></div>
+      <button type="button" aria-label="历史会话" @click="openHistory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6M12 7v5l3 2" /></svg><span>历史</span></button>
+      <button type="button" aria-label="返回今日对话" :disabled="chat.sending" @click="onNewSession"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg><span>今日</span></button>
+      <button type="button" aria-label="更多对话操作" aria-haspopup="dialog" :aria-expanded="showMore" aria-controls="chat-more-dialog" @click="showMore = true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>更多</span></button>
+    </header>
+    <Teleport to="body"><dialog v-if="isMobile" id="chat-more-dialog" ref="moreDialog" class="chat-more-dialog" aria-labelledby="chat-more-heading" @cancel.prevent="showMore = false" @close="showMore = false" @click="e => { if (e.target === moreDialog) { const r = moreDialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) showMore = false } }">
+      <div class="chat-more-heading"><h2 id="chat-more-heading">对话设置</h2><button type="button" aria-label="关闭更多操作" @click="showMore = false">×</button></div>
+      <button type="button" class="chat-more-item" @click="openMemory"><span>聊天记忆<small>查看和管理对话中记住的内容</small></span><b aria-hidden="true">↗</b></button>
+      <button type="button" class="chat-more-item" @click="openModels"><span>模型设置<small>选择模型与服务配置</small></span><b aria-hidden="true">↗</b></button>
+    </dialog></Teleport>
+    <div v-if="!isMobile" class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button></PageMasthead></div>
     <ChatMemoryPanel v-if="showMemoryPanel" @close="showMemoryPanel = false" />
 
     <!-- 会话列表抽屉（<1440px 主入口；≥1440px 隐藏按钮但仍可通过 MobileHeader 打开） -->
@@ -685,6 +742,7 @@ async function onRemoveSession(id) {
             <button v-if="!followingBottom && chat.messages.length" type="button" class="chat-jump-bottom" @click="scrollToBottom">回到最新消息 <span aria-hidden="true">↓</span></button>
           </div>
 
+          <ChatImageDraft ref="imageDraft" @count="imageCount = $event" @error="toast.warning($event)" />
           <!-- 输入条（附件按钮 + 拖拽上传区） -->
           <div
             :class="['chat-input-bar', { 'chat-input-drag': dragOver }]"
@@ -706,6 +764,7 @@ async function onRemoveSession(id) {
               :disabled="chat.sending"
               @input="autoGrow"
               @keydown="onKeydown"
+              @paste="onPasteImages"
             />
             <button aria-label="发送消息" :class="['chat-send', { enabled: canSend }]" :disabled="!canSend" @click="send">
               <span class="send-word" aria-hidden="true">SEND</span>
@@ -714,7 +773,7 @@ async function onRemoveSession(id) {
           </div>
 
           <!-- 拖拽提示 -->
-          <div v-if="dragOver" class="chat-drop-hint">松手把文件交给镜子保管（20MB 内）</div>
+          <div v-if="dragOver" class="chat-drop-hint">松手添加 · 图片预览 / 文件收藏</div>
 
           <!-- 上传卡（选文件后弹出，确认才上传） -->
           <VaultUploadCard

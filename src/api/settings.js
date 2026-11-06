@@ -35,6 +35,11 @@ export function testAiConnection() {
   return request.post('/settings/test-ai')
 }
 
+/** Tests the saved retrieval configuration, including its 1024-dimensional output. */
+export function testEmbeddingConnection() {
+  return request.post('/settings/test-embedding', null, { timeout: 90000 })
+}
+
 /**
  * 测试数据库连接
  * @returns {Promise<{ code: number, data: string }>}

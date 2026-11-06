@@ -12,7 +12,6 @@ import SettingsItem from '@/components/molecules/SettingsItem.vue'
 import TermCard from '@/components/molecules/TermCard.vue'
 import SelectMenu from '@/components/atoms/SelectMenu.vue'
 import { usePresentationMode } from '@/composables/usePresentationMode'
-import { useDialogFocus } from '@/composables/useDialogFocus'
 import { prefersReducedMotion } from '@/motion/core'
 import { usePaperEntrance } from '@/motion/usePaperEntrance'
 
@@ -28,8 +27,8 @@ const scrollArea = ref(null)
 usePaperEntrance(scrollArea, () => true, '.settings-identity, .settings-group')
 const activeSection = ref('settings-presentation')
 const sections = [
-  ['presentation', 'DISPLAY', '页面呈现'], ['model', 'CONNECTION', 'AI 模型连接'],
-  ['embedding', 'RETRIEVAL', '记忆检索'], ['authorization', 'PERMISSION', 'AI 使用与授权'],
+  ['presentation', 'DISPLAY', '页面呈现'], ['model', 'CONNECTION', '模型中心'],
+  ['authorization', 'PERMISSION', 'AI 使用与授权'],
   ['glossary', 'LEXICON', '个人词典'], ['memory', 'MEMORY', '镜子的记忆'], ['data', 'ARCHIVE', '数据与账号'],
 ]
 function trackSection() {
@@ -182,65 +181,10 @@ async function onLookbackChange(val) {
   else toast.error(settingsStore.error || '保存失败')
 }
 
-const showEditModal = ref(false)
-const editDialog = ref(null)
-useDialogFocus(() => showEditModal.value, editDialog, '.modal-input', () => { showEditModal.value = false })
-const editField = ref('')
-const editLabel = ref('')
-const editValue = ref('')
-const editPlaceholder = ref('')
-const editOptions = ref(null)
-
-function openEdit(field, currentValue, label, placeholder, options = null) {
-  editField.value = field
-  editValue.value = currentValue || ''
-  editLabel.value = label || field
-  editPlaceholder.value = placeholder || ''
-  editOptions.value = options
-  showEditModal.value = true
-}
-
-async function saveEdit() {
-  const data = {}
-  data[editField.value] = editValue.value
-  const success = await settingsStore.updateSettings(data)
-  if (success) {
-    showEditModal.value = false
-    toast.success('已保存')
-  } else {
-    toast.error(settingsStore.error || '保存失败')
-  }
-}
-
-function selectOption(value) {
-  editValue.value = value
-}
-
-async function handleTestAi() {
-  const result = await settingsStore.testAiConnection()
-  result.success ? toast.success(result.message) : toast.error(result.message)
-}
-
-/** 模型协议 chips（anthropic / openai 二选一） */
-async function selectProtocol(protocol) {
-  if (settingsStore.settings.ai_protocol === protocol) return
-  const ok = await settingsStore.updateSettings({ ai_protocol: protocol })
-  if (ok) toast.success(protocol === 'anthropic' ? '已切换 Anthropic 协议' : '已切换 OpenAI 兼容协议')
-  else toast.error(settingsStore.error || '保存失败')
-}
-
 async function setDefaultRecordMode(mode) {
   if (settingsStore.settings.default_record_mode === mode) return
   const ok = await settingsStore.updateSettings({ defaultRecordMode: mode })
   if (ok) toast.success(mode === 'AI_ASSISTED' ? '新记录默认由 AI 准备候选' : '新记录默认仅保存')
-  else toast.error(settingsStore.error || '保存失败')
-}
-
-/** 切换 Embedding 来源（1024 维硬约束说明见下方 note） */
-async function toggleEmbeddingSource() {
-  const newVal = settingsStore.settings.embedding_source === 'api' ? 'local' : 'api'
-  const ok = await settingsStore.updateSettings({ embedding_source: newVal })
-  if (ok) toast.success(newVal === 'api' ? '已切换为远程 API 服务' : '已切换为本地服务')
   else toast.error(settingsStore.error || '保存失败')
 }
 
@@ -293,96 +237,14 @@ function handleLogout() {
         <div class="settings-group-title">页面呈现</div>
         <div class="settings-card card presentation-settings">
           <div class="presentation-setting"><div><strong>当前布局</strong><small>切换不会中断正在进行的对话</small></div><div class="presentation-buttons"><button :aria-pressed="presentation.override.value === 'auto'" @click="presentation.requestMode('auto')">自动</button><button :aria-pressed="presentation.mode.value === 'mobile' && presentation.override.value !== 'auto'" @click="presentation.requestMode('mobile')">手机</button><button :aria-pressed="presentation.mode.value === 'desktop' && presentation.override.value !== 'auto'" @click="presentation.requestMode('desktop')">桌面</button></div></div>
-          <label class="presentation-setting"><span><strong>默认首页</strong><small>自动按屏幕选择；手机进入对话，桌面进入记录</small></span><select :value="homePage" @change="setHomePage($event.target.value)"><option value="auto">自动</option><option value="chat">对话</option><option value="records">记录</option></select></label>
+          <label class="presentation-setting"><span><strong>默认首页</strong><small>自动进入记录；也可以固定进入对话</small></span><select aria-label="默认首页" :value="homePage" @change="setHomePage($event.target.value)"><option value="auto">自动</option><option value="chat">对话</option><option value="records">记录</option></select></label>
         </div>
       </div>
-      <!-- AI 模型 -->
       <div class="settings-group" id="settings-model">
-        <div class="settings-group-title">AI 模型连接</div>
+        <div class="settings-group-title">模型中心</div>
         <div class="settings-card card">
-          <SettingsItem
-            icon="chat"
-            icon-bg="var(--accent)"
-            label="API Key"
-            :description="settingsStore.settings.ai_api_key_needs_reentry ? '无法解密，请重新输入' : (settingsStore.settings.ai_api_key || '未配置')"
-            action="edit"
-            @click="openEdit('ai_api_key', '', 'API Key', '输入 API Key')"
-          />
-          <div class="protocol-chips">
-            <button
-              :class="['chip', { selected: settingsStore.settings.ai_protocol === 'anthropic' }]"
-              @click="selectProtocol('anthropic')"
-            >Anthropic 协议</button>
-            <button
-              :class="['chip', { selected: settingsStore.settings.ai_protocol === 'openai' }]"
-              @click="selectProtocol('openai')"
-            >OpenAI 兼容</button>
-          </div>
-          <SettingsItem
-            icon="link"
-            icon-bg="var(--violet)"
-            label="API 地址"
-            :description="settingsStore.settings.ai_base_url || '使用默认'"
-            action="edit"
-            @click="openEdit('ai_base_url', settingsStore.settings.ai_base_url, 'API 地址', 'https://api.anthropic.com')"
-          />
-          <SettingsItem
-            icon="zap"
-            icon-bg="var(--success)"
-            label="模型"
-            :description="settingsStore.settings.ai_model || '未配置'"
-            action="edit"
-            @click="openEdit('ai_model', settingsStore.settings.ai_model, '模型名称', 'claude-sonnet-5 / gpt-4o')"
-          />
-          <div class="test-row">
-            <button class="test-btn" :disabled="settingsStore.testLoading" @click="handleTestAi">
-              {{ settingsStore.testLoading ? '测试中…' : '测试大模型' }}
-            </button>
-          </div>
-          <div class="settings-note">会用固定测试内容实际调用大模型，不读取历史记录，也不会创建记录。</div>
-        </div>
-      </div>
-
-      <!-- Embedding -->
-      <div class="settings-group" id="settings-embedding">
-        <div class="settings-group-title">记忆检索模型</div>
-        <div class="settings-card card">
-          <SettingsItem
-            icon="sparkle"
-            icon-bg="var(--processing)"
-            label="来源"
-            :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地 BGE-m3（1024 维）'"
-            action="toggle"
-            :toggle-value="settingsStore.settings.embedding_source === 'api'"
-            @toggle="toggleEmbeddingSource"
-          />
-          <SettingsItem
-            icon="database"
-            icon-bg="var(--warn)"
-            label="API 模式地址"
-            :description="settingsStore.settings.embedding_base_url || '未启用'"
-            action="edit"
-            @click="openEdit('embedding_base_url', settingsStore.settings.embedding_base_url, 'Embedding API 地址', 'https://api.example.com/v1')"
-          />
-          <SettingsItem
-            icon="lock"
-            icon-bg="var(--danger)"
-            label="API 模式 Key"
-            :description="settingsStore.settings.embedding_api_key_needs_reentry ? '无法解密，请重新输入' : (settingsStore.settings.embedding_api_key || '未配置')"
-            action="edit"
-            @click="openEdit('embedding_api_key', '', 'Embedding API Key', '输入 Embedding API Key')"
-          />
-          <SettingsItem
-            icon="layers"
-            icon-bg="var(--violet)"
-            label="模型"
-            :description="settingsStore.settings.embedding_model || '未配置'"
-            action="edit"
-            @click="openEdit('embedding_model', settingsStore.settings.embedding_model, 'Embedding 模型名称', 'BAAI/bge-m3')"
-          />
-        </div>
-        <div class="settings-note">
-          API 模式需要支持 1024 维的检索模型；保存和测试连接时会自动检查。
+          <SettingsItem icon="chat" icon-bg="var(--accent)" label="管理 AI 模型" :description="settingsStore.settings.ai_model || '添加模型配置，选择你的对话搭档'" action="none"><template #append><button class="test-btn" @click="router.push('/models')">进入模型中心</button></template></SettingsItem>
+          <SettingsItem icon="sparkle" icon-bg="var(--processing)" label="记忆检索模型" :description="settingsStore.settings.embedding_source === 'api' ? '远程 API 服务' : '本地 BGE-m3（1024 维）'" action="none"><template #append><button class="test-btn" @click="router.push({ path: '/models', query: { tab: 'embedding' } })">管理检索</button></template></SettingsItem>
         </div>
       </div>
 
@@ -600,49 +462,7 @@ function handleLogout() {
 
       <!-- 编辑弹窗 -->
       </div>
-      <Teleport to="body">
-        <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-          <div ref="editDialog" class="modal-content system-edit" role="dialog" aria-modal="true" :aria-label="editLabel" tabindex="-1">
-            <div class="modal-header">
-              <h3>{{ editLabel }}</h3>
-              <button class="modal-close" title="关闭" @click="showEditModal = false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-            <div class="modal-body">
-              <div v-if="editOptions" class="option-list">
-                <div
-                  v-for="opt in editOptions"
-                  :key="opt.value"
-                  :class="['option-item', { active: editValue === opt.value }]"
-                  @click="selectOption(opt.value)"
-                >
-                  <div class="option-radio"><div v-if="editValue === opt.value" class="option-radio-checked" /></div>
-                  <div class="option-content">
-                    <div class="option-label">{{ opt.label }}</div>
-                    <div v-if="opt.desc" class="option-desc">{{ opt.desc }}</div>
-                  </div>
-                </div>
-              </div>
-              <input
-                v-else
-                v-model="editValue"
-                :type="editField.includes('api_key') ? 'password' : 'text'"
-                class="modal-input"
-                :aria-label="editLabel"
-                :placeholder="editPlaceholder"
-                @keydown.enter.prevent="saveEdit"
-              >
-            </div>
-            <div class="modal-footer">
-              <button class="btn-cancel" @click="showEditModal = false">取消</button>
-              <button class="btn-save" :disabled="settingsStore.loading" @click="saveEdit">
-                {{ settingsStore.loading ? '保存中…' : '保存' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Teleport>
+
     </div>
   </div>
 </template>

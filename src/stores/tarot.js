@@ -9,6 +9,8 @@ export const useTarotStore = defineStore('tarot', () => {
   const cards = ref([]), daily = ref(null), collection = ref(null), preferences = ref(null)
   const reading = ref(null), analysis = ref(null), question = ref(''), recoveredDaily = ref(null)
   const loading = ref(false), busy = ref(false), saving = ref(false), error = ref(''), notice = ref('')
+  const history = ref(null), historyBusy = ref(false), historySelection = ref(null), historyVersions = ref([]), historyAnalysis = ref(null), historyDetailBusy = ref(false)
+  let historyGeneration = 0
   let epoch = 0, pendingAnalysis = null, polling = false
   const owner = () => auth.user?.id || ''
   const active = token => token === epoch && !!owner()
@@ -19,6 +21,7 @@ export const useTarotStore = defineStore('tarot', () => {
   watch(() => auth.user?.id, () => {
     epoch++; cards.value = []; daily.value = collection.value = preferences.value = reading.value = analysis.value = recoveredDaily.value = null
     question.value = error.value = notice.value = ''; loading.value = busy.value = saving.value = false
+    historyGeneration++; history.value = historySelection.value = historyAnalysis.value = null; historyVersions.value = []; historyBusy.value = historyDetailBusy.value = false
     pendingAnalysis = null; polling = false
   }, { flush: 'sync' })
   function requestKey(kind) { return `mirror.tarot.${owner()}.${kind}` }
@@ -117,6 +120,48 @@ export const useTarotStore = defineStore('tarot', () => {
     } catch (e) { if (active(token)) error.value = `${e.message}。连接恢复后会继续读取结果。` }
     finally { if (active(token)) polling = false }
   }
-  return { cards, daily, recoveredDaily, collection, preferences, reading, analysis, question, loading, busy, saving, error, notice,
+  async function loadHistory(more = false) {
+    if (!owner() || historyBusy.value) return
+    const token = epoch; historyBusy.value = true; error.value = ''
+    try {
+      const previous = history.value
+      const next = await api.history(20, more ? previous?.items.length || 0 : 0)
+      if (!active(token)) return
+      if (more && previous && next.total !== previous.total) {
+        // An insertion shifts every offset. Start again at the latest page rather than merging overlapping ranges.
+        const fresh = await api.history(20, 0)
+        if (!active(token)) return
+        history.value = fresh; notice.value = '记录有更新，已从最新相遇重新展开。'
+      } else history.value = { ...next, items: more && previous ? [...previous.items, ...next.items] : next.items }
+    } catch (e) { if (active(token)) error.value = e.message }
+    finally { if (active(token)) historyBusy.value = false }
+  }
+  async function inspectHistory(event) {
+    const token = epoch, generation = ++historyGeneration
+    historySelection.value = event; historyVersions.value = []; historyAnalysis.value = null
+    if (event.kind !== 'question') { historyDetailBusy.value = false; return }
+    historyDetailBusy.value = true; error.value = ''
+    try {
+      const versions = await api.versions(event.id)
+      if (!active(token) || generation !== historyGeneration) return
+      historyVersions.value = versions
+      const id = versions[0]?.analysis_id || event.latest_analysis_id
+      if (id) {
+        const result = await api.analysis(id)
+        if (active(token) && generation === historyGeneration) historyAnalysis.value = result
+      }
+    } catch (e) { if (active(token) && generation === historyGeneration) error.value = e.message }
+    finally { if (active(token) && generation === historyGeneration) historyDetailBusy.value = false }
+  }
+  async function selectHistoryVersion(id) {
+    const token = epoch, generation = ++historyGeneration
+    historyAnalysis.value = null; historyDetailBusy.value = true; error.value = ''
+    try {
+      const result = await api.analysis(id)
+      if (active(token) && generation === historyGeneration) historyAnalysis.value = result
+    } catch (e) { if (active(token) && generation === historyGeneration) error.value = e.message }
+    finally { if (active(token) && generation === historyGeneration) historyDetailBusy.value = false }
+  }
+  return { history, historyBusy, historySelection, historyVersions, historyAnalysis, historyDetailBusy, loadHistory, inspectHistory, selectHistoryVersion, cards, daily, recoveredDaily, collection, preferences, reading, analysis, question, loading, busy, saving, error, notice,
     dailyCard, questionCard, analyzing, unlocked, load, refreshDaily, drawDaily, drawQuestion, savePreferences, analyze, poll }
 })

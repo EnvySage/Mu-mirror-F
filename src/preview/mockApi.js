@@ -135,6 +135,26 @@ const settings = {
   reviewMode: 'manual', autoReviewAvailable: false, ragHalfLife: 30, mirrorLookback: 1,
 }
 
+// Preview profiles never contain credentials and reset when the demo is reloaded.
+const modelProfiles = []
+let nextModelProfileId = 0
+function modelProfileFromBody(body, existing = null) {
+  return {
+    id: existing?.id || `preview-model-${++nextModelProfileId}`,
+    name: body.name,
+    aiProvider: body.aiProvider,
+    aiProtocol: body.aiProtocol,
+    aiBaseUrl: body.aiBaseUrl,
+    aiModel: body.aiModel,
+    hasApiKey: Boolean(body.aiApiKey?.trim()) || Boolean(existing?.hasApiKey),
+    apiKeyNeedsReentry: false,
+    active: Boolean(existing?.active),
+    unappliedChanges: Boolean(existing?.active && (existing.unappliedChanges || ['aiProvider', 'aiProtocol', 'aiBaseUrl', 'aiModel'].some(key => existing[key] !== body[key]) || body.aiApiKey?.trim())),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 const glossary = {
   pending: [{ id: 710, term: '作品集', aliases: ['portfolio'], description: '你正在整理的个人项目展示页面。', status: 'pending', kind: 'new', evidence: '近期多次提到作品集首页。', sourceRecordId: 803, sourceChunkId: 1403 }],
   confirmed: [{ id: 709, term: '状态管理', aliases: ['state management'], description: '将服务端数据和界面交互状态分开维护的方式。', status: 'confirmed', sourceRecordId: 801, sourceChunkId: 1401 }],
@@ -293,9 +313,42 @@ function route(config) {
   const snapshot = path.match(/^\/api\/mirror\/snapshots\/(\d+)$/)
   if (snapshot) return result(config, { ...clone(profile), ...clone(snapshots.find(item => item.id === Number(snapshot[1])) || { id: Number(snapshot[1]) }) })
   if (path === '/api/mirror/generate' || path === '/api/mirror/generate-monthly') return result(config, clone(profile))
+  if (path === '/api/settings/model-profiles' && method === 'GET') return result(config, clone(modelProfiles))
+  if (path === '/api/settings/model-profiles' && method === 'POST') {
+    if (!body.aiApiKey?.trim()) throw new Error('请输入 API Key')
+    const profile = modelProfileFromBody(body)
+    modelProfiles.push(profile)
+    return result(config, clone(profile))
+  }
+  const modelProfilePath = path.match(/^\/api\/settings\/model-profiles\/([^/]+)(\/activate)?$/)
+  if (modelProfilePath) {
+    const index = modelProfiles.findIndex(item => item.id === decodeURIComponent(modelProfilePath[1]))
+    if (index < 0) throw new Error('配置不存在')
+    const profile = modelProfiles[index]
+    if (modelProfilePath[2] && method === 'POST') {
+      modelProfiles.forEach(item => { item.active = item.id === profile.id; item.unappliedChanges = false })
+      Object.assign(settings, { aiProvider: profile.aiProvider, aiProtocol: profile.aiProtocol, aiBaseUrl: profile.aiBaseUrl, aiModel: profile.aiModel, aiApiKey: '••••••••' })
+      return result(config, clone(profile))
+    }
+    if (method === 'PUT') {
+      modelProfiles[index] = modelProfileFromBody(body, profile)
+      return result(config, clone(modelProfiles[index]))
+    }
+    if (method === 'DELETE') {
+      if (profile.active) throw new Error('请先应用其他配置，再删除当前配置')
+      modelProfiles.splice(index, 1)
+      return result(config)
+    }
+  }
+  if (path === '/api/settings/test-ai/draft') {
+    const saved = modelProfiles.find(item => item.id === body.profileId)
+    if (!body.aiApiKey?.trim() && !saved?.hasApiKey) throw new Error('请输入 API Key')
+    return result(config, '演示环境仅模拟测试，未连接真实 AI 服务。')
+  }
   if (path === '/api/settings' && method === 'GET') return result(config, clone(settings))
   if (path === '/api/settings' && method === 'PUT') { Object.assign(settings, body); return result(config, clone(settings)) }
   if (path === '/api/settings/test-ai') return result(config, '演示环境不连接 AI 服务')
+  if (path === '/api/settings/test-embedding') return result(config, '演示环境仅模拟测试，未连接真实检索服务。')
   if (path === '/api/settings/test-db') return result(config, '演示环境未连接数据库')
   if (path === '/api/glossary') return result(config, clone(glossary))
   if (path === '/api/growth') return result(config, growthOverview())
