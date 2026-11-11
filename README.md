@@ -70,13 +70,14 @@ npm run preview  # 预览构建产物
 
 ### 后端地址
 
-`vite.config.js` 里硬编码代理到 `http://localhost:9050`：
+开发代理目标读取 `VITE_API_TARGET`，默认 `http://127.0.0.1:9050`。每台机器复制示例并修改：
 
-```js
-server: { proxy: { '/api': { target: 'http://localhost:9050', changeOrigin: true } } }
+```bash
+cp .env.example .env.local
+# 编辑 .env.local：VITE_API_TARGET=http://127.0.0.1:9050
 ```
 
-**没有 `.env` 文件**，改后端地址直接改这里。开发时需先启动 Mu-mirror-B（9050）。
+`.env.local` 已被 gitignore，不要改 `vite.config.js` 里的默认值。生产构建走同源 `/api`。完整双机开发约定见 [LOCAL-ENV](../Mu-mirror-B/docs/LOCAL-ENV.md)。
 
 ## 设计语言：Blue hour
 
