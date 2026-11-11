@@ -1,4 +1,5 @@
 <script setup>
+import { reportAchievementActivity } from '@/api/achievements'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecordsStore } from '@/stores/records'
@@ -58,6 +59,7 @@ function onDateDouble(date) {
 }
 
 function openRecord(id) {
+  reportAchievementActivity('calendar.opened', id)
   ui.selectedRecordId = id
   ui.showDetail = true
 }

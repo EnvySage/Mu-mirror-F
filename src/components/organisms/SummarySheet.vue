@@ -1,4 +1,5 @@
 <script setup>
+import { reportAchievementActivity } from '@/api/achievements'
 /**
  * 每日总结 sheet（v2 原型样式，T-F-R7 + 三轮接线 + 词典候选分区 R10）
  * 数据源：GET /api/summaries
@@ -146,6 +147,8 @@ async function toggleItem(item) {
   if (!item.content) {
     await summaries.fetchDetail(item.summary_date)
   }
+  const loaded = summaries.list.find(summary => summary.summary_date === item.summary_date)
+  if (loaded?.content && expandedDate.value === item.summary_date) reportAchievementActivity('summary.opened', item.summary_date)
 }
 
 // ==================== 列表分组 / 展示 ====================

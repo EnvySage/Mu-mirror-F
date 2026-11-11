@@ -1,0 +1,231 @@
+{
+  "generator": "built-in imagegen",
+  "date": "2026-11-11",
+  "layout": {
+    "columns": 4,
+    "rows": 2,
+    "order": "row-major"
+  },
+  "sets": [
+    {
+      "id": "M",
+      "palette": "cyan, coral and ivory",
+      "frame": "precision cog-shaped medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-375d0cb0-f9ef-4ea6-9a9a-92f730e34467.png",
+      "asset": "/art/achievements/sets/m-atlas.png",
+      "titles": [
+        "MIRROR LINK",
+        "MEMORY CORE",
+        "DUAL SIGNAL",
+        "SECOND CHANNEL",
+        "CALIBRATED",
+        "RIGHT CONNECTION",
+        "SAFE SWITCH",
+        "STEADY SIGNAL"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: precision cog-shaped medallions. Palette: cyan, coral and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: radio mirror connection, crystalline memory engine, twin signal relays, model cabinet, calibration target, routed cables, safe power switch, constellation of connected cores.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"MIRROR LINK\"; cell 2: \"MEMORY CORE\"; cell 3: \"DUAL SIGNAL\"; cell 4: \"SECOND CHANNEL\"; cell 5: \"CALIBRATED\"; cell 6: \"RIGHT CONNECTION\"; cell 7: \"SAFE SWITCH\"; cell 8: \"STEADY SIGNAL\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "R",
+      "palette": "amber, vermilion and ivory",
+      "frame": "diamond-shaped medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-8391ca6d-f07c-4d34-8ef6-5fbc7d52ec3d.png",
+      "originalSource": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-3e0145fe-4007-481e-a048-26aa786f5353.png",
+      "cleanupPrompt": "Edit this existing sprite atlas only to clean the alpha background. Preserve every medal, illustration, color, ALL eight English titles exactly, sizes, positions, the 4-by-2 grid and the 2:1 canvas. Remove ALL pale white/gray/pink background haze, residual color noise, detached pixels and shadows OUTSIDE the eight metal medal silhouettes. Background and gutters must be perfectly 100% transparent alpha=0. Keep the solid cream engraved medal frames opaque. No cropping, no rearrangement, no new design, no added words. Clean crisp transparent edges. This is a production UI atlas that must composite cleanly on dark blue.",
+      "asset": "/art/achievements/sets/r-atlas.png",
+      "titles": [
+        "FIRST TRACE",
+        "SEVEN MARKS",
+        "LONG RECORD",
+        "THREE TRACES",
+        "SECOND DRAFT",
+        "THIRTY DAYS",
+        "LIVING VOLUME",
+        "FOUR SEASONS"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: diamond-shaped medallions. Palette: amber, vermilion and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: open notebook and pen, seven marked calendar pages, layered journal pages, three little ink suns, bookmark and returning arrow, thirty calendar tiles, three lunar journal phases, four seasons tree and book.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST TRACE\"; cell 2: \"SEVEN MARKS\"; cell 3: \"LONG RECORD\"; cell 4: \"THREE TRACES\"; cell 5: \"SECOND DRAFT\"; cell 6: \"THIRTY DAYS\"; cell 7: \"LIVING VOLUME\"; cell 8: \"FOUR SEASONS\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "D",
+      "palette": "cyan, hot pink and ivory",
+      "frame": "star-shaped medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-e694f648-ce46-4a7b-b742-57cc7314a8a2.png",
+      "asset": "/art/achievements/sets/d-atlas.png",
+      "titles": [
+        "FIRST CONTACT",
+        "DAILY SIGNAL",
+        "ECHO RETURN",
+        "FOLLOW THE TRACE",
+        "MEMORY ANSWERS",
+        "WORDS TO ACTION",
+        "RETURNING VOICE",
+        "THREADS CONNECT"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: star-shaped medallions. Palette: cyan, hot pink and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: interlocking speech bubbles, heartbeat dialogue wave, echo clock, quotation bookmark, magnifying glass on speech, two-sided proposal handshake, five signal towers, telescope and spiral conversation.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST CONTACT\"; cell 2: \"DAILY SIGNAL\"; cell 3: \"ECHO RETURN\"; cell 4: \"FOLLOW THE TRACE\"; cell 5: \"MEMORY ANSWERS\"; cell 6: \"WORDS TO ACTION\"; cell 7: \"RETURNING VOICE\"; cell 8: \"THREADS CONNECT\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "K",
+      "palette": "mint, teal and ivory",
+      "frame": "faceted hexagonal medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-c276a509-b741-449f-aa50-54bf3553d7c3.png",
+      "asset": "/art/achievements/sets/k-atlas.png",
+      "titles": [
+        "MEMORY TRACE",
+        "WORD ARCHIVE",
+        "ECHO MATCH",
+        "FIVE WORDS",
+        "WORD CONNECTION",
+        "SOURCE FOUND",
+        "MEMORY REVISED",
+        "PERSONAL LIBRARY"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: faceted hexagonal medallions. Palette: mint, teal and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: memory crystal, dictionary book, echo rings, indexed lexicon drawers, linked word nodes, magnifying glass and book, revised pencil manuscript, library tree roots.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"MEMORY TRACE\"; cell 2: \"WORD ARCHIVE\"; cell 3: \"ECHO MATCH\"; cell 4: \"FIVE WORDS\"; cell 5: \"WORD CONNECTION\"; cell 6: \"SOURCE FOUND\"; cell 7: \"MEMORY REVISED\"; cell 8: \"PERSONAL LIBRARY\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "P",
+      "palette": "lime, gold and ivory",
+      "frame": "shield-shaped medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-809a41af-8756-43bc-870e-15d58f3c0028.png",
+      "asset": "/art/achievements/sets/p-atlas.png",
+      "titles": [
+        "FIRST PLAN",
+        "TASK COMPLETE",
+        "ACTION APPROVED",
+        "OWN DIRECTION",
+        "COURSE CORRECTION",
+        "LINKED ACTION",
+        "THIRTY DONE",
+        "STEADY PROGRESS"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: shield-shaped medallions. Palette: lime, gold and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: clipboard plan, triple checks, paper airplane launch, compass flag, corrected route arrow, scheduled calendar check, thirty woven checkmarks, mountain summit checklist.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST PLAN\"; cell 2: \"TASK COMPLETE\"; cell 3: \"ACTION APPROVED\"; cell 4: \"OWN DIRECTION\"; cell 5: \"COURSE CORRECTION\"; cell 6: \"LINKED ACTION\"; cell 7: \"THIRTY DONE\"; cell 8: \"STEADY PROGRESS\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "C",
+      "palette": "blue, silver and warm amber",
+      "frame": "round clock-edged medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-6123d591-118f-4cbf-85f8-08a72cc24579.png",
+      "asset": "/art/achievements/sets/c-atlas.png",
+      "titles": [
+        "DAILY ECHO",
+        "WEEKLY REVIEW",
+        "OLD DATE",
+        "CALENDAR TURN",
+        "DATE FOUND",
+        "YESTERDAY AGAIN",
+        "THIRTY ECHOES",
+        "LONG CORRIDOR"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: round clock-edged medallions. Palette: blue, silver and warm amber. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: daily calendar sun, seven-day review wheel, hourglass, folded map calendar, rewind arrow journal, window sunrise, orbit of twelve calendar pages, lighthouse in memory clock.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"DAILY ECHO\"; cell 2: \"WEEKLY REVIEW\"; cell 3: \"OLD DATE\"; cell 4: \"CALENDAR TURN\"; cell 5: \"DATE FOUND\"; cell 6: \"YESTERDAY AGAIN\"; cell 7: \"THIRTY ECHOES\"; cell 8: \"LONG CORRIDOR\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "REF",
+      "palette": "lavender, peach and ivory",
+      "frame": "cut-corner photographic medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-ce9c0810-9fba-4d5d-901f-165c1fe26451.png",
+      "asset": "/art/achievements/sets/ref-atlas.png",
+      "titles": [
+        "FIRST REFLECTION",
+        "MONTHLY LAYERS",
+        "DOUBLE EXPOSURE",
+        "CLOSER LOOK",
+        "OLD REFLECTION",
+        "VISIBLE CHANGE",
+        "HALF YEAR",
+        "YEAR IN MIRROR"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: cut-corner photographic medallions. Palette: lavender, peach and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: framed self portrait, layered monthly portraits, overlapping exposed photographs, photographic loupe, arrow through portrait frames, seasons on reflective glass, twelve-month film reel, rising horizon in mirror.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST REFLECTION\"; cell 2: \"MONTHLY LAYERS\"; cell 3: \"DOUBLE EXPOSURE\"; cell 4: \"CLOSER LOOK\"; cell 5: \"OLD REFLECTION\"; cell 6: \"VISIBLE CHANGE\"; cell 7: \"HALF YEAR\"; cell 8: \"YEAR IN MIRROR\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "T",
+      "palette": "violet, gold and pale turquoise",
+      "frame": "ornate hexagonal medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-abc368cd-dc1b-4ae8-94c5-3ba915e6e9c2.png",
+      "originalSource": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-8ea947c3-22ee-47de-a766-ba0aa0d2c52a.png",
+      "cleanupPrompt": "Edit this existing sprite atlas only to clean the alpha background. Preserve every medal, illustration, color, ALL eight English titles exactly, sizes, positions, the 4-by-2 grid and the 2:1 canvas. Remove ALL pale white/gray/pink background haze, residual color noise, detached pixels and shadows OUTSIDE the eight metal medal silhouettes. Background and gutters must be perfectly 100% transparent alpha=0. Keep the solid cream engraved medal frames opaque. No cropping, no rearrangement, no new design, no added words. Clean crisp transparent edges. This is a production UI atlas that must composite cleanly on dark blue.",
+      "asset": "/art/achievements/sets/t-atlas.png",
+      "titles": [
+        "ARCANA DRAW",
+        "STAR PATH",
+        "MAJOR ARCANA",
+        "BOTH SIDES",
+        "CARD REUNION",
+        "MOON CYCLE",
+        "CONSTELLATION",
+        "ARCANA WORLD"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: ornate hexagonal medallions. Palette: violet, gold and pale turquoise. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: moon on tarot card, orbital star path, fan of major arcana cards, sunrise and reversed moon cards, memory bookmark on card, crescent around month, three rings of stars, world wreath and complete tarot deck.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"ARCANA DRAW\"; cell 2: \"STAR PATH\"; cell 3: \"MAJOR ARCANA\"; cell 4: \"BOTH SIDES\"; cell 5: \"CARD REUNION\"; cell 6: \"MOON CYCLE\"; cell 7: \"CONSTELLATION\"; cell 8: \"ARCANA WORLD\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "V",
+      "palette": "copper, teal and ivory",
+      "frame": "vault-shaped hexagonal medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-a7ee4d6e-5019-488b-8b6c-e9bf6daa7920.png",
+      "asset": "/art/achievements/sets/v-atlas.png",
+      "titles": [
+        "FIRST ARCHIVE",
+        "TEN RELICS",
+        "FOUND AGAIN",
+        "OPEN ARCHIVE",
+        "REVIEWED FILE",
+        "LINKED RELICS",
+        "THIRTY RELICS",
+        "LIVING ARCHIVE"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: vault-shaped hexagonal medallions. Palette: copper, teal and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: archive box, ten tiny relic drawers, recovered key magnifier, document and quill, folder classification cabinet, two linked file references, indexed thirty file leaves, illuminated archive library.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST ARCHIVE\"; cell 2: \"TEN RELICS\"; cell 3: \"FOUND AGAIN\"; cell 4: \"OPEN ARCHIVE\"; cell 5: \"REVIEWED FILE\"; cell 6: \"LINKED RELICS\"; cell 7: \"THIRTY RELICS\"; cell 8: \"LIVING ARCHIVE\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "G",
+      "palette": "leaf green, peach and ivory",
+      "frame": "pentagonal medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-0658a95a-79e7-41b8-9728-0fced584b50d.png",
+      "asset": "/art/achievements/sets/g-atlas.png",
+      "titles": [
+        "FIRST GROWTH",
+        "THREE AXES",
+        "PERSONAL SCALE",
+        "NAMED GROWTH",
+        "NEXT STEP",
+        "FIVE DIRECTIONS",
+        "THIRTY STEPS",
+        "OWN HORIZON"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: pentagonal medallions. Palette: leaf green, peach and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: first sprout, three-axis compass plant, ruler and seed, branching seedling with pen, two ascending steps, five-dimensional leaf star, thirty growth rings, mature branching tree and horizon.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"FIRST GROWTH\"; cell 2: \"THREE AXES\"; cell 3: \"PERSONAL SCALE\"; cell 4: \"NAMED GROWTH\"; cell 5: \"NEXT STEP\"; cell 6: \"FIVE DIRECTIONS\"; cell 7: \"THIRTY STEPS\"; cell 8: \"OWN HORIZON\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "S",
+      "palette": "rose, turquoise, gold and ivory",
+      "frame": "prismatic hexagonal medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-61d3f3ec-a668-4bba-8787-b353ec05ef6c.png",
+      "asset": "/art/achievements/sets/s-atlas.png",
+      "titles": [
+        "MOOD SPECTRUM",
+        "MANY FACETS",
+        "BACKUP LOG",
+        "MOOD VIEW",
+        "SIGNAL FOUND",
+        "TAG THREAD",
+        "TWIN BACKUP",
+        "FULL SPECTRUM"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: prismatic hexagonal medallions. Palette: rose, turquoise, gold and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: rainbow mood prism, many-facet gem, backup archive arrow, emotional color wheel, date and bar chart, refraction constellation, two safe data archives, spectrum landscape.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"MOOD SPECTRUM\"; cell 2: \"MANY FACETS\"; cell 3: \"BACKUP LOG\"; cell 4: \"MOOD VIEW\"; cell 5: \"SIGNAL FOUND\"; cell 6: \"TAG THREAD\"; cell 7: \"TWIN BACKUP\"; cell 8: \"FULL SPECTRUM\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    },
+    {
+      "id": "SYS",
+      "palette": "periwinkle, citron and ivory",
+      "frame": "architectural shield medallions",
+      "source": "C:\\Users\\cheng\\.codex\\generated_images\\01a1c4a4-a90a-7491-8b36-c0cd352c31f8\\exec-41e978c7-6028-443b-8ada-f19f42225446.png",
+      "asset": "/art/achievements/sets/sys-atlas.png",
+      "titles": [
+        "HOME BASE",
+        "WRITE YOUR WAY",
+        "MEMORY RANGE",
+        "LOOKBACK LENS",
+        "ANOTHER VIEW",
+        "KNOW THE DESK",
+        "PERSONAL TUNING",
+        "OWN EXHIBITION"
+      ],
+      "prompt": "Create ONE wide 2:1 transparent production game UI sprite atlas. Exactly 4 columns by 2 rows, EIGHT separate centered square achievement medals, identical cell size. Grid centers at x12.5%,37.5%,62.5%,87.5% and y25%,75%. Each entire medal fits within 88% of its cell with transparent gutters, never crosses cell edge. Alpha transparent background, NO grid lines or surrounding titles.\nArt direction: highly crafted engraved enamel operation medals, vintage crosshatched print texture, sculpted ivory layered frames, dark navy recessed centers, geometric decorative cutouts, richly colored accent inlays; crisp silhouettes. Same family shape across this set: architectural shield medallions. Palette: periwinkle, citron and ivory. Distinctive eight individual central emblems IN EXACT ROW-MAJOR ORDER: personal home doorway, pen toggle, adjustable time dial, folding mirror lenses, mobile and desktop screens, navigation bookmarks, four tuned sliders, personalized observatory room.\nCritical typography: EACH MEDAL MUST HAVE ITS OWN DIFFERENT ENGLISH TITLE on a cream ribbon, bold condensed engraved lettering, correctly spelled, legible, no Chinese. These are EXACT titles IN ROW-MAJOR ORDER, one for each icon: cell 1: \"HOME BASE\"; cell 2: \"WRITE YOUR WAY\"; cell 3: \"MEMORY RANGE\"; cell 4: \"LOOKBACK LENS\"; cell 5: \"ANOTHER VIEW\"; cell 6: \"KNOW THE DESK\"; cell 7: \"PERSONAL TUNING\"; cell 8: \"OWN EXHIBITION\". Do not put the same title on multiple badges. Do not use a shared brand word as filler. Each ribbon should be wide enough to fit its respective title, use two lines if needed. A tiny \"OPERATION\" above the title is optional. No other text. This is a sprite sheet consumed directly by CSS with square cells, spacing must be exact. Flat orthographic emblem artwork, no scenery, no mockup photograph, no detached shadows."
+    }
+  ]
+}

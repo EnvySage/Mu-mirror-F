@@ -1,4 +1,5 @@
 <script setup>
+import { reportAchievementActivity } from '@/api/achievements'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -50,6 +51,7 @@ function setHomePage(value) {
   homePage.value = value
   if (value === 'auto') localStorage.removeItem('mirror.home-page')
   else localStorage.setItem('mirror.home-page', value)
+  if (value !== 'auto') reportAchievementActivity('home.changed', value)
 }
 
 // ==================== 个人词典（lexicon-design.md 5b） ====================

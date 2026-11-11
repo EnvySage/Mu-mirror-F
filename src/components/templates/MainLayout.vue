@@ -20,6 +20,8 @@ import DetailPanel from '@/components/organisms/DetailPanel.vue'
 import RecordReviewWorkspace from '@/components/organisms/RecordReviewWorkspace.vue'
 import { useRecordWorkflows } from '@/composables/useRecordWorkflows'
 import ToastContainer from '@/components/organisms/ToastContainer.vue'
+import AchievementNotifications from '@/components/organisms/AchievementNotifications.vue'
+import BackToTop from '@/components/molecules/BackToTop.vue'
 import { useRouteMotion } from '@/motion/useRouteMotion'
 import { cancelMirrorShatter } from '@/composables/useMirrorShatter'
 import { usePresentationMode } from '@/composables/usePresentationMode'
@@ -38,6 +40,13 @@ const glossary = useGlossaryStore()
 const statsStore = useStatsStore()
 const presentation = usePresentationMode()
 const mobileExploreOpen = ref(false)
+const topScrollTarget = shallowRef(null)
+function onPageScroll(event) {
+  const target = event.target
+  if (route.name === 'chat' || renderedPage.value !== route.name || !(target instanceof HTMLElement)) return
+  // Track only the page itself, never a sidebar, picker, dialog or chat history.
+  if (target.matches('.presentation-layout > .page > .page-content')) topScrollTarget.value = target
+}
 const mobileChat = computed(() => presentation.mode.value === 'mobile' && route.name === 'chat')
 const chatViewportHeight = ref(null)
 const chatViewportTop = ref(0)
@@ -57,9 +66,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateChatViewport)
 })
 useRecordWorkflows()
-watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false })
+watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false; topScrollTarget.value = null })
 const pageComponent = shallowRef(null)
 const renderedPage = ref(route.name)
+watch(pageComponent, () => { topScrollTarget.value = null })
 const renderedDate = ref(route.params.date)
 let pageGeneration = 0
 const routeWipe = ref(null)
@@ -100,7 +110,7 @@ useTodoPolling({
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
-  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', settings: '设置', models: '模型设置' }
+  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', gallery: '展览馆', settings: '设置', models: '模型设置' }
   return names[route.name] || ''
 })
 
@@ -134,7 +144,7 @@ watch(() => route.name, () => {
     <div class="app-water" aria-hidden="true" />
     <PersonaBackdrop />
     <DesktopLayout><AppSidebar /></DesktopLayout>
-    <main class="main">
+    <main class="main" tabindex="-1" @scroll.capture.passive="onPageScroll">
       <div v-if="IS_DEMO_PREVIEW && !mobileChat" class="preview-banner" role="note">
         <span>PUBLIC PREVIEW</span><i />演示环境 · 虚构样例数据，不会保存
       </div>
@@ -151,9 +161,10 @@ watch(() => route.name, () => {
           <component :is="pageComponent" :key="renderedPage" v-bind="renderedPage === 'records' ? { date: renderedDate } : {}" />
         </Transition>
       </PresentationLayout>
+      <BackToTop :target="topScrollTarget" />
       <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
-        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM', models: 'MODELS' })[renderedPage] }}</span>
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', gallery: 'GALLERY', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM', models: 'MODELS' })[renderedPage] }}</span>
       </div>
       <DetailPanel />
     </main>
@@ -163,6 +174,7 @@ watch(() => route.name, () => {
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <RecordReviewWorkspace />
     <ToastContainer />
+    <AchievementNotifications />
   </div>
 </template>
 

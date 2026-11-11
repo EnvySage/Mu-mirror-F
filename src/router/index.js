@@ -24,6 +24,7 @@ const router = createRouter({
         { path: '', redirect: preferredHome },
         { path: 'models', name: 'models', component: () => import('@/views/ModelsView.vue') },
         { path: 'tarot', name: 'tarot', component: () => import('@/views/TarotView.vue') },
+        { path: 'gallery', name: 'gallery', component: () => import('@/views/GalleryView.vue') },
         {
           path: 'records/:date?',
           name: 'records',

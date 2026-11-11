@@ -16,6 +16,7 @@ const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', 
 const weekday = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', weekday: 'short' }).format(today)
 const nav = [
  { page:'tarot', label:'偶然回声', en:'TAROT', path:'M6 2h12v20H6zM12 6l3 6-3 6-3-6z' },
+ { page:'gallery', label:'展览馆', en:'GALLERY', path:'M3 4h18v16H3zM6 7h12v10H6zM12 8l3 4-3 4-3-4z' },
  { page:'records', label:'日常记录', en:'RECORDS', path:'M4 5h16M4 12h16M4 19h10' },
  { page:'calendar', label:'时间日历', en:'CALENDAR', path:'M8 2v5M16 2v5M3 10h18M4 5h16v16H4z' },
  { page:'mirror', label:'我的镜子', en:'MIRROR', path:'M12 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 19v3M8 22h8M8 10l3-3' },
@@ -33,7 +34,7 @@ function switchPage(page) {
 </script>
 <template>
  <aside class="sidebar" aria-label="主导航">
-  <a class="brand" href="/records" @click.prevent="switchPage('records')"><span class="brand-mark">M<span> / </span></span><span class="brand-name">MIRROR<small>记录，让自己显影</small></span></a>
+  <a class="brand" href="/records" @click.prevent="switchPage('records')"><img class="brand-icon" src="/mirror-app-icon.png" alt=""><span class="brand-name">MIRROR<small>记录，让自己显影</small></span></a>
   <div class="sidebar-date"><strong>{{ dateLabel.replace('/', '.') }}</strong><span>{{ weekday }}<i>今天也值得被记住</i></span></div>
   <nav ref="navEl" class="sidebar-nav">
    <div ref="trackEl" class="nav-track" aria-hidden="true" />
@@ -55,7 +56,7 @@ function switchPage(page) {
 <style scoped>
 .sidebar { display:none; flex:0 0 var(--sidebar-width); width:var(--sidebar-width); min-height:0; flex-direction:column; padding:30px 18px 18px; background:#040d30f2; border-right:1px solid #5580cf38; color:white; overflow-y:auto; }
 @media(min-width:900px){.sidebar{display:flex}}
-.brand{display:flex;gap:9px;align-items:center;padding:0 6px;color:white}.brand-mark{font:italic 900 48px/.8 var(--font-display);letter-spacing:-8px;color:var(--cyan)}.brand-mark span{color:white;font-size:39px}.brand-name{font:italic 900 31px/.85 var(--font-display);letter-spacing:-.04em}.brand-name small{display:block;font:10px/1.5 var(--font);letter-spacing:.08em;color:#9db7e5;margin-top:7px}
+.brand{display:flex;gap:9px;align-items:center;padding:0 6px;color:white}.brand-icon{width:43px;height:43px;flex:none;object-fit:contain}.brand-name{font:italic 900 31px/.85 var(--font-display);letter-spacing:-.04em}.brand-name small{display:block;font:10px/1.5 var(--font);letter-spacing:.08em;color:#9db7e5;margin-top:7px}
 .sidebar-date{margin:36px 6px 28px;display:flex;gap:12px;align-items:center}.sidebar-date strong{font:italic 700 43px/1 var(--font-display);letter-spacing:-.04em}.sidebar-date>span{font:700 17px/1.3 var(--font-display);color:var(--cyan);text-transform:uppercase}.sidebar-date i{display:block;font:normal 9px/1.8 var(--font);color:#8ba5cf}
 .sidebar-nav{display:flex;flex-direction:column;gap:9px}.nav-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;min-height:64px;padding:10px 15px;text-align:left;color:#91b0e2;isolation:isolate;transition:color .18s,transform .18s}.nav-row::before{content:'';position:absolute;inset:0;z-index:-1;background:transparent;transform:skewY(-3deg);border-left:3px solid transparent}.nav-row svg{width:20px;height:20px;flex-shrink:0}.nav-row b{display:block;font:italic 800 24px/.95 var(--font-display);letter-spacing:.015em}.nav-row small{display:block;font-size:10px;margin-top:5px}.nav-row:hover{color:white;transform:translateX(3px)}.nav-row.active{color:var(--night)}.nav-row.active::before{background:var(--cyan);border-left-color:white;box-shadow:4px 4px 0 var(--electric)}.nav-arrow{margin-left:auto;font-size:11px}
 .sidebar-write{margin:28px 6px 16px;padding:11px 10px;background:white;color:var(--night);font-size:13px;font-weight:800;transform:skew(-7deg);box-shadow:4px 4px 0 var(--pink)}.sidebar-write>span{font-size:18px;margin-right:5px}.sidebar-write small{display:block;font:italic 700 11px var(--font-display);letter-spacing:.08em;margin-left:15px}

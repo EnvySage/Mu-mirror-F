@@ -1,4 +1,5 @@
 <script setup>
+import { reportAchievementActivity } from '@/api/achievements'
 import TarotEntry from '@/components/tarot/TarotEntry.vue'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -316,6 +317,7 @@ watch([compareAId, compareBId], async ([aId, bId], [prevA, prevB]) => {
   compareA.value = a
   compareB.value = b
   compareLoading.value = false
+  if (a && b && aId !== bId) reportAchievementActivity('snapshot.compared', aId, bId)
 }, { immediate: true })
 
 /** 漂移差值（两快照 drift_distance 都有值才算）：Δ = |A - B| */

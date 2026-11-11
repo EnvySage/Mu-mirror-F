@@ -1,4 +1,5 @@
 <script setup>
+import { reportAchievementActivity } from '@/api/achievements'
 import ChatImageDraft from '@/components/molecules/ChatImageDraft.vue'
 import PageMasthead from '@/components/molecules/PageMasthead.vue'
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
@@ -398,6 +399,7 @@ function openVaultRef(ref) {
     return
   }
   previewItem.value = ref
+  reportAchievementActivity('vault.search_opened', ref.vaultItemId ?? ref.vault_item_id, null, 'chat_retrieval')
 }
 
 // ==================== 附件上传（任务 2） ====================
@@ -535,6 +537,7 @@ async function onReceiptRemove(item) {
 async function onOpenSession(id) {
   showSessions.value = false
   await chat.loadSession(id)
+  if (chat.messages.length) reportAchievementActivity('session.opened', id)
   await scrollToBottom()
 }
 
@@ -686,7 +689,7 @@ async function onRemoveSession(id) {
                     v-for="vr in msg.vaultRefs"
                     :key="vr.id"
                     :ref-item="vr"
-                    @preview="(it) => (previewItem = it)"
+                    @preview="openVaultRef"
                     @download="downloadRef"
                   />
                 </div>

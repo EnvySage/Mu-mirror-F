@@ -12,6 +12,7 @@ const dialog = ref(null), route = useRoute(), router = useRouter()
 const ui = useUIStore(), glossary = useGlossaryStore(), presentation = usePresentationMode()
 let tween
 const destinations = [
+  { page: 'gallery', label: '展览馆', note: '成就章与塔罗收藏', icon: 'M3 4h18v16H3zM6 7h12v10H6zM12 8l3 4-3 4-3-4z' },
   { page: 'chat', label: '对话', note: '和另一个自己聊聊', icon: 'M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2ZM8 9h8M8 13h5' },
   { page: 'vault', label: '记忆资产', note: '文档与素材', icon: 'M3 4h18v5H3ZM5 9v11h14V9M9 13h6' },
   { action: 'summary', label: '每日总结', note: '回看今天的片段', icon: 'M14 3H6v18h14V9ZM14 3v6h6M8 13h8M8 17h5' },
@@ -66,9 +67,9 @@ onBeforeUnmount(() => { tween?.kill(); dialog.value?.close() })
       <nav class="explore-destinations" aria-label="探索功能">
         <button class="explore-tarot" :aria-current="route.name === 'tarot' ? 'page' : undefined" @click="choose({ page: 'tarot' })">
           <span class="explore-tarot-art" aria-hidden="true"><img src="/art/tarot/v1/back.png" alt="" /><img src="/art/tarot/v1/00-fool.png" alt="" /></span>
-          <span class="explore-tarot-copy"><strong>塔罗牌</strong><small><span>每日一张</span><span>问一问</span><span>收藏册</span></small><i aria-hidden="true">↗</i></span>
+          <span class="explore-tarot-copy"><strong>塔罗牌</strong><small><span>每日一张</span><span>问一问</span><span>相遇记录</span></small><i aria-hidden="true">↗</i></span>
         </button>
-        <button v-for="item in destinations" :key="item.page || item.action" class="explore-destination" :aria-current="route.name === item.page ? 'page' : undefined" @click="choose(item)">
+        <button v-for="item in destinations" :key="item.page || item.action" class="explore-destination" :class="{ 'explore-gallery': item.page === 'gallery' }" :aria-current="route.name === item.page ? 'page' : undefined" @click="choose(item)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path :d="item.icon" /></svg>
           <strong>{{ item.label }}<span v-if="item.page === 'settings' && glossary.pendingCount" class="explore-count">{{ glossary.pendingCount }}</span></strong><small>{{ item.note }}</small>
         </button>
@@ -89,6 +90,8 @@ onBeforeUnmount(() => { tween?.kill(); dialog.value?.close() })
 .explore-tarot-copy small span{display:inline-block;white-space:nowrap}.explore-tarot-copy small span+span:before{content:'·';margin:0 4px}
 .explore-destination{padding:17px 16px;min-height:117px;border:1px solid #b7dbe71c;background:#a3c4d307;border-radius:3px}.explore-destination{clip-path:polygon(7% 0,100% 5%,96% 84%,85% 100%,0 94%);transform:rotate(-1deg);background:linear-gradient(120deg,#8bcfdf16,#7fbce605)}.explore-destination:nth-child(even){transform:rotate(1.5deg);clip-path:polygon(0 8%,90% 0,100% 18%,96% 100%,4% 94%)}.explore-destination svg{width:23px;height:23px;color:#a8cbd7;margin-bottom:6px}.explore-destination strong{display:block;font-size:15px}.explore-destination small{display:block;font-size:10px;color:#91acbb;margin-top:5px}.explore-count{font-size:10px;margin-left:6px;color:#a1e9e5}
 .explore-layout{display:flex;align-items:center;justify-content:space-between;min-height:44px;width:100%;margin-top:16px;color:#9bb7c6;font-size:12px}.explore-layout span{font-size:18px}
+.explore-destinations .explore-gallery{display:grid;grid-template-columns:auto 1fr;column-gap:12px;grid-column:1/-1;min-height:62px;align-items:center;padding:10px 17px;background:#72effb20;border-color:#83d9e969}
+.explore-gallery svg{grid-row:span 2;margin-bottom:0;color:#89f3fa}.explore-gallery small{margin-top:0}
 @media(max-width:359px){.mobile-explore{padding:18px 15px}.explore-tarot-art{left:12px}.explore-tarot-copy{margin-left:126px}.explore-tarot-copy strong{font-size:23px}}
 @media(max-height:600px){.mobile-explore{padding-top:14px}.explore-heading{margin-bottom:14px}.explore-heading h2{font-size:26px}.explore-tarot{min-height:130px}.explore-tarot-art{top:12px}.explore-tarot-copy{padding-block:16px}.explore-destination{min-height:105px;padding:12px 16px}}
 </style>
