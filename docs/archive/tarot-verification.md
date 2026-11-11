@@ -14,7 +14,7 @@
 
 回档：牌背修复 `a52a737`；点击与收下动画 `64f26ac`；手机探索 `43a4539`；透明碎片 `9db6d7e`；原图查看见本节所在提交。
 
-最新截图：[手机展示](tarot-evidence/acquisition-revised-375.png)、[全屏原图](tarot-evidence/gallery-revised-1440.png)、[手机探索](tarot-evidence/explore-375.png)。
+最新截图：[手机展示](../tarot-evidence/acquisition-revised-375.png)、[全屏原图](../tarot-evidence/gallery-revised-1440.png)、[手机探索](../tarot-evidence/explore-375.png)。
 
 ## 视频动效修订（2026-10-27）
 
@@ -30,7 +30,7 @@
 
 动效验收启动独立演示服务：`VITE_DEMO_PREVIEW=true`，默认端口 5190；运行 `node tests/browser/tarot-motion.mjs`。这是合成数据预览，正式服务与真实模型验收边界仍见下文。
 
-截图：[黑色时钟](tarot-evidence/clock-revised-375.png)、[首次获得](tarot-evidence/acquisition-revised-375.png)、[收藏特写](tarot-evidence/gallery-revised-1440.png)。
+截图：[黑色时钟](../tarot-evidence/clock-revised-375.png)、[首次获得](../tarot-evidence/acquisition-revised-375.png)、[收藏特写](../tarot-evidence/gallery-revised-1440.png)。
 
 回档点：滚动修复 `34135fe`；时钟与首次获得 `a87394b`；收藏特写与交互验收见后续 `feat(tarot): stage collection closeups and verify motion` 提交。
 
@@ -95,6 +95,6 @@ node tests/browser/tarot.mjs
 - B 抽牌持久化：86774a6；资料范围：11597a6；异步分析：65c3cd1；聊天限制：e60276c；语义恢复：见本仓 fix(tarot) 提交。
 - AI 解读：28d66b4；聊天隔离：4a23e74；最终文档：96f7c9e。
 
-[完整实施取舍](tarot-implementation-decisions.md)。截图：[手机每日牌](tarot-evidence/daily-375.png)、[桌面收藏册](tarot-evidence/collection-1440.png)、[真实接口的问题解读](tarot-evidence/live-question-1440.png)。
+[完整实施取舍](tarot-implementation-decisions.md)。截图：[手机每日牌](../tarot-evidence/daily-375.png)、[桌面收藏册](../tarot-evidence/collection-1440.png)、[真实接口的问题解读](../tarot-evidence/live-question-1440.png)。
 
 开发时使用了共享依赖目录与独立 worktree，原工作目录未合并。功能分支为三个仓库的 codex/tarot-20261026，实际工作目录为 own/worktrees/tarot-20261026/F、B、AI。未推送或部署。

@@ -117,9 +117,11 @@ server: { proxy: { '/api': { target: 'http://localhost:9050', changeOrigin: true
 
 ## 文档
 
-- [总体设计 v2.3（历史快照）](https://github.com/EnvySage/Mu-mirror/blob/ai/docs/2026-09-03-system-design-v2.md) — 早于 Agent v2、塔罗、成长与成就；当前状态见三端项目进度
-- `docs/archive/prototype/` — 早期 HTML 原型
+- [文档索引](docs/README.md) — 当前文档、归档与维护规则
+- [历史摘要](docs/HISTORY.md) — 塔罗首版、验收、原型与旧交接
+- [记录流程](docs/record-workflow.md) — 记录、整理、审核与记忆授权
+- [UI 改版](docs/ui-redesign.md) — Blue hour / P3R 视觉规范
 
-### 塔罗首版
+### 塔罗
 
-新增 `/tarot`：每日牌、问一问、每日解锁收藏。实现与验收见 [塔罗验收记录](docs/tarot-verification.md)，卡面来源见 [资产说明](docs/tarot-assets.md)。
+现行 78 张牌、逆位、收藏与历史行为见 [塔罗 v2 前端](docs/tarot-v2-frontend.md)，素材见 [塔罗 v2 美术](docs/tarot-v2-art.md)。首版 12 张牌的验收记录已归档，摘要见 [历史摘要](docs/HISTORY.md)。

@@ -22,7 +22,7 @@ baseline_commit: "393645ff3744c6b0c03ac58827611b1e376ee56b"
 
 **完成与发布：**后续执行者完成 U1–U6 和 Verification Contract。实现授权不自动包含发布、合并或部署。
 
-配套图版：[三页布局与动画分镜](../design/mirror-ui-motion-board.svg)。图版的内容是示例，执行以本计划的状态规则为准。
+配套图版：[三页布局与动画分镜](../../design/mirror-ui-motion-board.svg)。图版的内容是示例，执行以本计划的状态规则为准。
 
 ---
 
