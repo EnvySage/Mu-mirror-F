@@ -1,6 +1,6 @@
 # 实施记录与取舍
 
-# SDD ledger — plan: docs/superpowers/plans/2026-10-26-tarot.md
+# SDD ledger — plan: docs/archive/plans/2026-10-26-tarot.md
 
 Execution: 2026-10-26. User authorizes full implementation, incremental commits, and only user-observable tests.
 Workspace: E:/project/mirror/own/worktrees/tarot-20261026/{F,B,AI}; branch codex/tarot-20261026 in each repo.
