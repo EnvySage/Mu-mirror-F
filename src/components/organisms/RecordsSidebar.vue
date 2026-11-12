@@ -26,6 +26,10 @@ import TodoChainCard from '@/components/molecules/TodoChainCard.vue'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { moodMap, typeMap, CONTENT_TYPES } from '@/constants/tags'
 import { parseDate } from '@/utils/time'
+import { reportAchievementActivity } from '@/api/achievements'
+import { vReadEnd } from '@/composables/useReadingEnd'
+import SummarySources from '@/components/molecules/SummarySources.vue'
+import { summarySourceIds } from '@/utils/summarySources'
 
 const emit = defineEmits(['open-record', 'open-summaries'])
 
@@ -253,7 +257,7 @@ const orphanSuggestions = computed(() => {
           </button>
           <template v-if="expandedDate === item.summary_date">
             <div v-if="summariesStore.detailLoading" class="side-empty side-empty-tight">加载全文…</div>
-            <p v-else-if="item.content" class="sum-full">{{ item.content }}</p>
+            <template v-else-if="item.content"><p v-read-end="{ key: item.summary_date, onRead: () => reportAchievementActivity('summary.opened', item.summary_date) }" class="sum-full">{{ item.content }}</p><SummarySources :date="item.summary_date" :source-ids="summarySourceIds(item.stats)" @open-record="emit('open-record', $event)" /></template>
             <div v-else class="side-empty side-empty-tight">全文加载失败</div>
           </template>
           <template v-else-if="briefLines(item).length">

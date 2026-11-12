@@ -68,6 +68,7 @@ export function normalizeCreatedRecords(records) {
 
 export function normalizeChatDone(payload = {}) {
   return {
+    assistantMessageId: payload.assistantMessageId ?? payload.assistant_message_id ?? null,
     sessionId: payload.sessionId ?? payload.session_id ?? null,
     runId: payload.runId ?? payload.run_id ?? null,
     requestId: payload.requestId ?? payload.request_id ?? null,

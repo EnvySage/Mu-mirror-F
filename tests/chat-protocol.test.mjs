@@ -64,6 +64,12 @@ test('legacy meta and done payloads tolerate unknown fields', () => {
   assert.equal(uncertain.runId, 'run-a')
 })
 
+test('completed replies retain the server assistant ID for source verification', () => {
+  assert.equal(normalizeChatDone({ assistantMessageId: 815 }).assistantMessageId, 815)
+  assert.equal(normalizeChatDone({ assistant_message_id: 816 }).assistantMessageId, 816)
+  assert.equal(normalizeChatDone({}).assistantMessageId, null)
+})
+
 test('created-record receipts normalize identically from SSE and history payloads', () => {
   const fromSse = normalizeCreatedRecords([
     { record_id: 31, status: 'record_only', created_at: '2026-10-20 12:30:00' },

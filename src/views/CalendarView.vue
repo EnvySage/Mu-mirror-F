@@ -18,6 +18,8 @@ const recordsStore = useRecordsStore()
 const ui = useUIStore()
 
 const selectedDate = ref(null)
+const selectedByUser = ref(false)
+const changedMonth = ref(null)
 const dateTurn = ref(null)
 let turnSerial = 0
 const filterInfo = ref('按月标记，点击日期看当天')
@@ -42,12 +44,18 @@ function dayKey(date) {
 }
 
 function onDateSelect(date) {
+  selectedByUser.value = true
   if (selectedDate.value && dayKey(date) !== dayKey(selectedDate.value) && !prefersReducedMotion()) {
     dateTurn.value = { from:new Date(selectedDate.value), to:new Date(date), serial:++turnSerial }
   }
   selectedDate.value = date
   filterInfo.value = formatFullDate(date)
   recordsStore.fetchDayRecords(dayKey(date))
+}
+function onMonthChange(date) {
+  onDateSelect(date)
+  changedMonth.value = dayKey(date).slice(0, 7)
+  selectedByUser.value = false
 }
 
 /** 双击日期 → 跳转记录页按日筛选 */
@@ -59,9 +67,11 @@ function onDateDouble(date) {
 }
 
 function openRecord(id) {
-  reportAchievementActivity('calendar.opened', id)
-  ui.selectedRecordId = id
-  ui.showDetail = true
+  const date = dayKey(selectedDate.value)
+  const activities = [{ kind: 'calendar.opened', subjectId: id }]
+  if (selectedByUser.value) activities.push({ kind: 'calendar.viewed', subjectId: id, otherId: date, value: 'date' })
+  if (changedMonth.value === date.slice(0, 7)) activities.push({ kind: 'calendar.viewed', subjectId: id, otherId: changedMonth.value, value: 'month' })
+  ui.openRecordWithActivity(id, activities)
 }
 
 onMounted(() => {
@@ -83,7 +93,7 @@ onMounted(() => {
             :model-value="selectedDate"
             @select-date="onDateSelect"
             @pick-date="onDateDouble"
-            @change-month="onDateSelect"
+            @change-month="onMonthChange"
           />
         </div>
 

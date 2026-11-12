@@ -22,6 +22,7 @@ import { useDialogFocus, prepareDialogFocusHandoff } from '@/composables/useDial
 import { stableVariant, prefersReducedMotion } from '@/motion/core'
 import { useListMotion } from '@/motion/useListMotion'
 import { useOverlayMotion } from '@/motion/useOverlayMotion'
+import { reportAchievementActivity } from '@/api/achievements'
 
 const props = defineProps({
   date: { type: String, default: null },
@@ -47,6 +48,11 @@ const workflowCards = computed(() => actions.recordWorkflows.filter(card => {
 
 const recordFilter = ref('all')
 const selectedTag = ref('')
+const selectedMood = ref('')
+const selectedType = ref('')
+function filterParams() {
+  return { ...(selectedTag.value ? { tags: selectedTag.value } : {}), ...(selectedMood.value ? { mood: selectedMood.value } : {}), ...(selectedType.value ? { contentType: selectedType.value } : {}) }
+}
 const recordFilters = [{ key:'all',label:'全部记录' },{ key:'record_only',label:'仅记录' },{ key:'reviewing',label:'待审核' },{ key:'done',label:'已入库' }]
 const filterDate = computed(() => props.date || (ui.sidebarSelectedDate ? formatDateStr(ui.sidebarSelectedDate) : null))
 const listRoot = ref(null)
@@ -59,7 +65,7 @@ function clearHighlightLater(id) {
 const dayNumber = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',day:'2-digit' }).format(new Date())
 const dayMonth = new Intl.DateTimeFormat('en', { timeZone:'Asia/Shanghai',month:'short' }).format(new Date())
 
-/** 按日期分组（倒序） */
+
 const grouped = computed(() => {
   const groups = {}
   const replaced = new Set(workflowCards.value.map(recordIdOf).filter(id => id != null).map(String))
@@ -138,19 +144,19 @@ watch(() => ui.highlightRecordId, async (id) => {
 }, { flush: 'post' })
 
 function loadByDate(dateStr) {
-  return recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr, ...(selectedTag.value ? { tags: selectedTag.value } : {}) })
+  return recordsStore.fetchRecords({ startDate: dateStr, endDate: dateStr, ...filterParams() })
 }
 
 function loadAll() {
-  return recordsStore.fetchRecords(selectedTag.value ? { tags: selectedTag.value } : undefined)
+  return recordsStore.fetchRecords(filterParams())
 }
 
 // ---- 侧栏形态：≥1440px 常驻右栏；窄屏（手机/平板）FAB + 抽屉 ----
-/** 与旧 CSS 断点同口径：1440px 以上侧栏常驻 */
+// Keep the sidebar pinned above 1440px.
 const WIDE_QUERY = '(min-width: 1440px)'
 const wideMql = window.matchMedia(WIDE_QUERY)
 const isWide = ref(wideMql.matches)
-/** 抽屉开合（仅窄屏有意义；转宽屏时强制收起，避免与常驻栏重复） */
+// Narrow-screen sidebar drawer.
 const showSidebarDrawer = ref(false)
 const drawerEl = ref(null)
 const drawerFocusOpen = ref(false)
@@ -171,13 +177,14 @@ onMounted(async () => {
   statsStore.fetchStats()
   wideMql.addEventListener('change', onWideChange)
   await request
+  if (!recordsStore.error && localStorage.getItem('mirror.home-page') === 'records') reportAchievementActivity('home.opened', 'records')
 })
 
 watch(() => props.date, (d) => {
   d ? loadByDate(d) : loadAll()
 })
 
-watch(selectedTag, () => {
+watch([selectedTag, selectedMood, selectedType], () => {
   filterDate.value ? loadByDate(filterDate.value) : loadAll()
 })
 
@@ -202,8 +209,8 @@ function scheduleListPolling() {
   if (!recordsStore.processingRecords.length) return
   pollTimer = setTimeout(async () => {
     await recordsStore.fetchRecords(filterDate.value
-      ? { startDate: filterDate.value, endDate: filterDate.value, ...(selectedTag.value ? { tags: selectedTag.value } : {}) }
-      : (selectedTag.value ? { tags: selectedTag.value } : undefined))
+      ? { startDate: filterDate.value, endDate: filterDate.value, ...filterParams() }
+      : filterParams())
     scheduleListPolling()
   }, 3000)
 }
@@ -213,12 +220,7 @@ watch(() => recordsStore.processingRecords.length, (n) => {
   if (n === 0) stopListPolling()
 }, { immediate: true })
 
-/**
- * AI 全部处理完成后刷新待办数据
- * 待办登记与状态建议都在处理过程中落库，处理完成前拉不到；
- * 侧栏待办列表读 stats.todo.open_items（30s 缓存），不强制刷新就停在旧数据上，
- * 只有整页刷新才看得到新待办。
- */
+
 watch(() => recordsStore.processingRecords.length, (n, prev) => {
   if (n !== 0 || !prev) return
   todoStore.fetch()
@@ -234,23 +236,27 @@ onBeforeUnmount(() => {
 
 function openRecord(id, event) {
   ui.captureDetailOrigin(event?.currentTarget, id)
-  ui.selectedRecordId = id
-  ui.showDetail = true
+  const activities = []
+  for (const [value, filter] of [['mood', selectedMood.value], ['type', selectedType.value], ['tag', selectedTag.value]]) {
+    if (filter) activities.push({ kind: 'record.filtered', subjectId: id, otherId: filter, value })
+  }
+  if (filterDate.value) activities.push({ kind: 'calendar.viewed', subjectId: id, otherId: filterDate.value, value: 'date' })
+  ui.openRecordWithActivity(id, activities)
 }
 
-/** 侧栏 todo 项点击 → 打开来源记录详情 */
+
 function openTodoRecord(recordId) {
   if (!recordId) return
   ui.selectedRecordId = recordId
   ui.showDetail = true
 }
 
-/** 侧栏「查看全部」→ 打开全局每日总结 sheet（复用现有入口） */
+// Open daily summaries.
 function openSummarySheet() {
   ui.openSummarySheet()
 }
 
-/** 抽屉内交互：先收起抽屉再执行（详情页/sheet 都是全屏层，叠在抽屉上会打架） */
+
 function onDrawerOpenRecord(recordId) {
   prepareDialogFocusHandoff()
   showSidebarDrawer.value = false
@@ -263,7 +269,7 @@ function onDrawerOpenSummaries() {
   openSummarySheet()
 }
 
-/** 列表内软删除（REVIEWING / FAILED） */
+// Prepare deletion.
 async function onDeleteRecord(record) {
   const proposal = await recordsStore.deleteRecord(record.id)
   if (proposal) deleteProposal.value = proposal
@@ -275,15 +281,15 @@ async function onDeleteActionUpdated(card) {
   if (card?.state === 'SUCCEEDED') {
     toast.success('记录已删除，关联成长贡献已按预览移除')
     await recordsStore.fetchRecords(filterDate.value
-      ? { startDate: filterDate.value, endDate: filterDate.value, ...(selectedTag.value ? { tags: selectedTag.value } : {}) }
-      : (selectedTag.value ? { tags: selectedTag.value } : undefined))
+      ? { startDate: filterDate.value, endDate: filterDate.value, ...filterParams() }
+      : filterParams())
     statsStore.fetchStats(30, true)
   } else if (card?.state === 'CANCELLED') {
     toast.info('已取消删除，记录保持不变')
   }
 }
 
-/** failed 重试先打开详情，再由用户准备并确认新的整理卡。 */
+// Failed records reopen the review flow.
 function onRetryRecord(record) {
   ui.selectedRecordId = record.id
   ui.showDetail = true
@@ -300,7 +306,7 @@ function onRetryRecord(record) {
         <div class="record-date"><strong>{{ dayNumber }}</strong><span>{{ dayMonth }}<small>此刻的你</small></span></div>
         <div class="record-intro-copy"><h2>把今天，留给以后的自己。</h2><button class="record-capture" @click="ui.openWriteModal()"><span>此刻，有什么想记下来？</span><b aria-hidden="true">＋</b></button></div>
       </section>
-      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><label class="record-tag-filter">自由标签<select v-model="selectedTag" aria-label="按自由标签筛选"><option value="">全部标签</option><option v-for="tag in tagOptions" :key="tag" :value="tag">{{ tag }}</option></select></label><span class="record-count">{{ subtitle }}</span></div>
+      <div class="record-toolbar"><div class="record-filters" aria-label="筛选记录"><button v-for="f in recordFilters" :key="f.key" :class="{ selected:recordFilter === f.key }" :aria-pressed="recordFilter === f.key" @click="recordFilter=f.key">{{ f.label }}<span v-if="f.key==='reviewing' && recordsStore.pendingRecords.length">{{ recordsStore.pendingRecords.length }}</span></button></div><label class="record-tag-filter">自由标签<select v-model="selectedTag" aria-label="按自由标签筛选"><option value="">全部标签</option><option v-for="tag in tagOptions" :key="tag" :value="tag">{{ tag }}</option></select></label><label class="record-tag-filter">情绪<select v-model="selectedMood" aria-label="按情绪筛选"><option value="">全部情绪</option><option v-for="(label,key) in moodMap" :key="key" :value="key">{{ label }}</option></select></label><label class="record-tag-filter">内容类型<select v-model="selectedType" aria-label="按内容类型筛选"><option value="">全部类型</option><option v-for="(label,key) in typeMap" :key="key" :value="key">{{ label }}</option></select></label><span class="record-count">{{ subtitle }}</span></div>
       <div v-if="highlightedRecordHidden" class="record-arrival-notice" role="status">新记录已保存，但当前筛选中看不到。<button @click="revealHighlightedRecord">查看新记录</button></div>
       <!-- 桌面双栏：记录列（fluid）+ 侧栏 320px（≥1440px 显示，sticky） -->
       <div class="records-layout">
@@ -392,131 +398,5 @@ function onRetryRecord(record) {
   </div>
 </template>
 
-<style scoped>
-.record-chat-entry { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:9px 13px; margin:0 0 10px; color:#e7faff; background:#102e63; border:1px solid #75d5e359; text-align:left; font-size:13px; }.record-chat-entry svg { width:20px; height:20px; color:var(--cyan); }.record-chat-entry b { margin-left:auto; color:var(--cyan); }.record-chat-entry:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
-.page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-.page-header {
-  display: none; padding: 26px clamp(32px, 4vw, 72px) 0; align-items: baseline; gap: 14px;
-}
-@media (min-width: 900px) { .page-header { display: flex; } }
-.page-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
-.page-subtitle { font-size: 13px; color: var(--text-low); }
-
-.page-content {
-  flex: 1; min-height: 0; overflow-y: auto;
-  padding: 10px 18px var(--page-bottom-clearance);
-  -webkit-overflow-scrolling: touch;
-}
-@media (min-width: 900px) {
-  /* fluid：宽度跟随空间，弹性侧距替代定宽居中（1920 屏内容占比 45%→75%） */
-  .page-content { padding: 18px clamp(32px, 4vw, 72px) 40px; }
-}
-
-/* ===== 双栏：主列 fluid + 右侧栏 320px（≥1440px 常驻；窄屏走抽屉，见下） ===== */
-.records-layout { display: flex; align-items: flex-start; gap: 18px; }
-.records-main { flex: 1; min-width: 0; }
-.records-aside { flex: 0 0 320px; width: 320px; position: sticky; top: 18px; }
-
-/* ===== 窄屏侧栏入口：FAB + 右滑抽屉 ===== */
-.sidebar-fab {
-  position: fixed; z-index: 18;
-  /* 上移让位给右下角的写日记 FAB（52px + 14px 间距），否则两个按钮叠在一起 */
-  right: 16px; bottom: calc(var(--nav-height) + var(--safe-bottom) + 78px);
-  width: 44px; height: 44px; border-radius: 14px;
-  display: grid; place-items: center;
-  background: var(--card); border: 1px solid var(--line);
-  box-shadow: var(--shadow-float);
-}
-.sidebar-fab svg { width: 19px; height: 19px; stroke: var(--text-mid); }
-.sidebar-fab:active { transform: scale(.94); }
-@media (min-width: 1440px) { .sidebar-fab { display: none; } }
-
-.sidebar-overlay { position: fixed; inset: 0; z-index: 46; background: rgba(26,26,23,.35); }
-.sidebar-drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 47;
-  width: min(88vw, 360px);
-  display: flex; flex-direction: column;
-  background: var(--ink); border-left: 1px solid var(--line);
-  box-shadow: var(--shadow-float);
-}
-.sidebar-drawer-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
-}
-.sidebar-drawer-title { font-family: var(--font-display); font-size: 16px; }
-.sidebar-drawer-close { font-size: 13px; color: var(--text-mid); padding: 4px 2px; }
-.sidebar-drawer-close:hover { color: var(--accent); }
-.sidebar-drawer-body {
-  flex: 1; min-height: 0; overflow-y: auto;
-  padding: 12px 14px calc(20px + var(--safe-bottom));
-}
-
-/* 稳定 ID 决定版式；外壳补位，卡面独立响应指针。 */
-.records-grid { position:relative; display:flex; flex-direction:column; gap:30px; }
-.records-day { display:grid; grid-template-columns:86px minmax(0,1fr); gap:20px; align-items:stretch; }
-.records-day.rail-offset-b { grid-template-columns:112px minmax(0,1fr); gap:16px; }
-.date-rail { position:relative; display:flex; flex-direction:column; align-items:flex-end; padding:20px 12px 0 0; color:#d6e7ff; text-align:right; }
-.date-rail::after { content:''; position:absolute; top:31px; bottom:-30px; right:0; width:2px; background:linear-gradient(#50edfa,#80b9ff20); transform:skewY(-13deg); transform-origin:top right; }
-.rail-offset-b .date-rail { padding-top:56px; padding-right:17px; }
-.rail-offset-b .date-rail::after { transform:skewY(12deg); }
-.records-day:last-child .date-rail::after { display:none; }
-.date-rail-dot { position:absolute; right:-4px; top:23px; width:9px; height:9px; border:2px solid var(--cyan); border-radius:50%; background:var(--night); z-index:1; }
-.rail-offset-b .date-rail-dot { top:60px; right:-4px; border-radius:0; transform:rotate(45deg); border-color:var(--pink); }
-.date-rail time { font:700 13px/1.3 var(--font-display); color:white; }
-.date-rail small { margin-top:5px; color:#9ebde9; font-size:10px; }
-.records-day-flow :deep(.record-layout.featured) { width:96%; align-self:flex-start; }
-.records-day-flow { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:15px; }
-.records-day-flow :deep(.record-card) { margin:0; isolation:isolate; position:relative; background:#0b255c; border:1px solid #7ba5e94a; box-shadow:none; color:#eaf1ff; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 20px,100% 100%,13px 100%,0 calc(100% - 14px)); transition:filter .2s,border-color .2s,box-shadow .2s; }
-.records-day-flow :deep(.record-card.featured) { min-height:190px; padding:25px 30px; background:linear-gradient(112deg,#f8fbff 0 83%,#d8faff 83% 100%); color:var(--text-hi); border-color:#d9e6ff; filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); clip-path:polygon(0 0,calc(100% - 42px) 0,100% 42px,100% 100%,20px 100%,0 calc(100% - 20px)); }
-.records-day-flow :deep(.record-layout.layout-1:not(.featured)) { width:84%; align-self:flex-end; margin-right:1.5%; }
-.records-day-flow :deep(.record-card.layout-1:not(.featured)) { padding:20px 24px; clip-path:polygon(24px 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 100%,0 24px); }
-.records-day-flow :deep(.record-layout.layout-2:not(.featured)) { width:91%; align-self:flex-start; margin-left:5%; }
-.records-day-flow :deep(.record-card.layout-2:not(.featured)) { padding:18px 22px; background:#10306d; clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 34px),calc(100% - 34px) 100%,0 100%); }
-.records-day-flow :deep(.record-layout.layout-0:not(.featured)) { width:78%; align-self:flex-end; margin-right:8%; }
-.records-day-flow :deep(.record-card.layout-0:not(.featured)) { padding:18px 22px; clip-path:polygon(0 0,calc(100% - 30px) 0,100% 30px,100% 100%,0 100%); }
-.records-day-flow :deep(.record-card::after) { content:''; position:absolute; right:0; top:0; width:8px; height:100%; background:linear-gradient(var(--cyan),var(--pink)); opacity:.8; clip-path:polygon(0 0,100% 0,100% 72%,0 100%); pointer-events:none; }
-.records-day-flow :deep(.record-card.featured) { filter:drop-shadow(9px 11px 0 #020c3440) drop-shadow(-5px 5px 0 #f03c8a75); }
-.records-day-flow :deep(.record-card:not(.featured)) { filter:drop-shadow(6px 7px 0 #50edfa50) drop-shadow(-5px 3px 0 #f03c8a55); }
-.records-day-flow :deep(.record-card:not(.featured) .record-time), .records-day-flow :deep(.record-card:not(.featured) .record-summary) { color:#b7ccef; }
-.records-day-flow :deep(.record-card:not(.featured) .record-title) { color:white; }
-.records-day-flow :deep(.record-card:not(.featured) .chunk-count) { color:var(--cyan); }
-.records-day-flow :deep(.record-card:hover), .records-day-flow :deep(.record-card:focus-visible), .records-day-flow :deep(.record-card.active) { border-color:var(--cyan); filter:drop-shadow(8px 10px 0 #50edfa88) drop-shadow(-5px 4px 0 #f03c8a75); }
-.record-arrival-notice{display:flex;align-items:center;gap:12px;margin:8px 0;padding:9px 12px;color:#d7eaff;background:#0b255c;border-left:3px solid var(--cyan);font-size:12px}
-.record-arrival-notice button{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
-.records-aside-shell :deep(.side-card) { color:#dce9ff; background:#0a245f; border:1px solid #7ba5e94a; border-bottom:1px solid #7ba5e94a; box-shadow:none; }
-.records-aside-shell :deep(.side-head-note), .records-aside-shell :deep(.side-empty), .records-aside-shell :deep(.sum-line), .records-aside-shell :deep(.sum-date), .records-aside-shell :deep(.today-unit) { color:#b7ccef; }
-.records-aside-shell :deep(.today-num), .records-aside-shell :deep(.side-more) { color:var(--cyan); }
-@media(max-width:599px){.records-day,.records-day.rail-offset-b{grid-template-columns:42px minmax(0,1fr);gap:8px}.date-rail,.rail-offset-b .date-rail{padding:16px 7px 0 0}.date-rail time{font-size:10px}.date-rail small{font-size:8px}.date-rail-dot,.rail-offset-b .date-rail-dot{top:19px;right:-4px}.records-grid{gap:20px}.records-day-flow{gap:11px}.records-day-flow :deep(.record-card.featured){min-height:164px;padding:19px 17px;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,14px 100%,0 calc(100% - 14px))}.records-day-flow :deep(.record-layout.layout-1:not(.featured)){width:96%;margin-right:0}.records-day-flow :deep(.record-layout.layout-2:not(.featured)){width:96%;margin-left:4%}.records-day-flow :deep(.record-layout.layout-0:not(.featured)){width:90%;margin-right:5%}.records-day-flow :deep(.record-layout.featured){width:100%}.records-day-flow :deep(.record-card:not(.featured)){padding:16px}}
-
-.loading-state { display: flex; justify-content: center; padding: 60px 0; }
-
-.records-page .page-content { padding-top:0; }
-.record-intro { position:relative; display:flex; align-items:center; gap:25px; overflow:hidden; min-height:170px; padding:26px 34px; background:#0d43c0; border-left:5px solid var(--cyan); color:white; }
-.record-intro::before { content:''; position:absolute; inset:0; background:url('/art/water-surface.webp') center 20% / cover; opacity:.3; pointer-events:none; }
-.record-date { position:relative; display:flex; gap:12px; align-items:center; padding-right:25px; border-right:1px solid #84bbff70; }
-.record-date strong { font:italic 800 94px/.8 var(--font-display); letter-spacing:-.05em; }
-.record-date span { color:var(--cyan); font:italic 800 27px/1 var(--font-display); text-transform:uppercase; }
-.record-date small { display:block; font:10px var(--font); color:#bed9ff; margin-top:10px; }
-.record-intro-copy { position:relative; flex:1; max-width:90%; z-index:1; }
-.record-intro-copy h2 { font-size:21px; font-weight:900; letter-spacing:-.035em; margin-bottom:15px; }
-.record-capture { display:flex; align-items:center; justify-content:space-between; min-height:45px; width:min(100%,430px); padding:10px 16px; border:1px solid #afdcff80; background:#071c6550; color:#d3eaff; text-align:left; font-size:12px; }
-.record-capture:hover { background:#052562; border-color:var(--cyan); }
-.record-capture b { font-size:24px; line-height:1; color:var(--cyan); }
-
-.record-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 6px; padding-bottom:13px; border-bottom:1px solid #7bafff45; }
-.record-filters { display:flex; gap:6px; }
-.record-tag-filter{display:flex;align-items:center;gap:7px;color:#adc8f4;font-size:11px}.record-tag-filter select{max-width:170px;min-height:34px;padding:5px 24px 5px 9px;border:1px solid #7bafff65;border-radius:3px;background:#071f55;color:white;font:inherit}
-.record-filters button { min-height:36px; padding:6px 16px; font-size:12px; color:#adc8f4; }
-.record-filters button.selected { color:var(--night); background:var(--cyan); font-weight:800; transform:skew(-7deg); box-shadow:3px 3px 0 var(--electric); }
-.record-filters span { margin-left:7px; background:var(--pink); color:white; font-size:10px; padding:0 5px; }
-.record-count { font-size:11px; color:#b7ccef; }
-.records-error { color:white; background:#09215c; padding:24px; border:1px solid #ffabc4; }
-.records-error button { margin-top:16px; }
-.records-main > .empty-state .empty-title { color:white; }
-.records-main > .empty-state .empty-desc { color:var(--on-dark); }
-@media(max-width:1199px){.record-intro{gap:18px;padding:25px}.record-date{padding-right:18px}.record-date strong{font-size:76px}.record-intro-copy h2{font-size:18px}.record-intro-copy{max-width:90%}}
-@media(max-width:599px){.record-intro{padding:24px 18px;min-height:190px;align-items:flex-start}.record-date{display:none}.record-intro-copy{max-width:85%;width:100%}.record-intro-copy h2{font-size:19px;max-width:13em}.record-capture{font-size:11px;padding:9px 12px;margin-top:28px;background:#0516469e}.record-toolbar{flex-wrap:wrap;gap:12px}.record-filters button{padding:6px 13px}.record-tag-filter{flex:1 1 100%;justify-content:flex-start}.record-count{font-size:10px}.record-toolbar{margin-top:18px}}
-
-</style>
+<style scoped src="@/assets/styles/records-view.css"></style>
 <style scoped src="@/assets/styles/persona-records.css"></style>

@@ -19,6 +19,7 @@
 import { ref, computed } from 'vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { CONTENT_TYPES } from '@/constants/tags'
+import VaultChunkReview from './VaultChunkReview.vue'
 
 const props = defineProps({
   /**
@@ -29,6 +30,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['confirm', 'skip', 'remove'])
+const chunkReview = ref(null)
+const waitingReview = ref(false)
 
 const confirmingDelete = ref(false)
 const leaving = ref(false)
@@ -59,8 +62,11 @@ const confirmLabel = computed(() => {
   return isFailed.value ? '补全并让它可被检索' : '确认，让它可被检索'
 })
 
-function onConfirm() {
-  if (!canConfirm.value) return
+async function onConfirm() {
+  if (!canConfirm.value || waitingReview.value) return
+  waitingReview.value = true
+  await chunkReview.value?.waitForReview()
+  waitingReview.value = false
   emit('confirm', {
     key: draft.value.key.trim(),
     description: draft.value.description.trim(),
@@ -121,6 +127,7 @@ function onCancelDelete() {
         未能读懂这份文件的内容——告诉镜子这是什么，它才能被找到
       </div>
 
+      <VaultChunkReview v-if="!isFailed" ref="chunkReview" :item-id="item.id" />
       <!-- key / description 可编辑字段 -->
       <div class="receipt-fields">
         <label class="receipt-field">

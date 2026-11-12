@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { createRecordListLoader } from '@/utils/recordListLoader'
 import { useActionsStore } from '@/stores/actions'
 import { dateLabel } from '@/utils/time'
 import {
@@ -107,19 +108,7 @@ export const useRecordsStore = defineStore('records', () => {
    * @param {Object} [params] - 可选查询参数
    * @returns {Promise<void>}
    */
-  async function fetchRecords(params) {
-    loading.value = true
-    error.value = null
-    try {
-      const res = await apiGetRecords(params)
-      records.value = res.data || []
-    } catch (err) {
-      error.value = err.message || '获取记录失败'
-      console.error('Failed to fetch records:', err)
-    } finally {
-      loading.value = false
-    }
-  }
+  const fetchRecords = createRecordListLoader(apiGetRecords, { records, loading, error })
 
   /**
    * 拉取「某一天」的记录（日历页专用，写独立的 dayRecords）

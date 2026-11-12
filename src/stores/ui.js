@@ -39,6 +39,12 @@ export const useUIStore = defineStore('ui', () => {
 
   /** @type {import('vue').Ref<string | null>} */
   const selectedRecordId = ref(null)
+  const recordAchievement = ref(null)
+  function openRecordWithActivity(id, activities = []) {
+    recordAchievement.value = { recordId: String(id), activities: Array.isArray(activities) ? activities : [activities] }
+    selectedRecordId.value = id
+    showDetail.value = true
+  }
 
   /** @type {import('vue').Ref<'view' | 'review' | 'processing' | 'failed'>} */
   const detailMode = ref('view')
@@ -74,6 +80,7 @@ export const useUIStore = defineStore('ui', () => {
     currentPage.value = page
     showDetail.value = false
     selectedRecordId.value = null
+    recordAchievement.value = null
     detailOrigin.value = null
     return true
   }
@@ -107,6 +114,8 @@ export const useUIStore = defineStore('ui', () => {
     showSummarySheet,
     sidebarSelectedDate,
     selectedRecordId,
+    recordAchievement,
+    openRecordWithActivity,
     detailMode,
     showDetail,
     detailOrigin,

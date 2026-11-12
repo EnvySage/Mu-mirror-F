@@ -15,13 +15,18 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": "/art/achievements/m-01.webp"
+    "image": "/art/achievements/m-01.webp",
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 0,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
   },
   {
     "code": "M-02",
     "english": "MEMORY CORE",
     "name": "记忆引擎",
-    "condition": "启用记忆检索配置，并成功处理第一条获准进入记忆的内容。",
+    "condition": "启用记忆检索配置，让第一条获准进入记忆的内容就绪。",
     "motif": "core",
     "group": {
       "id": "M",
@@ -30,16 +35,21 @@
       "accent": "#ff947d",
       "frame": "gear"
     },
-    "difficulty": 2,
-    "starter": false,
+    "difficulty": 1,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 1,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
   },
   {
     "code": "M-03",
     "english": "DUAL SIGNAL",
-    "name": "双面回声",
-    "condition": "使用两份不同的已保存模型配置，各成功完成至少一轮对话。",
+    "name": "双路信号",
+    "condition": "使用两份不同的已保存模型配置，各完成一次有效对话。",
     "motif": "dual",
     "group": {
       "id": "M",
@@ -51,13 +61,123 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 2,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": true
+  },
+  {
+    "code": "M-04",
+    "name": "备用频道",
+    "english": "SECOND CHANNEL",
+    "condition": "保存一份备用模型配置，并成功测试连接。",
+    "difficulty": 1,
+    "group": {
+      "id": "M",
+      "label": "模型",
+      "ink": "#65e8f6",
+      "accent": "#ff947d",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 3,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
+  },
+  {
+    "code": "M-05",
+    "name": "校准完成",
+    "english": "CALIBRATED",
+    "condition": "分别完成对话模型与记忆检索模型的连接测试。",
+    "difficulty": 2,
+    "group": {
+      "id": "M",
+      "label": "模型",
+      "ink": "#65e8f6",
+      "accent": "#ff947d",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 4,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
+  },
+  {
+    "code": "M-06",
+    "name": "各司其职",
+    "english": "RIGHT CONNECTION",
+    "condition": "为对话与记忆检索配置各自可用的模型，完成一次记忆问答。",
+    "difficulty": 2,
+    "group": {
+      "id": "M",
+      "label": "模型",
+      "ink": "#65e8f6",
+      "accent": "#ff947d",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 5,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
+  },
+  {
+    "code": "M-07",
+    "name": "自如切换",
+    "english": "SAFE SWITCH",
+    "condition": "切换到备用配置后完成对话，再切回原配置完成对话。",
+    "difficulty": 2,
+    "group": {
+      "id": "M",
+      "label": "模型",
+      "ink": "#65e8f6",
+      "accent": "#ff947d",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 6,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": false
+  },
+  {
+    "code": "M-08",
+    "name": "长明之镜",
+    "english": "STEADY SIGNAL",
+    "condition": "在 30 个不同日期使用自己配置的模型完成有效对话。",
+    "difficulty": 3,
+    "group": {
+      "id": "M",
+      "label": "模型",
+      "ink": "#65e8f6",
+      "accent": "#ff947d",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/m-atlas.png",
+    "atlasIndex": 7,
+    "setName": "镜面接线室",
+    "setDescription": "从第一次接通，到找到适合自己的模型。",
+    "plating": true
   },
   {
     "code": "R-01",
     "english": "FIRST TRACE",
     "name": "此刻入档",
-    "condition": "成功保存第一条记录。仅保存的记录也计入。",
+    "condition": "成功保存第一条记录，仅保存的记录也计入。",
     "motif": "notebook",
     "group": {
       "id": "R",
@@ -69,7 +189,12 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": "/art/achievements/r-01.webp"
+    "image": "/art/achievements/r-01.webp",
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 0,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "R-02",
@@ -87,12 +212,17 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 1,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": true
   },
   {
     "code": "R-03",
     "english": "LONG RECORD",
-    "name": "长页显影",
+    "name": "长页留影",
     "condition": "累计保存 30 条记录。",
     "motif": "pages",
     "group": {
@@ -105,7 +235,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 2,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "R-04",
@@ -123,7 +258,33 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 3,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": true
+  },
+  {
+    "code": "R-05",
+    "name": "补上一笔",
+    "english": "SECOND DRAFT",
+    "condition": "重新打开一条仅保存的记录，补充原文并保存。",
+    "difficulty": 1,
+    "group": {
+      "id": "R",
+      "label": "记录",
+      "ink": "#ffd17a",
+      "accent": "#fa7764",
+      "frame": "kite"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 4,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "R-06",
@@ -141,7 +302,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 5,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "R-07",
@@ -159,7 +325,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 6,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "R-08",
@@ -177,7 +348,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/r-atlas.png",
+    "atlasIndex": 7,
+    "setName": "日常留痕",
+    "setDescription": "一件小事、一页日常，慢慢连成自己的时间。",
+    "plating": false
   },
   {
     "code": "D-01",
@@ -195,13 +371,18 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": "/art/achievements/d-01.webp"
+    "image": "/art/achievements/d-01.webp",
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 0,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
   },
   {
     "code": "D-02",
     "english": "DAILY SIGNAL",
     "name": "日常对谈",
-    "condition": "累计完成 20 轮成功对话，且分布在至少 5 个不同日期。",
+    "condition": "累计完成 20 轮有效对话，分布在至少 5 个不同日期。",
     "motif": "wave",
     "group": {
       "id": "D",
@@ -213,13 +394,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 1,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
   },
   {
     "code": "D-03",
     "english": "ECHO RETURN",
     "name": "旧日回声",
-    "condition": "首次打开并载入一段至少含一轮对话的历史会话。",
+    "condition": "打开并载入一段有完整回复的往日会话。",
     "motif": "rewind",
     "group": {
       "id": "D",
@@ -229,9 +415,56 @@
       "frame": "cut"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 2,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
+  },
+  {
+    "code": "D-04",
+    "name": "循迹而来",
+    "english": "FOLLOW THE TRACE",
+    "condition": "从对话的记录引用中打开一条原始记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "D",
+      "label": "对话",
+      "ink": "#6cf2ef",
+      "accent": "#ff82ca",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 3,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
+  },
+  {
+    "code": "D-05",
+    "name": "记得这件事",
+    "english": "MEMORY ANSWERS",
+    "condition": "获得一次带有本人记忆引用的有效回答。",
+    "difficulty": 2,
+    "group": {
+      "id": "D",
+      "label": "对话",
+      "ink": "#6cf2ef",
+      "accent": "#ff82ca",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 4,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": true
   },
   {
     "code": "D-06",
@@ -249,7 +482,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 5,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
   },
   {
     "code": "D-07",
@@ -267,13 +505,39 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 6,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": false
+  },
+  {
+    "code": "D-08",
+    "name": "线索交汇",
+    "english": "THREADS CONNECT",
+    "condition": "在一次会话中获得记录与资产引用，并分别打开原始来源。",
+    "difficulty": 3,
+    "group": {
+      "id": "D",
+      "label": "对话",
+      "ink": "#6cf2ef",
+      "accent": "#ff82ca",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/d-atlas.png",
+    "atlasIndex": 7,
+    "setName": "回声频道",
+    "setDescription": "从一句问候，到把散落的线索重新连起来。",
+    "plating": true
   },
   {
     "code": "K-01",
     "english": "MEMORY TRACE",
     "name": "记忆显影",
-    "condition": "首次确认至少一个记录片段进入长期记忆，并完成索引。",
+    "condition": "首次确认一条记录片段进入长期记忆，并完成就绪。",
     "motif": "memory",
     "group": {
       "id": "K",
@@ -285,13 +549,18 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 0,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
   },
   {
     "code": "K-02",
     "english": "WORD ARCHIVE",
-    "name": "教会镜子一个词",
-    "condition": "手动添加或确认第一个个人词条。",
+    "name": "教镜子一个词",
+    "condition": "手动添加或确认第一个个人词典项。",
     "motif": "lexicon",
     "group": {
       "id": "K",
@@ -301,15 +570,20 @@
       "frame": "vault"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 1,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
   },
   {
     "code": "K-03",
     "english": "ECHO MATCH",
-    "name": "词语共鸣",
-    "condition": "一条已确认的个人词条首次进入对话上下文，且该轮回复成功。",
+    "name": "私语共振",
+    "condition": "让一个已确认的个人词条进入对话上下文，并获得有效回复。",
     "motif": "resonance",
     "group": {
       "id": "K",
@@ -321,7 +595,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": true,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 2,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
   },
   {
     "code": "K-04",
@@ -339,7 +618,75 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 3,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": true
+  },
+  {
+    "code": "K-05",
+    "name": "同一种语言",
+    "english": "WORD CONNECTION",
+    "condition": "为一个个人词条补充别名并保存。",
+    "difficulty": 1,
+    "group": {
+      "id": "K",
+      "label": "记忆与词典",
+      "ink": "#a5deff",
+      "accent": "#a5a7ff",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 4,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
+  },
+  {
+    "code": "K-06",
+    "name": "有据可查",
+    "english": "SOURCE FOUND",
+    "condition": "从一个词典项的依据入口打开原始记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "K",
+      "label": "记忆与词典",
+      "ink": "#a5deff",
+      "accent": "#a5a7ff",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 5,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
+  },
+  {
+    "code": "K-07",
+    "name": "亲手校对",
+    "english": "MEMORY REVISED",
+    "condition": "修改候选记忆片段后，主动确认它进入长期记忆。",
+    "difficulty": 2,
+    "group": {
+      "id": "K",
+      "label": "记忆与词典",
+      "ink": "#a5deff",
+      "accent": "#a5a7ff",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 6,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": false
   },
   {
     "code": "K-08",
@@ -357,12 +704,17 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/k-atlas.png",
+    "atlasIndex": 7,
+    "setName": "记忆织网",
+    "setDescription": "让镜子记住你认可的内容，也学会你的语言。",
+    "plating": true
   },
   {
     "code": "P-01",
     "english": "FIRST PLAN",
-    "name": "念头成形",
+    "name": "念头落地",
     "condition": "首次登记一条待办，可手动创建或确认 AI 建议。",
     "motif": "plan",
     "group": {
@@ -373,14 +725,19 @@
       "frame": "shield"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 0,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
   },
   {
     "code": "P-02",
     "english": "TASK COMPLETE",
-    "name": "三件落地",
+    "name": "三事已毕",
     "condition": "完成 3 条不同的待办。",
     "motif": "checks",
     "group": {
@@ -393,13 +750,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 1,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": true
   },
   {
     "code": "P-03",
     "english": "ACTION APPROVED",
-    "name": "建议有了回音",
-    "condition": "确认一条 AI 行动提案，且提案执行成功。",
+    "name": "让建议变成行动",
+    "condition": "确认一项 AI 行动提案，并执行成功。",
     "motif": "launch",
     "group": {
       "id": "P",
@@ -411,7 +773,75 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 2,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
+  },
+  {
+    "code": "P-04",
+    "name": "自己的航标",
+    "english": "OWN DIRECTION",
+    "condition": "手动创建一条待办，并填写具体描述。",
+    "difficulty": 1,
+    "group": {
+      "id": "P",
+      "label": "待办与行动",
+      "ink": "#e6f79c",
+      "accent": "#6ed9ad",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 3,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
+  },
+  {
+    "code": "P-05",
+    "name": "调整航线",
+    "english": "COURSE CORRECTION",
+    "condition": "修改一条待办的内容或状态并保存。",
+    "difficulty": 1,
+    "group": {
+      "id": "P",
+      "label": "待办与行动",
+      "ink": "#e6f79c",
+      "accent": "#6ed9ad",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 4,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
+  },
+  {
+    "code": "P-06",
+    "name": "来处与去处",
+    "english": "LINKED ACTION",
+    "condition": "从待办的来源入口查看它对应的原始记录。",
+    "difficulty": 2,
+    "group": {
+      "id": "P",
+      "label": "待办与行动",
+      "ink": "#e6f79c",
+      "accent": "#6ed9ad",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 5,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
   },
   {
     "code": "P-07",
@@ -429,7 +859,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 6,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": false
   },
   {
     "code": "P-08",
@@ -447,12 +882,17 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/p-atlas.png",
+    "atlasIndex": 7,
+    "setName": "行动航线",
+    "setDescription": "把想法放进待办，让完成留下可以追溯的足迹。",
+    "plating": true
   },
   {
     "code": "C-01",
     "english": "DAILY ECHO",
-    "name": "昨日回声",
+    "name": "当日回信",
     "condition": "首次展开一篇已生成的每日总结全文。",
     "motif": "daily",
     "group": {
@@ -463,9 +903,14 @@
       "frame": "kite"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 0,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
   },
   {
     "code": "C-02",
@@ -483,13 +928,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 1,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": true
   },
   {
     "code": "C-03",
     "english": "OLD DATE",
-    "name": "重逢旧日",
-    "condition": "从时间日历打开一条距今至少 30 天的记录。",
+    "name": "重访旧日",
+    "condition": "从时间日历打开一条至少创建于 30 天前的记录。",
     "motif": "hourglass",
     "group": {
       "id": "C",
@@ -501,7 +951,75 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 2,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
+  },
+  {
+    "code": "C-04",
+    "name": "翻过一页",
+    "english": "CALENDAR TURN",
+    "condition": "在时间日历切换月份，并打开当月的一条记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "C",
+      "label": "总结与日历",
+      "ink": "#ffc6ab",
+      "accent": "#8ddbf5",
+      "frame": "kite"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 3,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
+  },
+  {
+    "code": "C-05",
+    "name": "循日寻迹",
+    "english": "DATE FOUND",
+    "condition": "通过日历的日期入口查看指定日期的记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "C",
+      "label": "总结与日历",
+      "ink": "#ffc6ab",
+      "accent": "#8ddbf5",
+      "frame": "kite"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 4,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
+  },
+  {
+    "code": "C-06",
+    "name": "昨日有回声",
+    "english": "YESTERDAY AGAIN",
+    "condition": "在次日展开前一天的每日总结。",
+    "difficulty": 1,
+    "group": {
+      "id": "C",
+      "label": "总结与日历",
+      "ink": "#ffc6ab",
+      "accent": "#8ddbf5",
+      "frame": "kite"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 5,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
   },
   {
     "code": "C-07",
@@ -519,7 +1037,33 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 6,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": false
+  },
+  {
+    "code": "C-08",
+    "name": "时间的长廊",
+    "english": "LONG CORRIDOR",
+    "condition": "通过日历查看分属 6 个不同月份的记录。",
+    "difficulty": 3,
+    "group": {
+      "id": "C",
+      "label": "总结与日历",
+      "ink": "#ffc6ab",
+      "accent": "#8ddbf5",
+      "frame": "kite"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/c-atlas.png",
+    "atlasIndex": 7,
+    "setName": "时光回廊",
+    "setDescription": "翻一页总结，也重新遇见走过的日子。",
+    "plating": true
   },
   {
     "code": "REF-01",
@@ -535,14 +1079,19 @@
       "frame": "vault"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 0,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
   },
   {
     "code": "REF-02",
     "english": "MONTHLY LAYERS",
-    "name": "月痕留档",
+    "name": "月候叠影",
     "condition": "为 3 个不同月份成功生成月度画像。",
     "motif": "layers",
     "group": {
@@ -555,13 +1104,18 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 1,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
   },
   {
     "code": "REF-03",
     "english": "DOUBLE EXPOSURE",
-    "name": "两面之间",
-    "condition": "成功查看两份不同画像快照的对比结果。",
+    "name": "两次之间",
+    "condition": "查看两份不同画像快照的对比结果。",
     "motif": "exposure",
     "group": {
       "id": "REF",
@@ -573,7 +1127,75 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 2,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": true
+  },
+  {
+    "code": "REF-04",
+    "name": "读懂镜面",
+    "english": "CLOSER LOOK",
+    "condition": "展开并完整查看一份已生成的画像。",
+    "difficulty": 1,
+    "group": {
+      "id": "REF",
+      "label": "我的镜子",
+      "ink": "#b3e6ff",
+      "accent": "#fe94cf",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 3,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
+  },
+  {
+    "code": "REF-05",
+    "name": "回到那时",
+    "english": "OLD REFLECTION",
+    "condition": "从画像档案中打开一份历史快照。",
+    "difficulty": 1,
+    "group": {
+      "id": "REF",
+      "label": "我的镜子",
+      "ink": "#b3e6ff",
+      "accent": "#fe94cf",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 4,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
+  },
+  {
+    "code": "REF-06",
+    "name": "看见变化",
+    "english": "VISIBLE CHANGE",
+    "condition": "对比两份间隔至少 30 天的画像快照。",
+    "difficulty": 2,
+    "group": {
+      "id": "REF",
+      "label": "我的镜子",
+      "ink": "#b3e6ff",
+      "accent": "#fe94cf",
+      "frame": "vault"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 5,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
   },
   {
     "code": "REF-07",
@@ -591,7 +1213,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 6,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": false
   },
   {
     "code": "REF-08",
@@ -609,12 +1236,17 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/ref-atlas.png",
+    "atlasIndex": 7,
+    "setName": "自我显影",
+    "setDescription": "保留此刻的自己，也看见变化是怎样发生的。",
+    "plating": true
   },
   {
     "code": "T-01",
     "english": "ARCANA DRAW",
-    "name": "偶然相逢",
+    "name": "偶然回声",
     "condition": "完成第一次每日抽牌。",
     "motif": "moon",
     "group": {
@@ -627,12 +1259,17 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": "/art/achievements/t-01.webp"
+    "image": "/art/achievements/t-01.webp",
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 0,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
   },
   {
     "code": "T-02",
     "english": "STAR PATH",
-    "name": "星轨留痕",
+    "name": "星轨七日",
     "condition": "在 7 个不同日期完成每日抽牌。",
     "motif": "orbit",
     "group": {
@@ -645,13 +1282,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 1,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": true
   },
   {
     "code": "T-03",
     "english": "MAJOR ARCANA",
-    "name": "大阿卡那同行",
-    "condition": "通过每日抽牌收藏全部 22 张不同的大阿卡那牌。",
+    "name": "大阿卡纳同席",
+    "condition": "通过每日抽牌收藏全部 22 张不同的大阿卡纳。",
     "motif": "deck",
     "group": {
       "id": "T",
@@ -663,7 +1305,33 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 2,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
+  },
+  {
+    "code": "T-04",
+    "name": "牌面的另一侧",
+    "english": "BOTH SIDES",
+    "condition": "在收藏中分别查看一张牌的正位与逆位释义。",
+    "difficulty": 1,
+    "group": {
+      "id": "T",
+      "label": "塔罗",
+      "ink": "#ffdb8a",
+      "accent": "#b88cff",
+      "frame": "star"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 3,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
   },
   {
     "code": "T-05",
@@ -681,7 +1349,12 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 4,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
   },
   {
     "code": "T-06",
@@ -699,7 +1372,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 5,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
   },
   {
     "code": "T-07",
@@ -717,7 +1395,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 6,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": true
   },
   {
     "code": "T-08",
@@ -735,12 +1418,17 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/t-atlas.png",
+    "atlasIndex": 7,
+    "setName": "星轨收藏",
+    "setDescription": "从偶然的一张牌，到一整片属于你的星图。",
+    "plating": false
   },
   {
     "code": "V-01",
     "english": "FIRST ARCHIVE",
-    "name": "收藏第一束光",
+    "name": "收藏第一件",
     "condition": "确认归档第一份记忆资产。",
     "motif": "archive",
     "group": {
@@ -753,12 +1441,17 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 0,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
   },
   {
     "code": "V-02",
     "english": "TEN RELICS",
-    "name": "个人典藏",
+    "name": "十件私藏",
     "condition": "累计确认归档 10 份不同的记忆资产。",
     "motif": "relics",
     "group": {
@@ -771,13 +1464,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 1,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": true
   },
   {
     "code": "V-03",
     "english": "FOUND AGAIN",
-    "name": "线索归位",
-    "condition": "首次通过资产搜索找到并打开一份已归档的资产。",
+    "name": "失物归位",
+    "condition": "打开一次由对话检索找到的已归档资产。",
     "motif": "search",
     "group": {
       "id": "V",
@@ -786,10 +1484,78 @@
       "accent": "#f2bb72",
       "frame": "cut"
     },
-    "difficulty": 1,
+    "difficulty": 2,
     "starter": false,
     "hidden": true,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 2,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
+  },
+  {
+    "code": "V-04",
+    "name": "翻开档案",
+    "english": "OPEN ARCHIVE",
+    "condition": "从资产列表预览一份已归档文件。",
+    "difficulty": 1,
+    "group": {
+      "id": "V",
+      "label": "记忆资产",
+      "ink": "#b9ebd8",
+      "accent": "#f2bb72",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 3,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
+  },
+  {
+    "code": "V-05",
+    "name": "读过再收好",
+    "english": "REVIEWED FILE",
+    "condition": "检查提取出的文件片段，确认后完成归档。",
+    "difficulty": 1,
+    "group": {
+      "id": "V",
+      "label": "记忆资产",
+      "ink": "#b9ebd8",
+      "accent": "#f2bb72",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 4,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
+  },
+  {
+    "code": "V-06",
+    "name": "材料相互照亮",
+    "english": "LINKED RELICS",
+    "condition": "在同一段对话中打开两份不同的资产引用。",
+    "difficulty": 2,
+    "group": {
+      "id": "V",
+      "label": "记忆资产",
+      "ink": "#b9ebd8",
+      "accent": "#f2bb72",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 5,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
   },
   {
     "code": "V-07",
@@ -807,13 +1573,39 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 6,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": false
+  },
+  {
+    "code": "V-08",
+    "name": "随手可得",
+    "english": "LIVING ARCHIVE",
+    "condition": "在 12 个不同日期，通过对话找到并打开自己的资产。",
+    "difficulty": 3,
+    "group": {
+      "id": "V",
+      "label": "记忆资产",
+      "ink": "#b9ebd8",
+      "accent": "#f2bb72",
+      "frame": "cut"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/v-atlas.png",
+    "atlasIndex": 7,
+    "setName": "私人档案馆",
+    "setDescription": "收藏有用的材料，也让它们在需要的时候出现。",
+    "plating": true
   },
   {
     "code": "G-01",
     "english": "FIRST GROWTH",
     "name": "成长有据",
-    "condition": "首次在五维成长账本记下一笔已确认的成长记录。",
+    "condition": "首次向成长账本加入一条已确认的成长记录。",
     "motif": "sprout",
     "group": {
       "id": "G",
@@ -825,13 +1617,18 @@
     "difficulty": 1,
     "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 0,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
   },
   {
     "code": "G-02",
     "english": "THREE AXES",
     "name": "三维显影",
-    "condition": "至少 3 个不同成长维度各有一笔已确认的成长记录。",
+    "condition": "在 3 个不同成长维度各留下一条已确认记录。",
     "motif": "axes",
     "group": {
       "id": "G",
@@ -843,12 +1640,17 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 1,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
   },
   {
     "code": "G-03",
     "english": "PERSONAL SCALE",
-    "name": "按自己的刻度",
+    "name": "用自己的刻度",
     "condition": "首次记成长分前，自定义并保存至少一个成长维度。",
     "motif": "ruler",
     "group": {
@@ -859,9 +1661,35 @@
       "frame": "star"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 2,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
+  },
+  {
+    "code": "G-04",
+    "name": "为进步命名",
+    "english": "NAMED GROWTH",
+    "condition": "为一个尚未计分的成长维度设置自己的名称与说明。",
+    "difficulty": 1,
+    "group": {
+      "id": "G",
+      "label": "五维成长",
+      "ink": "#daf997",
+      "accent": "#f297b5",
+      "frame": "star"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 3,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
   },
   {
     "code": "G-05",
@@ -879,7 +1707,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 4,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": true
   },
   {
     "code": "G-06",
@@ -897,7 +1730,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 5,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
   },
   {
     "code": "G-07",
@@ -915,7 +1753,12 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 6,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": false
   },
   {
     "code": "G-08",
@@ -933,13 +1776,18 @@
     "difficulty": 3,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/g-atlas.png",
+    "atlasIndex": 7,
+    "setName": "生长刻度",
+    "setDescription": "自己定义进步，再为每一步留下具体的记录。",
+    "plating": true
   },
   {
     "code": "S-01",
     "english": "MOOD SPECTRUM",
-    "name": "情绪光谱",
-    "condition": "在已确认记录中留下 5 种不同的情绪。",
+    "name": "情绪折光",
+    "condition": "在已确认的记忆片段中留下 5 种不同情绪。",
     "motif": "prism",
     "group": {
       "id": "S",
@@ -951,13 +1799,18 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 0,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
   },
   {
     "code": "S-02",
     "english": "MANY FACETS",
     "name": "生活有几面",
-    "condition": "在已保存记录中使用至少 4 种不同的记录类型。",
+    "condition": "在已确认的记忆片段中使用 4 种不同内容类型。",
     "motif": "facets",
     "group": {
       "id": "S",
@@ -969,7 +1822,12 @@
     "difficulty": 2,
     "starter": false,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 1,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": true
   },
   {
     "code": "S-03",
@@ -985,14 +1843,124 @@
       "frame": "shield"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 2,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
+  },
+  {
+    "code": "S-04",
+    "name": "看见心情",
+    "english": "MOOD VIEW",
+    "condition": "使用情绪筛选，打开一条符合该情绪的记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "S",
+      "label": "生活信号",
+      "ink": "#ffc4e2",
+      "accent": "#9adff9",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 3,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
+  },
+  {
+    "code": "S-05",
+    "name": "按线索找回",
+    "english": "SIGNAL FOUND",
+    "condition": "使用内容类型筛选，打开一条匹配的记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "S",
+      "label": "生活信号",
+      "ink": "#ffc4e2",
+      "accent": "#9adff9",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 4,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
+  },
+  {
+    "code": "S-06",
+    "name": "词语的经纬",
+    "english": "TAG THREAD",
+    "condition": "给记录添加自由标签，再用该标签找到它。",
+    "difficulty": 2,
+    "group": {
+      "id": "S",
+      "label": "生活信号",
+      "ink": "#ffc4e2",
+      "accent": "#9adff9",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 5,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
+  },
+  {
+    "code": "S-07",
+    "name": "双份留存",
+    "english": "TWIN BACKUP",
+    "condition": "分别成功导出 JSON 和 Markdown 数据。",
+    "difficulty": 2,
+    "group": {
+      "id": "S",
+      "label": "生活信号",
+      "ink": "#ffc4e2",
+      "accent": "#9adff9",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 6,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": false
+  },
+  {
+    "code": "S-08",
+    "name": "完整的光谱",
+    "english": "FULL SPECTRUM",
+    "condition": "在 12 个不同月份留下带情绪的已确认记忆。",
+    "difficulty": 3,
+    "group": {
+      "id": "S",
+      "label": "生活信号",
+      "ink": "#ffc4e2",
+      "accent": "#9adff9",
+      "frame": "shield"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/s-atlas.png",
+    "atlasIndex": 7,
+    "setName": "生活光谱",
+    "setDescription": "从情绪、类型与数据里，看见生活的不同切面。",
+    "plating": true
   },
   {
     "code": "SYS-01",
     "english": "HOME BASE",
-    "name": "入口由我",
+    "name": "安放日常",
     "condition": "首次更改并保存默认首页。",
     "motif": "home",
     "group": {
@@ -1003,8 +1971,160 @@
       "frame": "gear"
     },
     "difficulty": 1,
-    "starter": false,
+    "starter": true,
     "hidden": false,
-    "image": null
+    "image": null,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 0,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-02",
+    "name": "落笔的方式",
+    "english": "WRITE YOUR WAY",
+    "condition": "选择并保存自己的默认记录方式。",
+    "difficulty": 1,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 1,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-03",
+    "name": "记忆的远近",
+    "english": "MEMORY RANGE",
+    "condition": "调整并保存记忆检索的时间权重。",
+    "difficulty": 1,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 2,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-04",
+    "name": "回望的深度",
+    "english": "LOOKBACK LENS",
+    "condition": "选择并保存生成画像时的原文回看深度。",
+    "difficulty": 1,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 3,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-05",
+    "name": "另一种视角",
+    "english": "ANOTHER VIEW",
+    "condition": "切换桌面与手机布局，分别查看一次日常记录。",
+    "difficulty": 1,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": true,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 4,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-06",
+    "name": "熟悉这张桌子",
+    "english": "KNOW THE DESK",
+    "condition": "依次查看设置中的显示、记录、记忆和数据区域。",
+    "difficulty": 1,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 5,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": false
+  },
+  {
+    "code": "SYS-07",
+    "name": "量身调校",
+    "english": "PERSONAL TUNING",
+    "condition": "完成首页、记录方式、检索权重与回看深度的个人设置。",
+    "difficulty": 2,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 6,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": true
+  },
+  {
+    "code": "SYS-08",
+    "name": "自己的陈列室",
+    "english": "OWN EXHIBITION",
+    "condition": "选择 8 枚不同的章，排好顺序并保存一个完整展示架。",
+    "difficulty": 2,
+    "group": {
+      "id": "SYS",
+      "label": "个人设置",
+      "ink": "#d4dfff",
+      "accent": "#94aaff",
+      "frame": "gear"
+    },
+    "hidden": false,
+    "starter": false,
+    "atlas": "/art/achievements/sets/sys-atlas.png",
+    "atlasIndex": 7,
+    "setName": "我的工作台",
+    "setDescription": "让 Mirror 按照你的习惯，成为顺手的个人空间。",
+    "plating": true
   }
 ]

@@ -8,7 +8,7 @@ import { useDialogFocus } from '@/composables/useDialogFocus'
 
 const PdfDocumentPreview = defineAsyncComponent(() => import('@/components/molecules/PdfDocumentPreview.vue'))
 const props = defineProps({ item: { type: Object, required: true }, origin: { type: Object, default: null } })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'loaded'])
 const loading = ref(true), error = ref(''), downloadError = ref(''), downloading = ref(false)
 const mime = ref(''), objectUrl = ref(''), textContent = ref(''), documentHtml = ref('')
 const rawBlob = shallowRef(null), truncated = ref(false), imageZoom = ref(1)
@@ -55,6 +55,7 @@ async function load() {
       // Servers may return octet-stream; restore the known file MIME for native media.
       objectUrl.value = URL.createObjectURL(blob.slice(0, blob.size, type.mime))
     }
+    if (['markdown', 'text', 'csv', 'docx'].includes(type.kind) && isCurrent(id)) emit('loaded', props.item)
   } catch (e) {
     if (isCurrent(id) && e.code !== 'ERR_CANCELED') error.value = kind.value === 'docx' ? '这份 Word 文件未能打开，文件可能已损坏。你可以重试或下载原文件。' : e.message || '文件未能打开，请重试。'
   } finally { if (isCurrent(id)) loading.value = false }
@@ -117,15 +118,15 @@ onBeforeUnmount(() => { active.value = false; generation++; controller?.abort();
               </div>
             </div>
             <template v-else-if="kind === 'docx'"><p class="fpm-note">Word 内容预览 · 复杂页眉、图表和分页请下载原文件查看。</p><article class="fpm-document fpm-word" v-html="documentHtml || '<p>这份文档还没有文字。</p>'" /></template>
-            <PdfDocumentPreview v-else-if="kind === 'pdf' && rawBlob" :blob="rawBlob" />
+            <PdfDocumentPreview v-else-if="kind === 'pdf' && rawBlob" :blob="rawBlob" @loaded="emit('loaded', item)" />
             <div v-else-if="kind === 'image'" class="fpm-image-view">
               <div class="fpm-image-tools"><button :aria-pressed="imageZoom === 1" @click="imageZoom = 1">适应窗口</button><button :aria-pressed="imageZoom === 2" @click="imageZoom = 2">放大查看</button></div>
-              <div class="fpm-image-scroll" tabindex="0" aria-label="图片预览"><img :src="objectUrl" :alt="displayName" :style="{ maxWidth: imageZoom === 1 ? '100%' : 'none', width: imageZoom === 1 ? 'auto' : '200%' }" @error="mediaError"></div>
+              <div class="fpm-image-scroll" tabindex="0" aria-label="图片预览"><img :src="objectUrl" :alt="displayName" :style="{ maxWidth: imageZoom === 1 ? '100%' : 'none', width: imageZoom === 1 ? 'auto' : '200%' }" @load="emit('loaded', item)" @error="mediaError"></div>
             </div>
             <div v-else-if="kind === 'audio'" class="fpm-audio">
               <div class="audio-disc" :class="{ 'is-playing': audioPlaying }" aria-hidden="true"><i /><span>KEEP<br>LISTENING.</span></div>
               <span class="audio-caption">SOUNDTRACK OF YOUR DAYS</span><h3>{{ displayName }}</h3>
-              <audio :src="objectUrl" controls preload="metadata" :aria-label="displayName" @play="audioPlaying = true" @pause="audioPlaying = false" @ended="audioPlaying = false" @error="mediaError" />
+              <audio :src="objectUrl" controls preload="metadata" :aria-label="displayName" @loadeddata="emit('loaded', item)" @play="audioPlaying = true" @pause="audioPlaying = false" @ended="audioPlaying = false" @error="mediaError" />
               <p>按下播放，回到那个瞬间。</p>
             </div>
             <div v-else class="fpm-state"><b class="fpm-state-mark">↗</b><strong>这类文件暂不支持直接预览。</strong><span>下载原文件后，用对应的应用打开。</span></div>

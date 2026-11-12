@@ -11,8 +11,8 @@
 | [记录流程](record-workflow.md) | 记录列表、后台整理、审核与记忆授权 |
 | [UI 改版](ui-redesign.md) | Blue hour / P3R 视觉规范与素材出处 |
 | [模型中心与移动对话](model-center-mobile-chat.md) | `/models` 与移动 `/chat` 行为 |
-| [成就目录评审](achievement-catalog-review.md) | 96 枚设计目录与后端 56 枚对照 |
-| [成就套装与镀层](achievement-sets-and-plating.md) | 套装图集、镀层外观草案 |
+| [成就目录评审](achievement-catalog-review.md) | 96 枚正式目录、稳定编号与行为口径 |
+| [成就套装与镀层](achievement-sets-and-plating.md) | 套装图集、真实账号镀层与行为采集 |
 | [塔罗 v2 前端](tarot-v2-frontend.md) | 78 张牌、逆位、历史分页的现行行为 |
 | [塔罗 v2 美术](tarot-v2-art.md) | 图集、哈希清单与素材生成 |
 | [塔罗素材](tarot-assets.md) | v1/v2 素材与使用位置 |

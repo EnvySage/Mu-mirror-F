@@ -5,11 +5,13 @@ import { useUIStore } from '@/stores/ui'
 import { useAchievementsStore } from '@/stores/achievements'
 import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AchievementDialog from './AchievementDialog.vue'
+import { notificationKey, notificationMedal } from '@/utils/achievementNotifications'
 
 const auth = useAuthStore()
 const ui = useUIStore()
 const achievements = useAchievementsStore()
 const displayed = ref(null)
+const displayedNotification = ref(null)
 const busy = ref(false)
 const dismissed = new Set()
 let timer
@@ -21,20 +23,24 @@ async function check() {
   busy.value = true
   try {
     await achievements.poll()
-    const next = achievements.pending.find(item => !dismissed.has(item.code))
-    const medal = next && achievements.catalog.find(item => item.code === next.code)
-    if (alive && available.value && medal && !document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) displayed.value = medal
+    const next = achievements.pending.find(item => !dismissed.has(notificationKey(item)))
+    const medal = notificationMedal(next, achievements.catalog)
+    if (alive && available.value && medal && !document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) {
+      displayedNotification.value = next
+      displayed.value = medal
+    }
   } catch { /* Pending awards remain on the server until acknowledged. */ }
   finally { busy.value = false }
 }
 function close() {
-  const code = displayed.value?.code
+  const notification = displayedNotification.value
   displayed.value = null
-  if (!code) return
-  dismissed.add(code)
-  achievements.acknowledge(code).catch(() => {})
+  displayedNotification.value = null
+  if (!notification) return
+  dismissed.add(notificationKey(notification))
+  achievements.acknowledge(notification).catch(() => {})
 }
-watch(() => auth.user?.id, () => { displayed.value = null; dismissed.clear() })
+watch(() => auth.user?.id, () => { displayed.value = null; displayedNotification.value = null; dismissed.clear() })
 onMounted(() => {
   if (IS_DEMO_PREVIEW) return
   timer = setInterval(check, 10000)

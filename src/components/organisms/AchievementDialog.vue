@@ -11,6 +11,7 @@ const replay = ref(0)
 const finish = ref(null)
 watch(() => props.medal?.code, () => { finish.value = null; replay.value = 0 })
 const finishPreview = computed(() => finish.value !== null)
+const platingReveal = computed(() => props.reveal && props.medal?.notificationKind === 'plated')
 const concealed = computed(() => props.medal?.hidden && !props.medal?.earned)
 const statusText = computed(() => props.medal?.plated ? '已获得 · 镜闪镀层' : props.medal?.earned ? '已获得' : concealed.value ? '待揭晓' : '未解锁')
 const { focusInitial } = useDialogFocus(() => !!props.medal, dialog, '.medal-close', () => emit('close'))
@@ -31,7 +32,7 @@ const progressText = computed(() => formatProgress(props.medal?.progress))
         <section ref="dialog" class="medal-dialog" :class="{ reveal }" :style="{ '--medal-ink': medal.group.ink, '--medal-accent': medal.group.accent }" role="dialog" aria-modal="true" aria-labelledby="medal-heading" aria-describedby="medal-condition" tabindex="-1">
           <header class="medal-dossier-header">
             <span class="dossier-mark" aria-hidden="true"><i /><i /></span>
-            <span>{{ reveal ? previewMode ? '解锁演示' : '成就解锁' : '藏品档案' }}</span>
+            <span>{{ reveal ? previewMode ? '解锁演示' : platingReveal ? '镜闪镀层解锁' : '成就解锁' : '藏品档案' }}</span>
             <span class="dossier-reference">{{ medal.code }}</span>
             <button type="button" class="medal-close" aria-label="关闭成就详情" @click="emit('close')">×</button>
           </header>
@@ -50,7 +51,7 @@ const progressText = computed(() => formatProgress(props.medal?.progress))
               <span class="medal-visual-caption">{{ medal.setName || medal.group.label }}</span>
             </div>
             <div class="medal-copy">
-              <span class="medal-kicker">{{ reveal ? previewMode ? 'UNLOCK PREVIEW' : 'ACHIEVEMENT UNLOCKED' : medal.group.label + ' / ' + medal.code }}</span>
+              <span class="medal-kicker">{{ reveal ? previewMode ? 'UNLOCK PREVIEW' : platingReveal ? 'MIRROR FINISH UNLOCKED' : 'ACHIEVEMENT UNLOCKED' : medal.group.label + ' / ' + medal.code }}</span>
               <h2 id="medal-heading">{{ concealed ? '隐藏成就' : medal.name }}</h2>
               <p v-if="!concealed" class="medal-english">{{ medal.english }}</p>
               <AchievementRating class="medal-detail-rating" :level="medal.difficulty" label />
@@ -72,7 +73,7 @@ const progressText = computed(() => formatProgress(props.medal?.progress))
             <span class="dossier-footnote" aria-hidden="true">{{ reveal ? '◆' : '◇' }} {{ medal.group.label }}</span>
             <button v-if="reveal && previewMode" type="button" @click="replay++">再播一次 ↻</button>
             <button v-else-if="!reveal && medal.code === 'D-01'" type="button" @click="emit('preview')">预览解锁 ↗</button>
-            <button type="button" class="medal-primary" @click="emit('close')">{{ previewMode ? '返回展览馆' : '收下成就' }}</button>
+            <button type="button" class="medal-primary" @click="emit('close')">{{ previewMode ? '返回展览馆' : platingReveal ? '收下镀层' : '收下成就' }}</button>
           </div>
         </section>
       </div>

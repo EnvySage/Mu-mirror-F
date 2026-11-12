@@ -12,6 +12,7 @@
  * - 未确认文件灰标"未确认 · 检索不到"（§3.3b 资产页低信息置顶区）
  */
 import { ref, computed, watch } from 'vue'
+import VaultChunkReview from './VaultChunkReview.vue'
 import FileTypeIcon from '@/components/atoms/FileTypeIcon.vue'
 import { formatBytes, CATEGORY_LABELS } from '@/constants/fileTypes'
 import { CONTENT_TYPES } from '@/constants/tags'
@@ -25,6 +26,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['save', 'confirm', 'remove', 'download', 'preview', 'draft-change', 'layout-change'])
+const chunkReview = ref(null)
+const waitingReview = ref(false)
 
 const editing = ref(false)
 const confirmingDelete = ref(false)
@@ -124,7 +127,8 @@ function cancelEdit() {
 }
 
 /** 编辑态保存时若原状态是 extracted/failed → 走 confirm 门禁动作（key/description/category） */
-function saveOrConfirm() {
+async function saveOrConfirm() {
+  if (waitingReview.value) return
   if (!draft.value.display_name.trim()) return
   const data = {
     display_name: draft.value.display_name.trim(),
@@ -133,6 +137,9 @@ function saveOrConfirm() {
   }
   if (unconfirmed.value || props.item.digest_status === 'failed') {
     if (!data.description.trim()) return // 确认门禁：确认必须带一句描述（Y4 图片强制描述同口径）
+    waitingReview.value = true
+    await chunkReview.value?.waitForReview()
+    waitingReview.value = false
     emit('confirm', { key: data.display_name, description: data.description, category: data.category }, (ok) => { if (ok) editing.value = false })
   } else {
     emit('save', data, (ok) => { if (ok) editing.value = false })
@@ -146,7 +153,7 @@ const saveLabel = computed(() => {
   return '保存'
 })
 const saveDisabled = computed(() => {
-  if (props.busy || !draft.value.display_name.trim()) return true
+  if (props.busy || waitingReview.value || !draft.value.display_name.trim()) return true
   if (unconfirmed.value || props.item.digest_status === 'failed') return !draft.value.description.trim()
   return false
 })
@@ -203,6 +210,7 @@ function onPreview() {
           </div>
         </div>
       </div>
+      <VaultChunkReview v-if="unconfirmed" ref="chunkReview" :item-id="item.id" />
       <div v-if="unconfirmed || item.digest_status === 'failed'" class="as-confirm-note">
         确认后镜子才能凭描述找到它；未确认只是保管，检索不到
       </div>

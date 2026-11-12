@@ -5,6 +5,7 @@ import { achievementApi } from '@/api/achievements'
 import { achievements as previewCatalog } from '@/constants/achievements'
 import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import { achievementDesignCatalog } from '@/preview/achievementSets'
+import { notificationKey } from '@/utils/achievementNotifications'
 
 export const useAchievementsStore = defineStore('achievements', () => {
   const auth = useAuthStore()
@@ -55,10 +56,10 @@ export const useAchievementsStore = defineStore('achievements', () => {
     if (result.length) await load()
     if (token === epoch) pending.value = result
   }
-  async function acknowledge(code) {
+  async function acknowledge(notification) {
     const token = epoch
-    await achievementApi.acknowledge([code])
-    if (token === epoch) pending.value = pending.value.filter(item => item.code !== code)
+    await achievementApi.acknowledgeNotifications([{ code: notification.code, kind: notification.kind || 'earned' }])
+    if (token === epoch) pending.value = pending.value.filter(item => notificationKey(item) !== notificationKey(notification))
   }
   return { catalog, groups, loading, error, pending, designMode, load, poll, acknowledge }
 })

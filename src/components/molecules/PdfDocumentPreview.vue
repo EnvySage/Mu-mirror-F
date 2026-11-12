@@ -5,6 +5,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 const props = defineProps({ blob: { type: Blob, required: true } })
+const emit = defineEmits(['loaded'])
 const canvas = ref(null), container = ref(null), pageNumber = ref(1), total = ref(0)
 const zoom = ref(1), busy = ref(true), error = ref(''), text = ref(''), showText = ref(false)
 let task, document, rendering, observer, generation = 0, paintGeneration = 0, disposed = false
@@ -50,7 +51,10 @@ function schedulePaint() {
       rendering = page.render({ canvasContext: canvas.value.getContext('2d'), viewport, transform: [ratio, 0, 0, ratio, 0, 0] })
       await rendering.promise
       const content = await page.getTextContent()
-      if (!disposed && id === paintGeneration) text.value = content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('')
+      if (!disposed && id === paintGeneration) {
+        text.value = content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('')
+        emit('loaded')
+      }
     } catch (e) {
       if (!disposed && id === paintGeneration && e.name !== 'RenderingCancelledException') error.value = '这一页未能显示，请重新打开文件。'
     } finally { if (!disposed && id === paintGeneration) busy.value = false }

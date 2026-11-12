@@ -1,3 +1,5 @@
+import { normalizeVaultRefs, normalizeToolsUsed, normalizeChatHistory } from '@/utils/chatMessages'
+import { createChatFrameHandler } from '@/utils/chatFrames'
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getStorage, setStorage, removeStorage as removeAppStorage } from '@/utils/storage'
@@ -15,101 +17,43 @@ import {
   applyChatError,
   applyTransportError,
   createChatRequest,
-  normalizeChatDone,
-  normalizeChatMeta,
   normalizeCreatedRecords,
   retryChatRequest,
 } from '@/utils/chatProtocol'
 
-/**
- * 对话 store（T-B-4 已就绪：POST /api/mirror/chat SSE 流式 + 会话 CRUD）
- *
- * SSE 消费用 fetch + ReadableStream（POST 不能用原生 EventSource）：
- *   meta       → { sessionId, route, tools_used? }    意图路由 + 工具轨迹（E6）
- *   thinking   → { content }                          思考增量（与 delta 同构，流式多次到达；
- *                                                     模型不支持思考时该事件完全不出现）
- *   delta      → { content }                          回答增量（逐块追加渲染）
- *   sources    → [{ n, record_id, quote, date }]      来源追溯（引用芯片，点击跳详情）
- *                                                      n = 正文里的 [n] 原始编号；
- *                                                      后端只回被引用子集、编号会跳号，
- *                                                      必须按 n 定位，不能按下标取
- *   vault_refs → [{ n, vault_item_id, display_name, file_type, size_bytes,
- *                   digest_status, quote, category?, created_at? }]  对话文件卡（4.1）
- *   done       → { sessionId, route, fallback }       结束标志（fallback=true 为兜底文案）
- *   error      → { message }                          AI 失败兜底（展示"暂时无法回答"类文案）
- *
- * vault_refs 归一化（VaultRefCard 三档口径）：
- *   有 quote → strength='strong' 完整卡；无 quote → 'weak' 芯片；
- *   后端无法定位具体文件（"昨天传的图片"）→ vague=true 芯片点开确认。
- *   同 vault_item_id 同气泡多引用 → 去重保第一条（含 quote 的强引用优先保留）。
- *
- * 后端 data 是 JSON 字符串（SseEmitter .data(objectMapper.writeValueAsString(...))），
- * 且 Spring 会在 JSON 内含换行时按 SSE 规范拆成多行 data:，此处按 "\n\n" 分帧、
- * 帧内多行 data: 以 "\n" 合并后 JSON.parse。
- *
- * @typedef {Object} ChatMessage
- * @property {string} id
- * @property {'user' | 'ai'} role
- * @property {string} content
- * @property {string} [thinking] 思考过程累积文本（仅本轮流式产生；历史消息永远没有）
- * @property {string} [route] - 意图路由（INTENT → HYBRID 等）
- * @property {boolean} [typing] - 是否正在打字
- * @property {{ n: number|null, recordId: number|string, quote: string, date: string }[]} [sources]
- * @property {{ id: string, tool: string, summary: string }[]} [toolsUsed] 工具轨迹（气泡上方芯片行）
- * @property {Array} [vaultRefs] 对话文件卡引用（已去重归一化）
- */
-
-/** @typedef {{ id: string, title: string, created_at: string, updated_at: string }} ChatSession */
-
 const FALLBACK_TEXT = '暂时无法回答'
 
-/** localStorage 存档 key（utils/storage 统一加 mirror_ 前缀） */
 const LAST_SESSION_KEY = 'last_chat_session'
 
 let msgId = 0
 
-/**
- * 解析 SSE data 载荷为对象（JSON 字符串；解析失败返回 null）
- * @param {string} raw
- * @returns {any}
- */
-function parseData(raw) {
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
 export const useChatStore = defineStore('chat', () => {
-  /** @type {import('vue').Ref<ChatMessage[]>} */
+
   const messages = ref([])
   // Draft remains session-scoped in memory so presentation changes can swap
   // page composition without persisting potentially sensitive text.
   const draft = ref('')
   const sending = ref(false)
-  /** 最近一次对话的会话 ID（发送时携带，续聊同一会话） */
+
   const sessionId = ref(null)
   const todaySession = ref(null)
   const todaySessionLoaded = ref(false)
   const endedDaySummaries = ref([])
   const daySummary = ref(null)
 
-  /** @type {import('vue').Ref<ChatSession[]>} */
   const sessions = ref([])
   const sessionsLoading = ref(false)
   const sessionsLoaded = ref(false)
-  /** 当前正在浏览历史的会话 ID（null = 新会话草稿） */
+
   const activeSessionId = ref(null)
-  /** 历史加载中 / 网络失败（ChatView 据此展示空态文案，后端未起时不白屏） */
+
   const historyLoading = ref(false)
   const historyError = ref(false)
-  /** 刷新时上一轮回答仍在后端生成：显示占位并轮询，落库后自动补上 */
+
   const recovering = ref(false)
   let recoveryTimer = null
   let recoveryToken = 0
 
-  /** 中断当前流（仅显式切换会话或新建会话时） */
   let abortController = null
   let activeAiMessage = null
   let pendingRetry = null
@@ -121,10 +65,6 @@ export const useChatStore = defineStore('chat', () => {
     recovering.value = false
   }
 
-  /**
-   * 刷新后若最后一条是刚发出的 user 消息、还没有 assistant，说明后端仍在生成。
-   * 轮询会话，等 assistant 落库后一次性替换；超过 2 分钟停止，避免无限请求。
-   */
   function maybeStartRecovery(sessionIdToLoad, list) {
     const last = list[list.length - 1]
     if (!last || last.role !== 'user') return
@@ -158,9 +98,8 @@ export const useChatStore = defineStore('chat', () => {
     recoveryTimer = setTimeout(tick, 2000)
   }
 
-  /** 用户当前应用会话内操作过对话后，不再用自动恢复覆盖本地消息 */
   let hasLocalChatActivity = false
-  /** 合并同一时刻的自动恢复调用（路由重复挂载时只发一次历史请求） */
+
   let restoreInProgress = null
 
   function readDailyPayload(data) {
@@ -230,75 +169,16 @@ export const useChatStore = defineStore('chat', () => {
       sources: [], toolsUsed: [], vaultRefs: [], createdRecords: [],
     }
     messages.value.push(msg)
-    // 必须返回数组里的响应式代理，不能返回原始 msg：之后 SSE 每一帧都往这个对象上写
-    // thinking/content，改原始对象不触发 Vue 更新——界面会一直停着，直到流结束时
-    // sending 翻转才一口气刷出全部内容（2026-09-21 联调：后端逐帧推送正常，浏览器仍"等一分钟一次性吐出"）
+    // Return the reactive array entry so streamed updates repaint immediately.
     return messages.value[messages.value.length - 1]
   }
 
-  /**
-   * 归一化 vault_refs 事件载荷 → VaultRefCard 口径（三档 + 同气泡去重）
-   * 有 quote=强引用（完整卡）；无 quote=弱引用（芯片）；vague=模糊提及（芯片点开确认）
-   * @param {Array} refs
-   * @returns {Array}
-   */
-  function normalizeVaultRefs(refs) {
-    const seen = new Map()
-    for (const r of refs) {
-      if (!r || (r.vault_item_id == null && !r.vague)) continue
-      const key = r.vague ? `vague:${r.display_name || r.query || ''}` : String(r.vault_item_id)
-      const item = {
-        id: key,
-        n: r.n ?? null,
-        vaultItemId: r.vault_item_id ?? null,
-        displayName: r.display_name || r.original_name || '未命名文件',
-        category: r.category || null,
-        fileType: r.file_type || r.fileType || '',
-        sizeBytes: r.size_bytes ?? r.sizeBytes ?? null,
-        digestStatus: r.digest_status || r.digestStatus || 'confirmed',
-        quote: r.quote || '',
-        createdAt: r.created_at || '',
-        deleted: !!r.deleted,
-        vague: !!r.vague,
-        strength: r.quote ? 'strong' : (r.vague ? 'vague' : 'weak'),
-      }
-      // 同 vault_item_id 多引用同气泡单卡：强引用优先保留
-      const prev = seen.get(key)
-      if (!prev || (prev.strength !== 'strong' && item.strength === 'strong')) seen.set(key, item)
-    }
-    return [...seen.values()]
-  }
+  const handleFrame = createChatFrameHandler({ sessionId, activeSessionId, saveSessionId, fallbackText: FALLBACK_TEXT })
 
-  /**
-   * 归一化 meta.tools_used（["search_records:12条"] 或 [{tool, summary}]）
-   * → [{ id, tool, summary }]（气泡上方工具轨迹芯片行）
-   */
-  function normalizeToolsUsed(list) {
-    if (!Array.isArray(list)) return []
-    return list
-      .map((t, i) => {
-        if (typeof t === 'string') {
-          const idx = t.indexOf(':')
-          return idx > -1
-            ? { id: `t${i}`, tool: t.slice(0, idx), summary: t.slice(idx + 1) }
-            : { id: `t${i}`, tool: t, summary: '' }
-        }
-        if (t && typeof t === 'object') {
-          return { id: `t${i}`, tool: t.tool || t.name || '', summary: t.summary || t.result_summary || '' }
-        }
-        return null
-      })
-      .filter(Boolean)
-  }
-
-  /**
-   * 发送消息：fetch POST /api/mirror/chat + ReadableStream 逐帧解析 SSE 五事件
-   * @param {string} content
-   */
   async function sendMessage(content) {
     const text = content.trim()
     if (!text || sending.value) return
-    // 先占用发送锁，再做异步会话解析；否则解析期间可重复点击，两条流会写进同一 placeholder。
+    // Lock before resolving the session to prevent duplicate submissions.
     sending.value = true
     stopRecovery()
 
@@ -444,96 +324,6 @@ export const useChatStore = defineStore('chat', () => {
     return receivedTerminal
   }
 
-  /**
-   * 处理一帧 SSE（event: xxx / data: yyy 多行）
-   * @param {string} frame
-   * @param {ChatMessage} aiMsg
-   */
-  function handleFrame(frame, aiMsg, userMsg, cards = useActionsStore()) {
-    let event = 'message'
-    const dataLines = []
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event:')) {
-        event = line.slice(6).trim()
-      } else if (line.startsWith('data:')) {
-        dataLines.push(line.slice(5).replace(/^ /, ''))
-      }
-    }
-    if (!dataLines.length) return false
-    const payload = parseData(dataLines.join('\n'))
-
-    switch (event) {
-      case 'meta':
-        if (payload) {
-          const meta = normalizeChatMeta(payload)
-          aiMsg.route = meta.route || aiMsg.route
-          aiMsg.runId = meta.runId || aiMsg.runId
-          aiMsg.requestId = meta.requestId || aiMsg.requestId
-          if (meta.toolsUsed.length) aiMsg.toolsUsed = normalizeToolsUsed(meta.toolsUsed)
-          if (meta.sessionId) {
-            sessionId.value = meta.sessionId
-            activeSessionId.value = meta.sessionId
-            saveSessionId(meta.sessionId)
-          }
-          const sourceMessageId = meta.sourceMessageId
-          if (sourceMessageId != null) {
-            if (userMsg) userMsg.serverMessageId = String(sourceMessageId)
-            aiMsg.actionSourceMessage = String(sourceMessageId)
-          }
-        }
-        break
-      case 'thinking':
-        // Deliberately discard raw reasoning; the UI exposes only brief action states.
-        break
-      case 'delta':
-        if (payload && typeof payload.content === 'string') {
-          aiMsg.typing = false
-          aiMsg.content += payload.content
-        }
-        break
-      case 'sources':
-        if (Array.isArray(payload)) {
-          aiMsg.sources = payload
-            .filter(s => s && s.record_id > 0)
-            .map(s => ({ n: s.n ?? null, recordId: s.record_id, quote: s.quote || '', date: s.date || '' }))
-        }
-        break
-      case 'vault_refs':
-        if (Array.isArray(payload)) aiMsg.vaultRefs = normalizeVaultRefs(payload)
-        break
-      case 'action_proposal':
-      case 'action_status':
-        if (payload) cards.upsert(payload)
-        break
-      case 'done': {
-        const done = normalizeChatDone(payload || {})
-        aiMsg.typing = false
-        aiMsg.status = done.status
-        aiMsg.outcome = done.outcome
-        aiMsg.errorCode = done.errorCode
-        aiMsg.runId = done.runId || aiMsg.runId
-        aiMsg.requestId = done.requestId || aiMsg.requestId
-        aiMsg.route = done.route || aiMsg.route
-        aiMsg.createdRecords = done.createdRecords
-        if (done.sessionId) {
-          sessionId.value = done.sessionId
-          activeSessionId.value = done.sessionId
-          saveSessionId(done.sessionId)
-        }
-        if (['failed', 'cancelled', 'abandoned'].includes(done.status) && !aiMsg.content) {
-          aiMsg.content = done.status === 'cancelled' ? '本轮请求已取消' : FALLBACK_TEXT
-        }
-        return true
-      }
-      case 'error':
-        applyChatError(aiMsg, payload || {}, FALLBACK_TEXT)
-        break
-      default:
-        break
-    }
-    return false
-  }
-
   async function refreshRun(message) {
     if (!message?.runId || message.checkingRun) return null
     message.checkingRun = true
@@ -546,6 +336,7 @@ export const useChatStore = defineStore('chat', () => {
       message.errorCode = run.error_code || null
       if (run.assistant) {
         const assistant = run.assistant
+        if (assistant.id != null) message.serverMessageId = String(assistant.id)
         if (typeof assistant.content === 'string') message.content = assistant.content
         message.sources = (assistant.sources || [])
           .filter(source => source && source.record_id > 0)
@@ -566,27 +357,22 @@ export const useChatStore = defineStore('chat', () => {
 
   // ==================== 会话存档（localStorage） ====================
 
-  /** 读取上次会话存档 id（无 / 非法返回 null） */
   function getSavedSessionId() {
     const id = getStorage(LAST_SESSION_KEY)
     return id && typeof id === 'string' && id.trim() ? id.trim() : null
   }
 
-  /** 会话 id 写入存档 */
   function saveSessionId(id) {
     if (id) setStorage(LAST_SESSION_KEY, id)
     else removeAppStorage(LAST_SESSION_KEY)
   }
 
-  /** 清除会话存档 */
   function clearSavedSessionId() {
     removeAppStorage(LAST_SESSION_KEY)
   }
 
   // ==================== 会话列表 / 历史 / 删除 ====================
-  /**
-   * 拉取会话列表（GET /api/mirror/sessions，updated_at 倒序）
-   */
+
   async function fetchSessions() {
     sessionsLoading.value = true
     try {
@@ -601,10 +387,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /**
-   * 加载会话历史（GET /api/mirror/sessions/{id}），失败置 historyError（空态兜底不白屏）
-   * @param {string} id
-   */
   async function loadSession(id, { preserveLocalState = false, recovery = false, force = false } = {}) {
     if (!recovery) stopRecovery()
     if (!preserveLocalState && !force) {
@@ -626,35 +408,7 @@ export const useChatStore = defineStore('chat', () => {
       sessionActions.forEach(card => cards.upsert(card))
       daySummary.value = data?.daySummary || data?.day_summary || null
       let lastUserMessageId = null
-      const list = (data?.messages || []).map(m => {
-        const role = m.role === 'assistant' ? 'ai' : 'user'
-        if (role === 'user') lastUserMessageId = String(m.id ?? '')
-        return {
-        id: String(m.id ?? ++msgId),
-        serverMessageId: String(m.id ?? ''),
-        role,
-        actionSourceMessage: role === 'ai' ? lastUserMessageId : null,
-        content: m.content || '',
-        createdAt: m.created_at || m.createdAt || '',
-        route: null,
-        typing: false,
-        sources: (m.sources || [])
-          .filter(s => s && s.record_id > 0)
-          .map(s => ({ n: s.n ?? null, recordId: s.record_id, quote: s.quote || '', date: s.date || '' })),
-        // 历史回放：B 在消息 VO 带出 tools_used / vault_refs 才有值，缺省空数组不渲染
-        toolsUsed: normalizeToolsUsed(m.tools_used || []),
-        vaultRefs: normalizeVaultRefs(m.vault_refs || []),
-        createdRecords: normalizeCreatedRecords(m.created_records || []),
-        status: 'completed',
-        outcome: null,
-        requestId: null,
-        runId: null,
-        retryable: false,
-        checkingRun: false,
-        // thinking 不落 conversation_history——历史消息永远没有思考面板（契约）
-        thinking: '',
-        }
-      })
+      const list = normalizeChatHistory(data?.messages, () => ++msgId)
       messages.value = list
       activeSessionId.value = id
       sessionId.value = id
@@ -666,17 +420,13 @@ export const useChatStore = defineStore('chat', () => {
     } catch (err) {
       console.error('Failed to load session:', err)
       historyError.value = true
-      // 失败归因：err.code 为数字 = 后端明确报错（404 已删 / 业务码）；否则是网络层失败（后端未起/超时）
+      // Numeric codes are server rejections; other failures are transport errors.
       return false
     } finally {
       historyLoading.value = false
     }
   }
 
-  /**
-   * 删除会话（DELETE /api/mirror/sessions/{id}，消息级联删除）
-   * @param {string} id
-   */
   async function removeSession(id) {
     try {
       await apiDeleteSession(id)
@@ -698,7 +448,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /** 开新会话：清空当前消息与归属（会话在后端首次发送时才真正创建） */
   function newConversation() {
     stopRecovery()
     hasLocalChatActivity = true
@@ -706,7 +455,6 @@ export const useChatStore = defineStore('chat', () => {
     clearMessages()
   }
 
-  /** 中断当前流式请求 */
   function abort() {
     discardRetry()
     if (activeAiMessage) {
@@ -724,11 +472,6 @@ export const useChatStore = defineStore('chat', () => {
 
   // ==================== 进页自动恢复 ====================
 
-  /**
-   * 进入聊天页时仅恢复服务器认定的今日会话；昨天及更早的会话仍从历史列表打开。
-   * 今日会话不存在时保持空态，不创建空会话。
-   * @returns {Promise<boolean>} 是否成功恢复了某个会话
-   */
   async function restoreLastSession() {
     // 自动恢复只负责首次填充；已有内存消息/本地操作时不能覆盖当前状态。
     if (hasLocalChatActivity || sending.value || messages.value.length > 0) return false

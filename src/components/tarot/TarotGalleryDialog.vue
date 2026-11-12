@@ -3,8 +3,16 @@ import { computed, ref, watch } from 'vue'
 import { tarotDate } from '@/utils/tarotProtocol'
 import { tarotPerspective, tarotCategory, orientationLabel } from '@/utils/tarotPresentation'
 import { useDialogFocus } from '@/composables/useDialogFocus'
+import { reportAchievementActivity } from '@/api/achievements'
+import { vReadEnd } from '@/composables/useReadingEnd'
 const props = defineProps({ card: Object, orientation: String, locked: Boolean, entry: Object, cards: { type: Array, default: () => [] } })
-const perspective = computed(() => tarotPerspective(props.card, props.orientation))
+const meaningOrientation = ref('upright')
+const activeOrientation = computed(() => props.entry ? meaningOrientation.value : props.orientation || 'upright')
+const perspective = computed(() => tarotPerspective(props.card, activeOrientation.value))
+watch([() => props.card?.id, () => props.orientation], () => { meaningOrientation.value = props.orientation === 'reversed' ? 'reversed' : 'upright' }, { immediate: true })
+function readMeaning() {
+  if (props.entry && !props.locked) reportAchievementActivity('tarot.meaning_opened', props.card.id, null, activeOrientation.value)
+}
 const emit = defineEmits(['close', 'select'])
 const dialog = ref(null), viewport = ref(null), picture = ref(null)
 const scale = ref(1), x = ref(0), y = ref(0)
@@ -76,13 +84,16 @@ function key(e) {
       <section v-if="card" ref="dialog" class="tarot-gallery" role="dialog" aria-modal="true" :aria-label="`欣赏${card.name}`" tabindex="-1" @keydown="key">
         <div ref="viewport" class="gallery-canvas" :class="{ enlarged: scale > 1 }" tabindex="0" aria-label="卡面原图，可双指或滚轮缩放、拖动查看"
           @wheel.prevent="wheel" @dblclick="doubleClick" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @lostpointercapture="up">
-          <img ref="picture" :src="card.image_url" :alt="card.name" width="1024" height="1536" draggable="false" :style="{ transform: `translate(${x}px,${y}px) scale(${scale}) rotate(${orientation === 'reversed' ? 180 : 0}deg)` }" />
+          <img ref="picture" :src="card.image_url" :alt="card.name" width="1024" height="1536" draggable="false" :style="{ transform: `translate(${x}px,${y}px) scale(${scale}) rotate(${activeOrientation === 'reversed' ? 180 : 0}deg)` }" />
         </div>
         <aside class="gallery-info">
-          <span>{{ tarotCategory(card).name }} · {{ orientationLabel(orientation) }}<template v-if="locked"> · 尚未收藏</template></span>
+          <div v-if="entry && !locked" class="meaning-controls" role="group" aria-label="选择卡牌释义"><button type="button" :aria-pressed="activeOrientation === 'upright'" @click="meaningOrientation = 'upright'">正位释义</button><button type="button" :aria-pressed="activeOrientation === 'reversed'" @click="meaningOrientation = 'reversed'">逆位释义</button></div>
+          <div :key="`${card.id}:${activeOrientation}`" v-read-end="{ key: `${card.id}:${activeOrientation}`, onRead: readMeaning }">
+          <span>{{ tarotCategory(card).name }} · {{ orientationLabel(activeOrientation) }}<template v-if="locked"> · 尚未收藏</template></span>
           <h2>{{ card.name }} <small>{{ card.en }}</small></h2>
           <b>{{ perspective.keyword }}</b><p>{{ perspective.meaning }}</p><p class="gallery-action">小尝试 / {{ perspective.action }}</p>
           <small v-if="entry">{{ tarotDate(entry.first_obtained_at) }} 首次获得 · 每日抽中 {{ entry.daily_draw_count }} 次</small>
+          </div>
         </aside>
         <button class="gallery-close" aria-label="关闭卡牌原图" @click="$emit('close')">×</button>
         <nav class="gallery-controls" aria-label="卡牌原图操作">
@@ -97,6 +108,7 @@ function key(e) {
   </Teleport>
 </template>
 <style scoped>
+.meaning-controls{display:flex;gap:9px;margin-bottom:13px}.meaning-controls button{min-height:40px;padding:7px 10px;border:1px solid #97bac5;color:#e9f7f3;font-size:12px}.meaning-controls button[aria-pressed=true]{background:#d4eee6;color:#153b51}
 .tarot-gallery{position:fixed;inset:0;z-index:1120;color:white;background:#052a4e9c;backdrop-filter:blur(20px);overflow:hidden;outline:none}
 .gallery-canvas{position:absolute;inset:0 42% 0 0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;overscroll-behavior:contain;cursor:zoom-in;outline:none}
 .gallery-canvas.enlarged{cursor:grab}.gallery-canvas.enlarged:active{cursor:grabbing}

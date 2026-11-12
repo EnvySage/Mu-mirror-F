@@ -26,6 +26,7 @@ import { useTodoStore } from '@/stores/todo'
 import { useSettingsStore } from '@/stores/settings'
 import { useToastStore } from '@/stores/toast'
 import { taskStatusMap } from '@/constants/tags'
+import { useUIStore } from '@/stores/ui'
 
 const props = defineProps({
   chain: { type: Object, required: true },
@@ -38,6 +39,11 @@ const emit = defineEmits(['open-record'])
 const todoStore = useTodoStore()
 const settingsStore = useSettingsStore()
 const toast = useToastStore()
+const ui = useUIStore()
+function openLinkedRecord(recordId) {
+  ui.recordAchievement = { recordId: String(recordId), activities: [{ kind: 'todo.source_opened', subjectId: todoId.value, otherId: recordId }] }
+  emit('open-record', recordId)
+}
 
 // ---- 字段口径兼容（snake 为主，camel 兜底；同 RecordsSidebar open_items 防御风格） ----
 const todoId = computed(() => props.chain.todo_id ?? props.chain.todoId ?? null)
@@ -78,7 +84,7 @@ function toggleExpand() {
 /** L1 点击：跳"创建它的记录"；无 origin 时退化为展开/收起（重排位/来源缺失兜底） */
 function onOpenOrigin() {
   if (originRecordId.value) {
-    emit('open-record', originRecordId.value)
+    openLinkedRecord(originRecordId.value)
     return
   }
   toggleExpand()
@@ -195,7 +201,7 @@ function fmtDate(s) {
           v-if="origin.record_id ?? origin.recordId"
           class="tl-arrow"
           title="打开这条记录"
-          @click="emit('open-record', origin.record_id ?? origin.recordId)"
+          @click="openLinkedRecord(origin.record_id ?? origin.recordId)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 17L17 7M9 7h8v8" />
@@ -217,7 +223,7 @@ function fmtDate(s) {
           v-if="ev.record_id ?? ev.recordId"
           class="tl-arrow"
           title="打开这条记录"
-          @click="emit('open-record', ev.record_id ?? ev.recordId)"
+          @click="openLinkedRecord(ev.record_id ?? ev.recordId)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 17L17 7M9 7h8v8" />
