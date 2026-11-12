@@ -15,3 +15,10 @@ Vue 前端通过 Java 后端的 REST API 提供桌面和移动端界面。
 | --- | --- |
 | 蚀刻章成图的英文逐枚对应目录名称，不能整套统一写成品牌名。 | `tests/achievement-sets.test.mjs` 检查目录英文唯一性和图集完整性；成图文字必须按 `docs/achievement-art-manifest.json` 人工逐套核对，并附实际界面截图。目录测试不代替成图文字校对。 |
 | 成就页筛选默认收起；详情采用紧凑档案与分段显影，避免大章面瞬间弹出。 | 浏览器验证初始隐藏、展开/收起保留条件，以及桌面、手机、矮屏详情和打开动画；截图保存在 `.verify/achievement-geometry/`。 |
+
+## 文档维护契约
+
+- **单一来源**：跨端状态写 B 仓 `docs/PROGRESS.md`；本仓启动/构建写 `README.md`；界面规范写 `docs/ui-redesign.md`；记录流程写 `docs/record-workflow.md`；成就素材写 `docs/achievement-*.md`。
+- **同一提交更新**：改 API、路由、store、构建配置、`.env.example` 或用户可见行为时，必须在同一提交更新对应文档。
+- **禁止文档泛滥**：不新建平行的“进度/现状/总结”文档；一次性验证记录完成即移入 `docs/archive/`。
+- **提交门禁**：pre-commit 会拦截“高风险改动但没有文档改动”的提交；紧急情况用 `SKIP_DOC_CHECK=1`，并在提交说明里写明原因。
