@@ -9,6 +9,7 @@ const { descriptor } = parse(source)
 const compiled = compileScript(descriptor, { id: 'record-growth-regression' }).content
   .replace(/from (['"])vue\1/g, `from ${JSON.stringify(import.meta.resolve('vue'))}`)
   .replace(/from '@\/constants\/tags'/g, `from ${JSON.stringify(new URL('../src/constants/tags.js', import.meta.url).href)}`)
+  .replace(/from '@\/utils\/recordIndexing'/g, `from ${JSON.stringify(new URL('../src/utils/recordIndexing.js', import.meta.url).href)}`)
   .replace("import { useGrowthStore } from '@/stores/growth'", 'const useGrowthStore = () => globalThis.__recordGrowthTestStore')
   .replace("import RecordTodoLinks from './RecordTodoLinks.vue'", 'const RecordTodoLinks = {}')
 const { default: Form } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)

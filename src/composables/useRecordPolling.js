@@ -1,11 +1,13 @@
 import { ref, onBeforeUnmount } from 'vue'
 import { getRecord } from '@/api/records'
+import { shouldPollRecord } from '@/utils/recordIndexing'
 
 /**
  * 记录状态轮询（8.2 契约）
  *
  * POST /records 返回 status=processing 后无推送通道，前端每 2-3s 轮询
- * GET /records/{id}，status 变为 reviewing / done / failed 时停止。
+ * GET /records/{id}，处理完成且没有待处理的索引任务时停止。
+ * version1 的 READY 不代表索引结束；明确跳过及 failed 不继续轮询。
  *
  * 用法：
  *   const { startPolling, stopPolling, pollingId } = useRecordPolling({
@@ -17,7 +19,7 @@ import { getRecord } from '@/api/records'
  * @param {{ onUpdate: (record: Object) => void, interval?: number }} options
  * @returns {{ startPolling: Function, stopPolling: Function, pollingId: import('vue').Ref<string|number|null> }}
  */
-export function useRecordPolling({ onUpdate, interval = 2500 } = {}) {
+export function useRecordPolling({ onUpdate, interval = 2500, loadRecord = async id => (await getRecord(id)).data } = {}) {
   const pollingId = ref(null)
   const pollingRecordId = ref(null)
 
@@ -36,25 +38,23 @@ export function useRecordPolling({ onUpdate, interval = 2500 } = {}) {
       if (pollingRecordId.value !== recordId) return
       let record = null
       try {
-        const res = await getRecord(recordId)
-        record = res.data
+        record = await loadRecord(recordId, () => pollingRecordId.value === recordId)
       } catch (err) {
         // 网络/服务错误：继续下一轮，不中断轮询
         console.warn('poll error:', err.message)
-        schedule(recordId)
+        if (pollingRecordId.value === recordId) schedule(recordId)
         return
       }
+      if (pollingRecordId.value !== recordId) return
       if (!record) {
         schedule(recordId)
         return
       }
       if (onUpdate) onUpdate(record)
-      const status = record.status
-      if (status === 'processing') {
+      if (shouldPollRecord(record)) {
         schedule(recordId)
       } else {
-        // reviewing / done / failed：终态，停止
-        pollingRecordId.value = null
+        stopPolling()
       }
     }, interval)
   }

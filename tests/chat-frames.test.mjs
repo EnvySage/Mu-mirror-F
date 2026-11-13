@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createChatFrameHandler } from '../src/utils/chatFrames.js'
-import { normalizeChatHistory } from '../src/utils/chatMessages.js'
+import { createClientChatMessageId, normalizeChatHistory } from '../src/utils/chatMessages.js'
 
 test('SSE frames retain streamed text and trusted source identity through completion', () => {
   const sessionId = { value: null }, activeSessionId = { value: null }
@@ -48,4 +48,24 @@ test('history replay keeps assistant and user identities attached to their own t
   assert.equal(messages[1].sources[0].recordId, 8)
   assert.equal(messages[3].serverMessageId, '23')
   assert.equal(messages[3].actionSourceMessage, '22')
+})
+
+test('optimistic and missing history IDs are client-namespaced and cannot collide with server IDs', () => {
+  const firstLocalId = createClientChatMessageId()
+  const secondLocalId = createClientChatMessageId()
+  assert.match(firstLocalId, /^client-/)
+  assert.notEqual(firstLocalId, secondLocalId)
+
+  const messages = normalizeChatHistory([
+    { id: 1, role: 'user', content: 'Persisted user message' },
+    { id: 2, role: 'assistant', content: 'Persisted assistant message' },
+    { role: 'user', content: 'Legacy message with no server ID' },
+    { role: 'assistant', content: 'Legacy reply with no server ID' },
+  ], createClientChatMessageId)
+  assert.equal(messages[0].id, '1')
+  assert.equal(messages[1].actionSourceMessage, '1')
+  assert.match(messages[2].id, /^client-/)
+  assert.equal(messages[2].serverMessageId, null)
+  assert.equal(messages[3].actionSourceMessage, messages[2].id)
+  assert.equal(new Set(messages.map(message => message.id)).size, messages.length)
 })

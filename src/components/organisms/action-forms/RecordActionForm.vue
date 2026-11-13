@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { CONTENT_TYPES, ALL_MOODS, normalizeContentType } from '@/constants/tags'
 import { useGrowthStore } from '@/stores/growth'
 import RecordTodoLinks from './RecordTodoLinks.vue'
+import { buildRecordSubmission, resetEmbeddingSuggestion, embeddingEnabledOf, indexPolicyVersionOf } from '@/utils/recordIndexing'
 
 const props = defineProps({ proposal: { type: Object, required: true }, expanded: Boolean, hideActions: Boolean })
 const emit = defineEmits(['save', 'cancel', 'dirty'])
@@ -56,8 +57,8 @@ watch(
     () => props.proposal?.preview?.recordDraft?.preparationStatus,
   ],
   () => {
-    payload.value = clone(props.proposal?.payload)
-    payload.value.recordDraft ||= clone(props.proposal?.preview?.recordDraft)
+    payload.value = buildRecordSubmission(props.proposal?.payload)
+    payload.value.recordDraft ||= buildRecordSubmission({ recordDraft: props.proposal?.preview?.recordDraft }).recordDraft || {}
     for (const segment of payload.value.recordDraft?.segments || []) {
       segment.contentType = normalizeContentType(segment.contentType)
     }
@@ -71,16 +72,22 @@ growth.fetchAxes().catch(() => {})
 function updateSegment(index, key, value) {
   if (props.expanded) emit('dirty')
   const next = clone(payload.value)
+  const changed = next.recordDraft.segments[index][key] !== value
   next.recordDraft.segments[index][key] = value
   if (key === 'contentType') next.recordDraft.segments[index].todoEnabled = value === 'todo'
-  if (key === 'text') next.recordDraft.finalContent = next.recordDraft.segments.map(segment => segment.text).join('\n')
+  if (key === 'text') {
+    if (changed) next.recordDraft.segments[index] = resetEmbeddingSuggestion(next.recordDraft.segments[index])
+    next.recordDraft.finalContent = next.recordDraft.segments.map(segment => segment.text).join('\n')
+  }
   payload.value = next
 }
 function updateFinalContent(value) {
   if (props.expanded) emit('dirty')
   const next = clone(payload.value)
   next.recordDraft.finalContent = value
-  if (next.recordDraft.segments?.length === 1) next.recordDraft.segments[0].text = value
+  if (next.recordDraft.segments?.length === 1 && next.recordDraft.segments[0].text !== value) {
+    next.recordDraft.segments[0] = resetEmbeddingSuggestion({ ...next.recordDraft.segments[0], text: value })
+  }
   payload.value = next
 }
 function tagsText(tags) { return Array.isArray(tags) ? tags.join(', ') : '' }
@@ -117,7 +124,7 @@ function updateGrowthSuggestion(dimensionId, key, value) {
 }
 function submit() {
   if (running.value || growthDefinitionChanged.value) return
-  const next = clone(payload.value)
+  const next = buildRecordSubmission(payload.value)
   if (Array.isArray(next.todoResolutions)) next.todoResolutions = next.todoResolutions.map(({ todoId, suggestionId, action, status }) => ({ todoId, suggestionId, action, status }))
   if (next.recordDraft.mode === 'ONLY_SAVE') {
     next.recordDraft.growthSuggestions = []
@@ -129,10 +136,6 @@ function submit() {
       ? growthAxes.value.map(axis => byId.get(axis.id) || { dimensionId: axis.id, points: 0, reason: '' })
       : []
     delete next.recordDraft.growth_suggestions
-  }
-  // 选择 AI 整理即授权记忆；仅在记忆管理中停止，不再逐段勾选。
-  if (next.recordDraft?.mode === 'AI_ASSISTED') {
-    ;(next.recordDraft.segments || []).forEach(segment => { segment.memoryEnabled = true })
   }
   emit('save', next)
 }
@@ -153,6 +156,7 @@ defineExpose({ submit })
       <label v-if="expanded" class="record-field">摘要<textarea :value="segment.summary" maxlength="500" rows="3" :disabled="running" @input="updateSegment(index, 'summary', $event.target.value)" /></label>
       <label class="record-field">分类<select :value="segment.contentType || 'note'" :disabled="running" @change="updateSegment(index, 'contentType', $event.target.value)"><option v-for="item in CONTENT_TYPES" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
       <label class="record-field">自由标签<input :value="tagDrafts[index]" maxlength="500" placeholder="用逗号分隔" :disabled="running" @input="setTags(index, $event.target.value)"></label>
+      <details v-if="draft.mode === 'AI_ASSISTED'" class="record-indexing-options"><summary>参与联想检索 <span>{{ embeddingEnabledOf(segment) ? '保留索引' : '跳过索引' }}</span><small v-if="segment.memoryEnabled === false" class="record-indexing-denied">未授权 · 不可供 AI 查询</small></summary><label><input type="checkbox" :checked="embeddingEnabledOf(segment)" :disabled="running" @change="updateSegment(index, 'embeddingEnabled', $event.target.checked)"><span>参与联想检索<small>{{ segment.embeddingReason || '保留具体经历，便于日后联想检索。' }}</small></span></label><p v-if="segment.memoryEnabled === false">索引开关不会改变此片段的授权。</p><p v-else-if="indexPolicyVersionOf(draft) === 1 && segment.memoryEnabled === true">日常内容仍可在对话中按需查询。</p><p v-else>确认保存后在后台加入记忆，完成后可用于检索。</p></details>
       <label v-if="segment.contentType === 'todo' && draft.mode === 'AI_ASSISTED'" class="record-todo-consent"><input type="checkbox" :checked="!!segment.todoEnabled" :disabled="running" @change="updateSegment(index, 'todoEnabled', $event.target.checked)"><span><b>保存后加入侧栏待办</b><small>取消勾选则只保留记录，不登记为待办。</small></span></label>
       <div v-if="expanded" class="record-moods"><span>情绪</span><button v-for="mood in ALL_MOODS" :key="mood.key" type="button" :aria-pressed="(segment.moods || []).includes(mood.key)" @click="updateSegment(index, 'moods', (segment.moods || []).includes(mood.key) ? segment.moods.filter(m => m !== mood.key) : [...(segment.moods || []), mood.key])">{{ mood.label }}</button></div>
     </fieldset>
@@ -172,11 +176,13 @@ defineExpose({ submit })
       <b>{{ resolution.todoTitle || resolution.title || '关联待办' }}</b>
       <span>{{ resolution.action === 'dismissed' ? '本次忽略' : `确认状态：${resolution.status || '维持当前状态'}` }}</span>
     </div>
-    <div v-if="!hideActions" class="record-form-actions"><button type="button" @click="emit('cancel')">返回</button><button type="submit" :disabled="running || growthDefinitionChanged">保存修改并重新确认</button></div>
+    <div v-if="!hideActions" class="record-form-actions"><button type="button" @click="emit('cancel')">返回</button><button type="submit" :disabled="running || growthDefinitionChanged">确认保存</button></div>
   </form>
 </template>
 
 <style scoped>
+.record-indexing-denied{display:block;clear:both;color:#ad3027;line-height:1.7;padding-bottom:5px}
+.record-indexing-options{min-width:0;padding:8px 10px;border:1px solid #8794ad33;border-radius:6px;font-size:12px;color:var(--text-mid)}.record-indexing-options summary{cursor:pointer;min-height:30px;line-height:30px}.record-indexing-options summary>span{float:right;margin-left:10px;font-size:11px}.record-indexing-options label{display:flex;align-items:flex-start;gap:10px;padding:10px 0}.record-indexing-options input{accent-color:#1854cc;width:18px;height:18px;flex-shrink:0}.record-indexing-options label span{display:grid;gap:5px}.record-indexing-options small,.record-indexing-options p{font-size:11px;line-height:1.7;overflow-wrap:anywhere}.record-indexing-options p{margin:0 0 4px}
 .record-todo-consent{grid-column:1/-1;display:flex;align-items:flex-start;gap:12px;padding:15px;background:#dfff4e35;border-left:3px solid #1757c9;color:#16395c;font-size:12px}.record-todo-consent input{accent-color:#1854cc;width:18px;height:18px;flex-shrink:0}.record-todo-consent span{display:grid;gap:6px}.record-todo-consent small{line-height:1.6}
 .record-source summary,.record-segments summary{cursor:pointer;font-size:12px;color:#3b5e77;min-height:36px;padding:10px 0}.record-segments summary span{float:right;color:#627c8e}.record-segments .record-segment{margin-top:10px}.record-source summary:focus-visible,.record-segments summary:focus-visible{outline:2px solid #1854cc;outline-offset:3px}
 

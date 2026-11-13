@@ -1,9 +1,12 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { timeAgo } from '@/utils/time'
 import { typeMap, moodMap } from '@/constants/tags'
 import { MOOD_COLOR } from '@/constants/moodColor'
 import { vCardLift } from '@/composables/useCardLift'
+import { recordIndexingState, shouldPollRecord } from '@/utils/recordIndexing'
+import { useRecordPolling } from '@/composables/useRecordPolling'
+import { useRecordsStore } from '@/stores/records'
 
 const props = defineProps({
   record: { type: Object, required: true },
@@ -17,6 +20,13 @@ const props = defineProps({
 const emit = defineEmits(['open', 'retry', 'delete'])
 
 const status = computed(() => props.record.status)
+const indexing = computed(() => recordIndexingState(props.record))
+const records = useRecordsStore()
+const { startPolling, stopPolling, pollingRecordId } = useRecordPolling({ loadRecord: (id, isCurrent) => records.fetchRecord(id, { isCurrent }) })
+watch(() => [props.record.id, shouldPollRecord(props.record)], ([id, pending]) => {
+  if (indexing.value && pending && pollingRecordId.value !== id) startPolling(id)
+  else if (!pending) stopPolling()
+}, { immediate: true })
 const memoryDisabled = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? '').toUpperCase() === 'DISABLED')
 const memoryReady = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? '').toUpperCase() === 'READY')
 const timeText = computed(() => timeAgo(props.record.created_at))
@@ -114,8 +124,8 @@ const processingPreview = computed(() => {
       <div class="record-tags">
         <span v-for="t in types" :key="t" class="tag tag-type">{{ typeMap[t] || t }}</span>
         <span v-if="status === 'reviewing'" class="tag tag-processing">待审核</span>
-        <span v-if="memoryReady" class="tag tag-memory-ready">已就绪</span>
-        <span v-if="memoryDisabled" class="tag tag-memory-removed">已永久移出记忆</span>
+        <template v-if="indexing"><span class="tag" :class="indexing.readable ? 'tag-memory-ready' : 'tag-memory-removed'">{{ indexing.readabilityLabel }}</span><span class="tag tag-indexing" :data-indexing="indexing.key"><span v-if="indexing.moving" class="spinner" />{{ indexing.label }}</span></template>
+        <template v-else><span v-if="memoryReady" class="tag tag-memory-ready">已就绪</span><span v-if="memoryDisabled" class="tag tag-memory-removed">已永久移出记忆</span></template>
         <span v-for="m in moodChips" :key="m" class="tag">
           <span class="dot" :style="{ background: MOOD_COLOR[m] || '#999' }" />{{ moodMap[m] || m }}
         </span>
@@ -123,6 +133,7 @@ const processingPreview = computed(() => {
     </div>
     <div class="record-title">{{ title }}</div>
     <div class="record-summary">{{ summary }}</div>
+    <p v-if="indexing" class="record-indexing-hint" role="status">{{ indexing.hint }}</p>
     <div v-if="(firstChunk?.metadata?.keywords || []).length" class="record-keywords">
       <span v-for="k in firstChunk.metadata.keywords" :key="k" class="keyword">{{ k }}</span>
     </div>
@@ -160,6 +171,7 @@ const processingPreview = computed(() => {
 .tag-record-only { color: var(--cyan); background: #00d9ff16; }
 .tag-memory-ready { color:#dfff4f; background:#dfff4f12; border:1px solid #dfff4f55; }
 .tag-memory-removed { color: #ffb3c0; background: #ff4b6e1f; border: 1px solid #ff8fa366; }
+.tag-indexing{color:var(--text-mid);gap:5px}.tag-indexing[data-indexing="failed"]{color:#ffb3c0}.tag-indexing .spinner{height:10px;width:10px}.record-indexing-hint{margin:7px 0 0;font-size:11px;line-height:1.7;color:var(--text-mid)}
 .record-raw-preview { white-space: pre-line; }
 
 .record-meta {

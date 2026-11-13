@@ -7,6 +7,7 @@ import RecordActionForm from '@/components/organisms/action-forms/RecordActionFo
 import { TASK_STATUSES, taskStatusMap } from '@/constants/tags'
 import { useGrowthStore } from '@/stores/growth'
 import { createPrepareKey } from '@/api/actions'
+import { indexPolicyVersionOf, recordIndexingState, embeddingEnabledOf, canEditRecordBody } from '@/utils/recordIndexing'
 
 /**
  * 审核面板（v2 原型版）
@@ -28,13 +29,15 @@ const todoStore = useTodoStore()
 const growth = useGrowthStore()
 
 const memoryState = computed(() => String(props.record.memory_state ?? props.record.memoryState ?? (['reviewing', 'record_only'].includes(props.record.status) ? 'NONE' : 'UNKNOWN')).toUpperCase())
+const indexPolicyVersion = computed(() => indexPolicyVersionOf(props.record))
+const indexing = computed(() => recordIndexingState(props.record))
 const editable = computed(() => memoryState.value === 'NONE')
 const candidateMode = computed(() => !!props.proposal)
 const correctionCandidate = computed(() => !!(props.proposal?.payload?.correctionOfRecordId ?? props.proposal?.payload?.correction_of_record_id ?? props.proposal?.preview?.correctionOfRecordId))
 const candidateEditing = ref(true)
-const chunksEditable = computed(() => memoryState.value === 'NONE')
+const chunksEditable = computed(() => canEditRecordBody(props.record))
 const readonly = computed(() => !chunksEditable.value)
-const memoryStateText = computed(() => ({
+const memoryStateText = computed(() => indexing.value ? `${indexing.value.readabilityLabel}。${indexing.value.hint}` : ({
   NONE: '仅保存 · 尚未加入 Mirror 记忆，可编辑并重新提交 AI 整理。',
   PENDING: '记忆建立中 · 本条内容已冻结；部分片段尚未就绪，当前不会用于检索或画像。',
   READY: '记忆已就绪 · 来源和片段只读，后续检索可用。',
@@ -42,7 +45,7 @@ const memoryStateText = computed(() => ({
   UNKNOWN: '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。',
 }[memoryState.value] || '记忆状态暂不可用 · 为保护来源内容，当前按只读显示。'))
 const embeddingProgress = computed(() => {
-  const approved = chunks.value.filter(c => c.ai_memory_approved ?? c.aiMemoryApproved)
+  const approved = chunks.value.filter(c => (c.ai_memory_approved ?? c.aiMemoryApproved) && (indexPolicyVersion.value !== 1 || embeddingEnabledOf(c)))
   const ready = approved.filter(c => String(c.embedding_status ?? c.embeddingStatus ?? (c.has_embedding ?? c.hasEmbedding ? 'ready' : '')).toLowerCase() === 'ready').length
   const failed = approved.filter(c => String(c.embedding_status ?? c.embeddingStatus).toLowerCase() === 'failed').length
   return { total: approved.length, ready, failed }
@@ -341,6 +344,7 @@ watch(() => props.record.id, closePicker)
 
 /** 新增片段：本地空占位，由 chunk-card 的显式保存按钮 POST /records/{id}/chunks */
 function onAddChunk() {
+  if (!chunksEditable.value) return
   const placeholder = {
     id: `local_${Date.now()}`,
     recordId: props.record.id,
@@ -362,7 +366,8 @@ function onAddChunk() {
     <template v-else>
     <div class="memory-state-banner" :data-state="memoryState" role="status">
       <b>{{ memoryState }}</b><span>{{ memoryStateText }}</span>
-      <small v-if="memoryState === 'PENDING' && embeddingProgress.total">
+      <small v-if="indexing">{{ indexing.label }}<template v-if="embeddingProgress.total">：{{ embeddingProgress.ready }}/{{ embeddingProgress.total }} 个片段就绪</template></small>
+      <small v-else-if="memoryState === 'PENDING' && embeddingProgress.total">
         实际入库状态：{{ embeddingProgress.ready }}/{{ embeddingProgress.total }} 个片段就绪<span v-if="embeddingProgress.failed">，{{ embeddingProgress.failed }} 个失败</span>。全部就绪前不会暴露部分记忆。
       </small>
       <small v-if="memoryState === 'NONE' && memoryFailureReason" class="memory-failure-reason">记忆建立未完成，已降级为仅保存；原内容仍可编辑并重新提交。原因：{{ memoryFailureReason }}</small>
@@ -412,7 +417,7 @@ function onAddChunk() {
     </nav>
 
     <div v-for="(chunk, i) in chunks" :key="chunk.id" ref="chunkNodes" class="chunk-review-item">
-      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" :todo-overlay="taskOverlayFor(chunk)" :memory-state="memoryState" @dirty-change="setChunkDirty" />
+      <ChunkCard :chunk="chunk" :index="i" :editable="chunksEditable" :readonly="readonly" :todo-overlay="taskOverlayFor(chunk)" :memory-state="memoryState" :index-policy-version="indexPolicyVersion" @dirty-change="setChunkDirty" />
       <div v-if="editable && !String(chunk.id).startsWith('local_')" class="chunk-consent">
         <label class="chunk-consent-option">
           <input type="checkbox" :checked="memorySelection.has(chunk.id)" :disabled="authorizationBusy || !editable" @change="toggleMemory(chunk.id, $event.target.checked)">
@@ -430,7 +435,7 @@ function onAddChunk() {
     </div>
 
     <template v-if="editable">
-      <button class="add-chunk-btn" @click="onAddChunk">
+      <button v-if="chunksEditable" class="add-chunk-btn" @click="onAddChunk">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         新增片段（AI 自动单段分类）
       </button>

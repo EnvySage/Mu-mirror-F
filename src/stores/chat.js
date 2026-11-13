@@ -1,4 +1,4 @@
-import { normalizeVaultRefs, normalizeToolsUsed, normalizeChatHistory } from '@/utils/chatMessages'
+import { createClientChatMessageId, normalizeVaultRefs, normalizeToolsUsed, normalizeChatHistory } from '@/utils/chatMessages'
 import { createChatFrameHandler } from '@/utils/chatFrames'
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
@@ -24,8 +24,6 @@ import {
 const FALLBACK_TEXT = '暂时无法回答'
 
 const LAST_SESSION_KEY = 'last_chat_session'
-
-let msgId = 0
 
 export const useChatStore = defineStore('chat', () => {
 
@@ -156,14 +154,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function pushUser(content) {
-    const message = { id: String(++msgId), role: 'user', content }
+    const message = { id: createClientChatMessageId(), role: 'user', content }
     messages.value.push(message)
     return messages.value[messages.value.length - 1]
   }
 
   function pushAiPlaceholder(route) {
     const msg = {
-      id: String(++msgId), role: 'ai', content: '', thinking: '', route: route || null,
+      id: createClientChatMessageId(), role: 'ai', content: '', thinking: '', route: route || null,
       typing: true, status: null, outcome: null, errorCode: null, errorMessage: '',
       requestId: null, runId: null, retryable: false, checkingRun: false,
       sources: [], toolsUsed: [], vaultRefs: [], createdRecords: [],
@@ -407,8 +405,7 @@ export const useChatStore = defineStore('chat', () => {
       const sessionActions = Array.isArray(data?.actions) ? data.actions : await cards.loadForSession(id).catch(() => [])
       sessionActions.forEach(card => cards.upsert(card))
       daySummary.value = data?.daySummary || data?.day_summary || null
-      let lastUserMessageId = null
-      const list = normalizeChatHistory(data?.messages, () => ++msgId)
+      const list = normalizeChatHistory(data?.messages, createClientChatMessageId)
       messages.value = list
       activeSessionId.value = id
       sessionId.value = id

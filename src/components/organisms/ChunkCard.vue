@@ -6,6 +6,7 @@ import { useRecordsStore } from '@/stores/records'
 import { useToastStore } from '@/stores/toast'
 import { renderMarkdown } from '@/utils/mdPreview'
 import { createChunkDraft, discardChunkDraft, hasChunkDraftChanges, updateChunkDraft } from '@/utils/chunkDraft'
+import { chunkIndexingState } from '@/utils/recordIndexing'
 /**
  * 片段卡片（v2 原型版 —— "镜面反射"）
  * 左缘 3px accent-grad 光条；segment 作为本地草稿，显式保存后才 PUT /chunks/{id}。
@@ -21,6 +22,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   todoOverlay: { type: Object, default: null },
   memoryState: { type: String, default: 'NONE' },
+  indexPolicyVersion: { type: Number, default: 0 },
 })
 const emit = defineEmits(['dirty-change'])
 
@@ -29,6 +31,7 @@ const toast = useToastStore()
 
 /** 编辑可用 = 审核中 且 非只读（done） */
 const canEdit = computed(() => props.editable && !props.readonly)
+const chunkIndexing = computed(() => chunkIndexingState(props.chunk, props.indexPolicyVersion, props.memoryState))
 
 /** 仅本地占位片段（ReviewPanel 新增）走 POST /records/{id}/chunks */
 const isNew = computed(() => String(props.chunk.id).startsWith('local_'))
@@ -272,13 +275,11 @@ async function removeChunk() {
       <button type="button" class="chunk-draft-cancel" :disabled="saving" @click="cancelSegmentEdit">取消</button>
       <button type="button" class="chunk-draft-save" :disabled="saving || !edit.segment.trim()" @click="saveSegment">{{ saving ? '保存中…' : '保存修改' }}</button>
     </div>
-    <div v-if="chunk.ai_memory_approved ?? chunk.aiMemoryApproved" class="chunk-embedding-status" :data-status="chunk.embedding_status ?? chunk.embeddingStatus ?? (chunk.has_embedding ?? chunk.hasEmbedding ? 'ready' : 'pending')">
-      <span v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'pending' || (!(chunk.embedding_status ?? chunk.embeddingStatus) && !(chunk.has_embedding ?? chunk.hasEmbedding))">◌ 向量重建中，完成后即可用于记忆检索</span>
-      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed'">向量重建失败：{{ chunk.embedding_error ?? chunk.embeddingError ?? '暂时无法生成' }}</span>
-      <span v-else-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'ready' || (chunk.has_embedding ?? chunk.hasEmbedding)">✓ 片段向量已就绪<span v-if="props.memoryState === 'PENDING'">；整条记录全部就绪后才可检索</span><span v-else-if="props.memoryState === 'DISABLED'">；已永久移出记忆</span></span>
-      <span v-else>尚未生成向量</span>
-      <button v-if="(chunk.embedding_status ?? chunk.embeddingStatus) === 'failed' || (!(chunk.has_embedding ?? chunk.hasEmbedding) && (chunk.embedding_status ?? chunk.embeddingStatus) === 'not_requested')" type="button" :disabled="saving" @click="retryEmbedding">重试生成</button>
+    <div v-if="chunk.ai_memory_approved ?? chunk.aiMemoryApproved" class="chunk-embedding-status" :data-status="chunkIndexing.key">
+      <span>{{ chunkIndexing.label }}</span>
+      <button v-if="chunkIndexing.retry" type="button" :disabled="saving" @click="retryEmbedding">重试生成</button>
     </div>
+    <div v-else-if="indexPolicyVersion === 1" class="chunk-embedding-status" data-status="unapproved">未授权 · 不可供 AI 查询</div>
 
     <!-- 标题/摘要（AI 生成展示） -->
     <div class="chunk-field">

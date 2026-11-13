@@ -267,9 +267,13 @@ function autoGrow() {
   const el = inputEl.value
   if (!el) return
   el.style.height = 'auto'
-  const maxHeight = isMobile.value ? 112 : 110
-  el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px'
-  el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  el.style.overflowY = 'hidden'
+  const style = getComputedStyle(el)
+  const maxHeight = parseFloat(style.maxHeight) || 110
+  const borderHeight = (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0)
+  const contentHeight = el.scrollHeight + borderHeight
+  el.style.height = Math.min(contentHeight, maxHeight) + 'px'
+  el.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden'
   chatScroll.requestBottom()
 }
 
@@ -277,7 +281,7 @@ async function send() {
   if (!canSend.value) return
   const text = input.value
   input.value = ''
-  if (inputEl.value) inputEl.value.style.height = 'auto'
+  nextTick(autoGrow)
 
 
   scrollToBottom()

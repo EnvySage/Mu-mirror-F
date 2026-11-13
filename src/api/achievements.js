@@ -5,7 +5,6 @@ const data = promise => promise.then(response => response.data)
 export const achievementApi = {
   collection: () => data(request.get('/achievements')),
   pending: () => data(request.get('/achievements/pending')),
-  acknowledge: codes => data(request.post('/achievements/acknowledge', { codes })),
   acknowledgeNotifications: notifications => data(request.post('/achievements/acknowledge', { notifications })),
   showcase: () => data(request.get('/achievements/showcase')),
   saveShowcase: payload => data(request.put('/achievements/showcase', payload)),

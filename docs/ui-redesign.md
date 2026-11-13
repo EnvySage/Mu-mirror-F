@@ -10,6 +10,20 @@
 - Mirror focuses on recent accomplishments, progress, emotional state, and unfinished tasks. Historical snapshots remain distinct from the rolling 30-day statistics.
 - Responsive desktop/mobile layouts, keyboard focus, reduced-motion support, visible loading/error/empty states. Preserve review, snapshot comparison, streaming chat, upload confirmation, and delete protection.
 
+## Dialogue reading density — 2026-11-13
+
+- Chat body text uses 13px on desktop and 14px in the mobile layout, with a 1.6 line height. Markdown paragraphs use a .45em gap; lists and headings follow the same compact rhythm.
+- Message bubbles use 10–12px vertical padding, with 12–14px between messages. Sender labels, retrieval references, and the full-reply control use smaller gaps so short replies occupy less of the viewport.
+- Long-reply excerpts inherit the bubble typography. The full-reply reader uses 14px text with a 1.65 line height.
+- The composer starts at one line, grows with wrapped text or Shift+Enter, and scrolls internally after reaching 110px on desktop or 112px on mobile. Deleting text or sending a message restores the compact height; mobile action buttons retain 44px touch targets.
+
+## Achievement notification batches — 2026-11-13
+
+- One pending award keeps the existing detail reveal. Multiple pending awards share one compact dialog, at most 640px wide: three columns on desktop, two on mobile. The list scrolls vertically when needed; the accept-all footer stays visible.
+- The opened batch is a snapshot. Closing it acknowledges exactly those `(code, kind)` identities in one API request; awards arriving afterward stay pending for the next batch. Ordinary medals and plating remain distinct, with the ordinary medal showing its base finish.
+- Single-award and multi-award dismissal share the store's `acknowledgeBatch` path and the API's `acknowledgeNotifications` method; unused single-award aliases have been removed. The backend still accepts legacy `{codes}` requests.
+- Existing dialog deferral, keyboard focus containment, Escape dismissal, reduced motion, account isolation, and server persistence on acknowledgement failures remain in use.
+
 ## Assets
 
 P3R character images are original ATLUS / SEGA assets from the [official site](https://p3re.jp/en/), included at the user's request. Provenance is retained here; these are not represented as original Mirror characters.

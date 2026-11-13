@@ -1,4 +1,5 @@
 import { onBeforeUnmount } from 'vue'
+import { shouldPollRecord } from '@/utils/recordIndexing'
 
 export function useDetailPolling({ ui, recordsStore, todoStore, actionsStore, toast, record, preparedRecordAction, onRecordActionUpdated, getGeneration }) {
 let pollTimer = null
@@ -93,13 +94,13 @@ function startEmbeddingPolling(recordId) {
     embeddingPollInFlight = false
     if (generation !== getGeneration() || String(ui.selectedRecordId) !== String(recordId)) {
       const current = record.value
-      if (!pollTimer && String(current?.memory_state ?? current?.memoryState ?? '').toUpperCase() === 'PENDING') {
+      if (!pollTimer && shouldPollRecord(current)) {
         startEmbeddingPolling(current.id)
       }
       return
     }
     if (!r) return
-    const pending = String(r.memory_state ?? r.memoryState ?? '').toUpperCase() === 'PENDING'
+    const pending = shouldPollRecord(r)
     if (pending) {
       if (!pollTimer) pollTimer = setTimeout(tick, 1800)
     } else stopPolling()

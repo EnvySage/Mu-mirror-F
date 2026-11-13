@@ -56,10 +56,16 @@ export const useAchievementsStore = defineStore('achievements', () => {
     if (result.length) await load()
     if (token === epoch) pending.value = result
   }
-  async function acknowledge(notification) {
+  async function acknowledgeBatch(notifications) {
+    const batch = [...new Map(notifications.map(item => {
+      const notification = { code: item.code, kind: item.kind || 'earned' }
+      return [notificationKey(notification), notification]
+    })).values()]
+    if (!batch.length) return
     const token = epoch
-    await achievementApi.acknowledgeNotifications([{ code: notification.code, kind: notification.kind || 'earned' }])
-    if (token === epoch) pending.value = pending.value.filter(item => notificationKey(item) !== notificationKey(notification))
+    await achievementApi.acknowledgeNotifications(batch)
+    const acknowledged = new Set(batch.map(notificationKey))
+    if (token === epoch) pending.value = pending.value.filter(item => !acknowledged.has(notificationKey(item)))
   }
-  return { catalog, groups, loading, error, pending, designMode, load, poll, acknowledge }
+  return { catalog, groups, loading, error, pending, designMode, load, poll, acknowledgeBatch }
 })

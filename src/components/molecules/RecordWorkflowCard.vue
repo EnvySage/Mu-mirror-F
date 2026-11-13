@@ -13,7 +13,7 @@ const title = computed(() => draft.value.segments?.find(s => s.title?.trim())?.t
   <button type="button" :class="['record-flight', `flight-${state.key}`, { compact }]" :data-workflow-id="proposal.id" :data-phase="state.key" @click="$emit('open')">
     <span class="flight-number" aria-hidden="true">{{ String(state.step + 1).padStart(2, '0') }}<i>✦</i></span>
     <span class="flight-content"><span class="flight-status" role="status"><i :class="{ moving: state.moving }" />{{ state.label }}<small v-if="state.key === 'review' || state.key === 'preparing'">尚未保存</small></span><strong :key="title">{{ title }}</strong><span class="flight-hint">{{ state.hint }}</span><span class="flight-track" aria-hidden="true"><i v-for="n in 4" :key="n" :class="{ passed: n <= state.step, current: n === state.step + 1 }" /></span></span>
-    <span class="flight-open">{{ state.key === 'review' ? '打开，改成你的版本' : state.key === 'done' ? '查看记录' : state.key === 'failed' ? '查看并处理' : '查看进度' }}<b aria-hidden="true">↗</b></span>
+    <span class="flight-open">{{ state.key === 'review' ? '打开，改成你的版本' : state.key === 'done' ? '查看已保存记录' : state.key === 'failed' ? '查看并处理' : '查看进度' }}<b aria-hidden="true">↗</b></span>
   </button>
 </template>
 <style scoped>

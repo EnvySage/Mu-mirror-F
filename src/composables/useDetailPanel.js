@@ -1,4 +1,5 @@
 import { useDetailPolling } from '@/composables/useDetailPolling'
+import { shouldPollRecord } from '@/utils/recordIndexing'
 import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
@@ -111,7 +112,7 @@ function updateDetailMode(r) {
     ui.detailMode = 'view'
   } else {
     ui.detailMode = 'view'
-    if (String(r.memory_state ?? r.memoryState ?? '').toUpperCase() === 'PENDING') {
+    if (shouldPollRecord(r)) {
       startEmbeddingPolling(r.id)
     }
     if ((r.chunks || []).length > 0) {
@@ -187,7 +188,7 @@ watch(record, (newRecord, oldRecord) => {
 
 watch(() => `${record.value?.memory_state ?? record.value?.memoryState ?? ''}:${(record.value?.chunks || []).map(chunk => `${chunk.id}:${chunk.embedding_status ?? chunk.embeddingStatus ?? ''}`).join('|')}`, () => {
   if (!record.value) return
-  const pending = String(record.value.memory_state ?? record.value.memoryState ?? '').toUpperCase() === 'PENDING'
+  const pending = shouldPollRecord(record.value)
   if (pending && !hasPolling() && !isEmbeddingPolling()) startEmbeddingPolling(record.value.id)
   else if (!pending && hasPolling()) stopPolling()
 })

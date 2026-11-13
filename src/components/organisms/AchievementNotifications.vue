@@ -5,42 +5,39 @@ import { useUIStore } from '@/stores/ui'
 import { useAchievementsStore } from '@/stores/achievements'
 import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AchievementDialog from './AchievementDialog.vue'
-import { notificationKey, notificationMedal } from '@/utils/achievementNotifications'
+import AchievementBatchDialog from './AchievementBatchDialog.vue'
+import { notificationBatch } from '@/utils/achievementNotifications'
 
 const auth = useAuthStore()
 const ui = useUIStore()
 const achievements = useAchievementsStore()
-const displayed = ref(null)
-const displayedNotification = ref(null)
+const displayed = ref([])
 const busy = ref(false)
 const dismissed = new Set()
 let timer
 let alive = true
 const available = computed(() => !ui.showDetail && !ui.showWriteModal && !ui.showSummarySheet)
 async function check() {
-  if (IS_DEMO_PREVIEW || achievements.designMode || busy.value || !available.value || document.hidden || displayed.value
+  if (IS_DEMO_PREVIEW || achievements.designMode || busy.value || !available.value || document.hidden || displayed.value.length
       || document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) return
   busy.value = true
   try {
     await achievements.poll()
-    const next = achievements.pending.find(item => !dismissed.has(notificationKey(item)))
-    const medal = notificationMedal(next, achievements.catalog)
-    if (alive && available.value && medal && !document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) {
-      displayedNotification.value = next
-      displayed.value = medal
+    const batch = notificationBatch(achievements.pending, achievements.catalog, dismissed)
+    if (alive && available.value && !document.hidden && batch.length && !document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) {
+      displayed.value = batch
     }
   } catch { /* Pending awards remain on the server until acknowledged. */ }
   finally { busy.value = false }
 }
 function close() {
-  const notification = displayedNotification.value
-  displayed.value = null
-  displayedNotification.value = null
-  if (!notification) return
-  dismissed.add(notificationKey(notification))
-  achievements.acknowledge(notification).catch(() => {})
+  const batch = displayed.value
+  displayed.value = []
+  if (!batch.length) return
+  batch.forEach(item => dismissed.add(item.key))
+  achievements.acknowledgeBatch(batch.map(item => item.notification)).catch(() => {})
 }
-watch(() => auth.user?.id, () => { displayed.value = null; displayedNotification.value = null; dismissed.clear() })
+watch(() => auth.user?.id, () => { displayed.value = []; dismissed.clear() }, { flush: 'sync' })
 onMounted(() => {
   if (IS_DEMO_PREVIEW) return
   timer = setInterval(check, 10000)
@@ -49,4 +46,7 @@ onMounted(() => {
 onBeforeUnmount(() => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', check) })
 </script>
 
-<template><AchievementDialog :medal="displayed" reveal :preview-mode="false" @close="close" /></template>
+<template>
+  <AchievementDialog :medal="displayed.length === 1 ? displayed[0].medal : null" reveal :preview-mode="false" @close="close" />
+  <AchievementBatchDialog :awards="displayed.length > 1 ? displayed : []" @close="close" />
+</template>

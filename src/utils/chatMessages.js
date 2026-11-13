@@ -1,5 +1,12 @@
 import { normalizeCreatedRecords } from './chatProtocol.js'
 
+/** Local optimistic IDs must never collide with persisted server message IDs. */
+export function createClientChatMessageId() {
+  const randomId = globalThis.crypto?.randomUUID?.()
+  if (randomId) return `client-${randomId}`
+  return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
 export function normalizeVaultRefs(refs) {
   const seen = new Map()
   for (const r of refs) {
@@ -49,10 +56,12 @@ export function normalizeChatHistory(messages, nextId) {
   let lastUserMessageId = null
   return (messages || []).map(m => {
   const role = m.role === 'assistant' ? 'ai' : 'user'
-  if (role === 'user') lastUserMessageId = String(m.id ?? '')
+  const serverMessageId = m.id == null || String(m.id) === '' ? null : String(m.id)
+  const id = serverMessageId || String(nextId())
+  if (role === 'user') lastUserMessageId = id
   return {
-  id: String(m.id ?? nextId()),
-  serverMessageId: String(m.id ?? ''),
+  id,
+  serverMessageId,
   role,
   actionSourceMessage: role === 'ai' ? lastUserMessageId : null,
   content: m.content || '',
