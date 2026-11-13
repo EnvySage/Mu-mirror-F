@@ -130,11 +130,12 @@ async function submit() {
 </template>
 
 <style scoped>
-.ledger-editor,.entry-heading{display:grid;gap:10px}
+.ledger-editor,.entry-heading{display:grid;gap:12px}
 .ledger-editor label{display:grid;gap:5px;font-size:13px;font-weight:700;color:#294874}
-.ledger-editor :is(input:not([type=checkbox]),textarea){min-height:42px;width:100%;border:1px solid #b7cae9;border-radius:0;padding:7px 10px;background:white;color:var(--night);font:inherit;font-size:14px}
+.ledger-editor :is(input:not([type=checkbox]),textarea){min-height:42px;width:100%;border:0;border-bottom:1px solid #9fb8dc;border-radius:0;padding:9px 10px;background:#edf3ff;color:var(--night);font:inherit;font-size:14px;transition:background .15s,border-color .15s}
+.ledger-editor :is(input:not([type=checkbox]),textarea):focus{background:#e2faff;outline:2px solid var(--electric);outline-offset:1px}
 .ledger-editor textarea{resize:vertical}
-.ledger-editor .ledger-upload{position:relative;display:flex;align-items:center;min-height:47px;padding:8px 12px;background:#e1eeff;border:1px dashed #4e79ca;color:#1647a5;cursor:pointer}
+.ledger-editor .ledger-upload{position:relative;display:flex;align-items:center;min-height:47px;padding:10px 14px;background:#dcf8ff;border:1px dashed #5b8eb9;color:#1647a5;cursor:pointer;box-shadow:3px 3px 0 #c2d9f6}
 .ledger-upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .ledger-upload:focus-within{outline:2px solid var(--electric);outline-offset:2px}
 .ledger-editor-info,.ledger-form-error{font-size:13px;line-height:1.55;margin:0}
@@ -143,8 +144,9 @@ async function submit() {
 .ledger-category summary{cursor:pointer;padding:7px 0}
 .ledger-category>div{display:grid;grid-template-columns:1fr auto;gap:8px}
 .ledger-editor .ledger-diary-check{display:flex;align-items:center;gap:8px;min-height:40px}
-footer{display:flex;justify-content:flex-end;gap:9px;padding-top:12px;border-top:1px solid var(--line)}
+footer{position:sticky;bottom:0;z-index:2;display:flex;justify-content:flex-end;gap:9px;padding:14px 0 5px;border-top:1px dashed #a7bddc;background:#f8fbfff5;backdrop-filter:blur(8px)}
 button{min-height:41px;padding:7px 13px;border:1px solid #b3c8e9;font-weight:700}
-.ledger-submit{background:#0c44cb;color:white;border-color:#0c44cb;box-shadow:3px 3px 0 var(--cyan)}
+.ledger-submit{background:#0c44cb;color:white;border-color:#0c44cb;box-shadow:3px 3px 0 var(--cyan);transition:transform .2s,box-shadow .2s}
+.ledger-submit:hover{transform:translateY(-2px);box-shadow:4px 5px 0 var(--cyan)}
 button:disabled{opacity:.5}
 </style>

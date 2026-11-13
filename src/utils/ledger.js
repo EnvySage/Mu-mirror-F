@@ -1,6 +1,14 @@
 export const flowLabels = { EXPENSE: '支出', INCOME: '收入', RECOVERY: '收回款' }
 export const validAmount = value => /^\d{1,10}(\.\d{1,2})?$/.test(String(value).trim()) && Number(value) > 0
 export const currency = value => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(Number(value || 0))
+
+export function entryHeadline(entry) {
+  const income = Number(entry.income || 0), expense = Number(entry.expense || 0), recovery = Number(entry.recovery || 0)
+  if (!expense && income && !recovery) return { amount: income, label: '收入', tone: 'income' }
+  if (!expense && recovery && !income) return { amount: recovery, label: '收回', tone: 'recovery' }
+  const net = Number(entry.net_expense || 0)
+  return { amount: Math.abs(net), label: net < 0 ? '净收回' : '净支出', tone: net < 0 ? 'recovery' : 'expense' }
+}
 export const shanghaiToday = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date())

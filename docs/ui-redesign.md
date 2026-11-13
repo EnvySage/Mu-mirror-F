@@ -24,6 +24,13 @@
 - Single-award and multi-award dismissal share the store's `acknowledgeBatch` path and the API's `acknowledgeNotifications` method; unused single-award aliases have been removed. The backend still accepts legacy `{codes}` requests.
 - Existing dialog deferral, keyboard focus containment, Escape dismissal, reduced motion, account isolation, and server persistence on acknowledgement failures remain in use.
 
+## Ledger receipts and motion — 2026-11-13
+
+- Ledger dialogs explicitly use viewport positioning and automatic margins, overriding the global margin reset. Desktop and mobile stay centered at a maximum width of 650px; short screens scroll inside the dialog while the header and form actions remain visible. Native focus containment, Escape, return focus and busy-state dismissal guards remain in use.
+- The main page uses an angled live receipt for today's figures, an offset seven-day chart, and dated paper rows. Filters and exports start collapsed. Pure-income rows show their actual income as the main amount; mixed cashflows retain the backend's net-expense value and separate income/recovery labels.
+- Wish cards use offset placement, visible percentages and distinct active/achieved/future surfaces. Receipt settling, chart growth, row arrival and tab changes provide motion; dialog entry reuses `useOverlayMotion`. Both CSS and shared motion handling respect reduced-motion preferences.
+- Validation: 103 Node tests and production build pass. Actual local-browser checks cover centered desktop/mobile dialogs, a 390×480 short viewport with internal scrolling and visible actions, Escape/return focus, and no horizontal overflow. The complete isolated Chrome preview smoke also passes: mobile capture/save, wish creation, calendar deep links, receipt review/confirmation, desktop layout and the new centering/short-screen assertions. The preview used its own service and synthetic data; the live local account was not changed by that run.
+
 ## Assets
 
 P3R character images are original ATLUS / SEGA assets from the [official site](https://p3re.jp/en/), included at the user's request. Provenance is retained here; these are not represented as original Mirror characters.

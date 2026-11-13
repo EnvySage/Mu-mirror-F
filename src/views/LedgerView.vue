@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { downloadLedger, getLedgerBrief, getLedgerCategories, getLedgerRecord, getLedgerRecords, removeLedgerFlow, removeLedgerRecord } from '@/api/ledger'
 import { fetchPreviewBlob } from '@/api/vault'
 import { useToastStore } from '@/stores/toast'
-import { currency, flowLabels, shanghaiToday, shiftDay } from '@/utils/ledger'
+import { currency, entryHeadline, flowLabels, shanghaiToday, shiftDay } from '@/utils/ledger'
 import LedgerDialog from '@/components/ledger/LedgerDialog.vue'
 import LedgerEntryEditor from '@/components/ledger/LedgerEntryEditor.vue'
 import LedgerPlanning from '@/components/ledger/LedgerPlanning.vue'
@@ -18,6 +18,7 @@ const activeDialog = ref(''), editorMode = ref('create'), editorSeed = ref(null)
 const selected = ref(null), dialogError = ref(''), detailBusy = ref(false), editorBusy = ref(false)
 const preview = ref(null), previewBusy = ref(false)
 const panel = ref('entries')
+const displayEntries = computed(() => entries.value.map(entry => ({ ...entry, headline: entryHeadline(entry) })))
 let requestSerial = 0, detailSerial = 0, imageSerial = 0, clock
 
 const totalLabels = [['expense', '付出'], ['income', '收入'], ['recovery', '收回']]
@@ -166,7 +167,7 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
     <div class="page-content">
       <header class="ledger-masthead">
         <div>
-          <h1>账本</h1>
+          <div class="ledger-title-line"><h1>账本</h1><time :datetime="today">{{ today.slice(5).replace('-', '.') }}</time></div>
           <p>今天的每一笔，都有来处。</p>
         </div>
         <button class="ledger-main-action" type="button" @click="openEditor()">＋ 记一笔</button>
@@ -176,8 +177,8 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
         <article class="ledger-today">
           <div class="ticket-lines" aria-hidden="true" />
           <div class="ledger-today-copy">
-            <h2>今日简报 <small>{{ today }}</small></h2>
-            <p>净消费</p>
+            <h2>今日简报 <small>{{ day ? day.flow_count : '—' }} 笔已确认</small></h2>
+            <p>净支出</p>
             <strong>{{ day ? currency(day.net_expense) : '—' }}</strong>
             <dl><div v-for="[key, label] in totalLabels" :key="key"><dt>{{ label }}</dt><dd>{{ day ? currency(day[key]) : '—' }}</dd></div></dl>
           </div>
@@ -186,7 +187,7 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
           <div class="week-heading"><h2>近七天</h2><strong>{{ week ? currency(week.net_expense) : '—' }}</strong></div>
           <p>已确认净消费 · 下方按日显示实际付出</p>
           <div v-if="week?.days?.length" class="week-bars" aria-label="近七天每日付出">
-            <div v-for="row in week.days" :key="row.date" :title="row.date + ' 付出 ' + currency(row.expense)">
+            <div v-for="(row, index) in week.days" :key="row.date" :title="row.date + ' 付出 ' + currency(row.expense)" :style="{ '--bar': index }" role="img" :aria-label="row.date + ' 付出 ' + currency(row.expense)">
               <i :style="{ height: Math.max(3, 100 * Number(row.expense || 0) / scale) + '%' }" />
               <span>{{ row.date.slice(5) }}</span>
             </div>
@@ -195,13 +196,16 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
         </article>
       </section>
 
-      <nav class="ledger-sections" aria-label="账本分区">
+      <nav class="ledger-sections" aria-label="账本分区" :style="{ '--ledger-tab': panel === 'plans' ? 1 : 0 }">
         <button type="button" :aria-pressed="panel === 'entries'" @click="panel = 'entries'">账目流水</button>
         <button type="button" :aria-pressed="panel === 'plans'" @click="panel = 'plans'">愿望与周期</button>
       </nav>
+      <Transition name="ledger-pane" mode="out-in">
       <LedgerPlanning v-if="panel === 'plans'" :categories="categories" @ledger-updated="load" @open-record="navigateToRecord" />
       <section v-else class="ledger-history" aria-labelledby="ledger-entries">
-        <div class="ledger-history-title"><h2 id="ledger-entries">账目流水</h2><span>按发生日查看</span></div>
+        <div class="ledger-history-title"><h2 id="ledger-entries">账目流水</h2><span>{{ entries.length }} 组账目</span></div>
+        <details class="ledger-filter-panel">
+        <summary><span>筛选与导出</span><time>{{ from.slice(5).replace('-', '.') }} — {{ to.slice(5).replace('-', '.') }}</time></summary>
         <form class="ledger-filter" @submit.prevent="load">
           <label>从<input v-model="from" type="date" :max="today" /></label>
           <label>至<input v-model="to" type="date" :max="today" /></label>
@@ -212,19 +216,25 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
           <button type="button" :disabled="exporting || !dateRangeValid" @click="exportRange('csv')">导出 CSV</button>
           <button type="button" :disabled="exporting || !dateRangeValid" @click="exportRange('json')">导出 JSON</button>
         </div>
+        </details>
         <div v-if="viewError" class="ledger-message" role="alert"><p>{{ viewError }}</p><button type="button" @click="load">重试</button></div>
         <p v-if="loading" class="ledger-message" role="status">正在查账…</p>
         <p v-else-if="!entries.length && !viewError" class="ledger-message">这个日期范围里还没有账目。</p>
         <ul v-else class="ledger-items">
-          <li v-for="entry in entries" :key="entry.id">
-            <button type="button" class="ledger-item" @click="navigateToRecord(entry.id)">
-              <div><strong>{{ entry.title }}</strong><p>{{ entry.record_date }} · {{ entry.flows?.length || 0 }} 笔</p></div>
-              <div class="ledger-item-amount"><strong>{{ currency(entry.net_expense) }}</strong><small v-if="entry.income">收入 {{ currency(entry.income) }}</small><small v-if="entry.recovery">收回 {{ currency(entry.recovery) }}</small></div>
-              <span aria-hidden="true">›</span>
+          <li v-for="(entry, index) in displayEntries" :key="entry.id" :style="{ '--row': Math.min(index, 7) }">
+            <button type="button" class="ledger-item" :data-tone="entry.headline.tone" @click="navigateToRecord(entry.id)">
+              <time class="ledger-item-day" :datetime="entry.record_date" aria-hidden="true">{{ entry.record_date.slice(8) }}<small>{{ entry.record_date.slice(5, 7) }} 月</small></time>
+              <span class="ledger-item-paper">
+                <span class="ledger-item-direction" aria-hidden="true">{{ entry.headline.tone === 'expense' ? '↙' : '↗' }}</span>
+                <span class="ledger-item-copy"><strong>{{ entry.title }}</strong><span>{{ entry.record_date }} · {{ entry.flows?.length || 0 }} 笔<span v-if="entry.diary_ids?.length"> · 已关联随记</span></span></span>
+                <span class="ledger-item-amount"><small>{{ entry.headline.label }}</small><strong>{{ currency(entry.headline.amount) }}</strong><small v-if="entry.income && entry.headline.tone !== 'income'">收入 {{ currency(entry.income) }}</small><small v-if="entry.recovery && entry.headline.tone !== 'recovery'">收回 {{ currency(entry.recovery) }}</small></span>
+                <span class="ledger-item-arrow" aria-hidden="true">›</span>
+              </span>
             </button>
           </li>
         </ul>
       </section>
+      </Transition>
     </div>
 
     <LedgerDialog :open="activeDialog === 'editor'" :title="editorTitle" :busy="editorBusy" @close="backFromEditor">
@@ -260,54 +270,4 @@ onBeforeUnmount(() => { clearInterval(clock); requestSerial++; detailSerial++; d
   </div>
 </template>
 
-<style scoped>
-.ledger-page{display:flex;flex:1;min-height:0;overflow:auto;color:#edf5ff}
-.ledger-page .page-content{flex:1;width:100%;min-width:0;padding-top:clamp(24px,4vw,54px);padding-bottom:40px}
-.ledger-masthead{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:0 1px 17px;border-bottom:1px solid #5682d2;margin-bottom:17px}
-.ledger-masthead h1{margin:0;font-size:clamp(45px,7vw,86px);font-weight:900;line-height:1;letter-spacing:-.1em;transform:skew(-9deg);transform-origin:left;color:#fff;text-shadow:4px 4px 0 #1251e7}
-.ledger-masthead p{margin:12px 0 0;font-size:13px;color:#c6d9ff}
-.ledger-main-action{flex-shrink:0;min-height:46px;padding:8px 18px;background:var(--cyan);color:var(--night);font-size:16px;font-weight:900;transform:skew(-8deg);box-shadow:4px 4px 0 var(--pink)}
-.ledger-briefs{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:13px}
-.ledger-today{position:relative;isolation:isolate;min-height:252px;overflow:hidden;background:var(--night);border-left:5px solid var(--cyan);clip-path:polygon(0 0,100% 0,100% 91%,96% 100%,0 100%)}
-.ticket-lines{position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#06123f 7%,#06123f 28%,#06123fdd 49%,#06123f00 76%),url('/art/ledger/receipt-tide.svg') right center/auto 100% no-repeat}
-.ledger-today-copy{padding:22px clamp(14px,2.4vw,27px)}
-.ledger-today h2,.ledger-week h2,.ledger-history h2{margin:0;font-size:19px;font-weight:900}
-.ledger-today h2 small{margin-left:6px;font:italic 700 14px var(--font-display);color:var(--cyan);white-space:nowrap}
-.ledger-today p,.ledger-week p{margin:12px 0 0;font-size:12px;color:#c2d5ff}
-.ledger-today-copy>strong{font:italic 900 clamp(49px,8vw,78px)/1 var(--font-display);letter-spacing:-.025em;color:white;text-shadow:3px 3px 0 var(--electric);overflow-wrap:anywhere}
-.ledger-today dl,.ledger-detail dl{display:flex;flex-wrap:wrap;gap:12px 16px;margin:17px 0 0;padding:0}
-.ledger-today dl{width:fit-content;max-width:100%;padding:5px 12px 6px 0;background:linear-gradient(94deg,#06123fdd,#06123fc8);clip-path:polygon(0 0,100% 0,97% 100%,0 100%)}
-.ledger-today dl div{border-left:2px solid var(--pink);padding-left:8px}
-.ledger-today dt,.ledger-detail dt{font-size:11px;color:inherit}
-.ledger-today dd,.ledger-detail dd{margin:2px 0 0;font:italic 800 22px var(--font-display);color:inherit}
-.ledger-week{padding:20px clamp(14px,2.1vw,23px);background:#143572c9;border-top:4px solid var(--pink);min-width:0}
-.week-heading{display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap}.week-heading strong{font:italic 800 31px var(--font-display);color:var(--cyan)}
-.ledger-week p{margin:3px 0 16px}
-.week-bars{height:96px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:5px;padding:0 0 15px;border-bottom:1px solid #84b6fb68}
-.week-bars>div{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative}
-.week-bars i{display:block;width:68%;background:var(--cyan);box-shadow:3px 0 0 #1762ff;transform:skew(-7deg)}
-.week-bars span{font:700 11px var(--font-display);position:absolute;bottom:-15px;color:#d8e7ff}
-.week-empty{display:grid;place-items:center;height:90px;color:#bed2fa;font-size:13px}
-.ledger-sections{display:flex;gap:7px;margin-top:23px;align-items:center}
-.ledger-sections button{padding:5px 12px;min-height:42px;border:1px solid #688fda;color:#dceaff;font-size:13px;font-weight:800;clip-path:polygon(0 0,100% 0,95% 100%,0 100%)}
-.ledger-sections button[aria-pressed=true]{background:var(--cyan);border-color:var(--cyan);color:var(--night)}
-.ledger-history{margin-top:9px;background:#0b2152ed;border:1px solid #4066ac;padding:clamp(14px,2.2vw,24px)}
-.ledger-history-title{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}.ledger-history-title span{font-size:11px;color:#c1d4f8}
-.ledger-filter{display:grid;grid-template-columns:repeat(2,minmax(110px,.7fr)) minmax(130px,1.4fr) auto;gap:8px;align-items:end}
-.ledger-filter label{display:grid;gap:5px;font-size:11px;color:#d0e0ff;min-width:0}
-.ledger-filter input{min-height:40px;width:100%;min-width:0;padding:7px 9px;background:#f4f9ff;color:#091b43;border:0;border-radius:0;font:inherit;font-size:14px}
-.ledger-filter button,.ledger-message button{min-height:40px;padding:6px 13px;background:#50edfa;color:var(--night);font-weight:800}
-.ledger-export{display:flex;gap:9px;margin:11px 0 0;justify-content:flex-end}.ledger-export button{min-height:35px;border-bottom:1px solid #6bb8f3;padding:4px 5px;color:#c9e5ff;font-size:12px}
-.ledger-export button:disabled,.ledger-filter button:disabled{opacity:.5}
-.ledger-items{list-style:none;margin:9px 0 0;padding:0}.ledger-items li+li{border-top:1px solid #4765a0}
-.ledger-item{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:13px;text-align:left;min-height:66px;width:100%;padding:9px 4px;color:#f3f8ff}
-.ledger-item:hover{background:#3152a44d}.ledger-item strong{overflow-wrap:anywhere}.ledger-item p{font-size:11px;color:#b3c8f4;margin:4px 0 0}
-.ledger-item-amount{display:grid;justify-items:end;gap:1px}.ledger-item-amount strong{font:italic 800 25px var(--font-display);color:var(--cyan)}.ledger-item-amount small{font-size:10px;color:#c9dcff}
-.ledger-message{font-size:14px;margin:12px 0 0;color:#dbebff}.ledger-detail-error{color:#a92450;font-size:13px}
-.ledger-detail p{margin:0 0 10px}.ledger-detail dl{margin:0;background:#e6efff;padding:10px 13px}.ledger-detail ol{padding:0;list-style:none}.ledger-detail li{display:grid;grid-template-columns:1fr auto;align-items:start;gap:8px;border-bottom:1px solid var(--line);padding:10px 0}
-.ledger-detail li small{display:block;color:#4c6590;margin-top:4px}.ledger-detail li p{font-size:13px;margin:6px 0 0}.ledger-detail li img{max-width:min(100%,380px);grid-column:1/-1}
-.ledger-flow-actions,.ledger-detail footer{display:flex;gap:7px;flex-wrap:wrap}.ledger-detail button,.ledger-diary-links a{min-height:37px;padding:6px 9px;border:1px solid #b8cbed;color:#174396;font-weight:700;font-size:12px}
-.ledger-diary-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-@media(max-width:770px){.ledger-briefs{grid-template-columns:1fr}.ledger-today{min-height:225px}.ledger-filter{grid-template-columns:repeat(2,minmax(0,1fr))}.ledger-filter button{justify-self:stretch}}
-@media(max-width:400px){.ledger-page .page-content{padding-inline:12px}.ledger-main-action{padding-inline:13px}.ledger-week{padding-top:13px}.ledger-item{gap:8px}.ledger-item-amount strong{font-size:22px}}
-</style>
+<style scoped src="../assets/styles/ledger-view.css"></style>

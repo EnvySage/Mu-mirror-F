@@ -39,13 +39,14 @@ function selectExpense(flow) {
 
 <style scoped>
 .ledger-flow-fields{display:grid;gap:10px}
-fieldset{min-width:0;margin:0;padding:12px;border:1px solid #a7bee4;background:#edf4ff}
-legend{padding:0 6px;color:#1b48a0;font-size:13px;font-weight:800}
+fieldset{min-width:0;margin:0;padding:14px;border:0;border-left:3px solid var(--electric);background:#e9f1ff}
+legend{padding:4px 10px;color:#f8fbff;background:var(--night);font-size:12px;font-weight:800;transform:rotate(-2deg)}
 .ledger-flow-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
 label{display:grid;gap:5px;color:#284770;font-size:12px;font-weight:700;margin:4px 0}
-input,select{width:100%;min-width:0;min-height:41px;padding:7px 8px;border:1px solid #b7cae9;border-radius:0;color:#10254e;background:white;font:inherit;font-size:14px}
+input,select{width:100%;min-width:0;min-height:41px;padding:8px 9px;border:0;border-bottom:1px solid #9db6dc;border-radius:0;color:#10254e;background:white;font:inherit;font-size:14px}
+input:focus,select:focus{outline:2px solid var(--electric);outline-offset:1px}
 .ledger-flow-tail{display:flex;align-items:center;justify-content:space-between;gap:7px;font-size:12px}
 .ledger-flow-tail button{margin-left:auto;color:#981e55;min-height:35px;padding:0 8px}
-.ledger-flow-add{justify-self:start;border:1px solid #4675cf;color:#1247b5;min-height:40px;padding:6px 11px;font-size:13px;font-weight:700}
+.ledger-flow-add{justify-self:start;border:0;border-bottom:2px solid #4675cf;color:#1247b5;min-height:40px;padding:6px 2px;font-size:13px;font-weight:700}
 .ledger-flow-note{font-size:12px;color:#963d04;margin:6px 0}
 </style>

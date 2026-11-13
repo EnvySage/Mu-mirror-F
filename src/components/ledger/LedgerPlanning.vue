@@ -141,12 +141,15 @@ onMounted(load)
 
     <div v-else-if="active === 'wishes'" class="wish-board">
       <p v-if="!wishes.length" class="planning-empty">给自己一个期待。预算内少花一点，或达到一个收入目标。</p>
-      <article v-for="wish in wishes" :key="wish.id" class="wish-card" :class="{ achieved: wish.state === 'ACHIEVED', nearest: nearest?.id === wish.id }">
+      <article v-for="(wish, index) in wishes" :key="wish.id" class="wish-card" :style="{ '--wish': Math.min(index, 5) }" :class="{ achieved: wish.state === 'ACHIEVED', nearest: nearest?.id === wish.id, 'not-started': wish.state === 'NOT_STARTED' }">
         <div class="wish-head"><h3>{{ wish.title }}</h3><span>{{ statusLabels[wish.state] || '进行中' }}</span></div>
         <p v-if="nearest?.id === wish.id" class="nearest-label">最接近达标</p>
         <p>{{ wish.kind === 'RECURRING' ? '周期愿望' : '普通愿望' }} · {{ metrics[wish.metric] }} {{ currency(wish.target_amount) }}<span v-if="wish.price"> · 目标价格 {{ currency(wish.price) }}</span></p>
-        <div class="wish-meter" :aria-label="'目标完成度 ' + Math.round(100 * Number(wish.progress_ratio || 0)) + '%'">
-          <span :style="{ width: Math.min(100, Math.max(0, 100 * Number(wish.progress_ratio || 0))) + '%' }" />
+        <div class="wish-progress">
+          <div class="wish-meter" :aria-label="'目标完成度 ' + Math.round(100 * Number(wish.progress_ratio || 0)) + '%'">
+            <span :style="{ width: Math.min(100, Math.max(0, 100 * Number(wish.progress_ratio || 0))) + '%' }" />
+          </div>
+          <strong aria-hidden="true">{{ Math.round(100 * Number(wish.progress_ratio || 0)) }}<small>%</small></strong>
         </div>
         <small v-if="wish.period_start">{{ wish.period_start }} 至 {{ wish.period_end }} · 当前 {{ currency(wish.progress_amount) }}</small>
         <small v-else>从 {{ wish.start_on }} 起计算</small>
@@ -170,7 +173,7 @@ onMounted(load)
 
     <div v-else>
       <h3 v-if="due.length" class="planning-title">待确认</h3>
-      <article v-for="item in due" :key="item.id" class="planning-row">
+      <article v-for="item in due" :key="item.id" class="planning-row is-due">
         <div><strong>{{ item.title }} · {{ currency(item.amount) }}</strong><small>到期 {{ item.due_on }} · {{ categoryLabel(item.category_id) }}</small></div>
         <div class="planning-actions"><button type="button" :disabled="busy" @click="open('due', item)">确认今天已付</button><button type="button" :disabled="busy" @click="skip(item)">跳过</button></div>
       </article>
@@ -235,29 +238,4 @@ onMounted(load)
   </section>
 </template>
 
-<style scoped>
-.ledger-planning{margin-top:9px;background:#0a2053;border-top:4px solid #50edfa;padding:clamp(14px,2vw,22px);color:#ecf5ff}
-.planning-head,.wish-head,.planning-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.planning-tabs,.planning-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.planning-tabs button,.planning-primary,.planning-actions :is(a,button),.planning-row>button,.planning-form footer button{min-height:38px;padding:6px 10px;border:1px solid #638bdb;color:inherit;font-weight:700;font-size:13px}
-.planning-tabs button[aria-pressed=true],button.planning-primary{background:var(--cyan);border-color:var(--cyan);color:var(--night)}
-.planning-tabs span{background:#fff;color:#153784;padding:1px 5px;border-radius:2px}
-.wish-board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:13px}
-.wish-card{background:#133774;padding:13px;border-left:3px solid #5a91ee;overflow-wrap:anywhere}
-.wish-card.achieved{border-left-color:var(--cyan)}
-.wish-card.nearest{border-left-color:var(--pink);box-shadow:inset 0 0 0 1px #c82c75}
-.wish-head h3,.planning-title{margin:0;font-size:17px;font-weight:900}.wish-head span{color:#c2e6ff;font-size:11px}
-.wish-card p,.wish-card small,.planning-row small{margin:6px 0;font-size:12px;color:#bdd5ff;display:block}
-.wish-card p.nearest-label{color:#ffbbd5}
-.wish-card .previous-achievement{color:var(--cyan);font-weight:800}
-.wish-meter{height:6px;background:#081c4c;margin-top:9px;overflow:hidden;transform:skew(-8deg)}.wish-meter span{display:block;height:100%;background:linear-gradient(90deg,#1762ff,var(--cyan))}
-.wish-events{grid-column:1/-1;padding-top:8px}.wish-events summary{cursor:pointer}
-.planning-title{margin-top:13px}.planning-row{border-top:1px solid #5875b3;padding:8px 0;margin-top:7px}
-.planning-alert,.planning-empty{margin:12px 0;font-size:13px;color:#d1e1ff}.planning-alert{color:#ffd0df}.planning-alert button{text-decoration:underline}
-.planning-form{color:#193c74;display:grid;gap:9px}.planning-form label{display:grid;gap:4px;font-size:13px;font-weight:700}
-.planning-form :is(input:not([type=checkbox]),select){width:100%;min-width:0;min-height:40px;padding:7px;border:1px solid #b3c9e9;border-radius:0;background:white;font:inherit;font-size:14px;color:#11294f}
-.planning-form-grid,.budget-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.planning-form footer{display:flex;justify-content:end;gap:8px;padding-top:8px;border-top:1px solid var(--line)}
-.planning-form-error{font-size:13px;color:#a61b48;margin:4px 0}
-@media(max-width:600px){.wish-board{grid-template-columns:1fr}}
-</style>
+<style scoped src="../../assets/styles/ledger-planning.css"></style>
