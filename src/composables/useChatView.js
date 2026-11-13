@@ -1,3 +1,7 @@
+import LedgerActionForm from '@/components/ledger/LedgerActionForm.vue'
+import { recognizeLedgerEvidence } from '@/api/ledger'
+import { createPrepareKey } from '@/api/actions'
+import { autoReceiptEnabled, setAutoReceiptEnabled } from '@/utils/ledger'
 import { parseCitations, citeTitle } from '@/utils/chatViewCitations'
 import { reportAchievementActivity } from '@/api/achievements'
 import ChatImageDraft from '@/components/molecules/ChatImageDraft.vue'
@@ -105,6 +109,51 @@ function openHistory() {
 
 const imageDraft = ref(null)
 const imageCount = ref(0)
+const receiptEnabled = ref(autoReceiptEnabled())
+const receiptBusy = ref(false)
+const receiptOffers = ref([])
+const receiptSession = computed(() => chat.activeSessionId || chat.sessionId || chat.todaySession?.id || 'new')
+const visibleReceiptOffers = computed(() => receiptOffers.value.filter(offer => offer.session === receiptSession.value
+  || offer.session === 'new' && receiptSession.value === chat.todaySession?.id))
+
+function toggleReceipt() {
+  receiptEnabled.value = !receiptEnabled.value
+  setAutoReceiptEnabled(receiptEnabled.value)
+  toast.info(receiptEnabled.value ? '可以识别对话中的支付截图' : '已关闭对话支付截图识别')
+}
+async function recognizeChatImage(image) {
+  if (!receiptEnabled.value || receiptBusy.value) return
+  if (image.file.size > 8 * 1024 * 1024) { toast.warning('凭证图片须小于 8 MB'); return }
+  const session = receiptSession.value
+  receiptBusy.value = true
+  try {
+    const saved = await vault.upload(image.file, '对话支付截图')
+    if (!saved.ok || !saved.item?.id) throw new Error(saved.error || '图片上传失败')
+    imageDraft.value?.removeById(image.id)
+    const result = await recognizeLedgerEvidence(saved.item.id)
+    if (result?.status === 'BILL' || result?.status === 'NEEDS_REVIEW' && result.draft?.flows?.length) {
+      const draft = result.draft || {}
+      receiptOffers.value.push({
+        id: saved.item.id, session, editing: false, busy: false, error: '', actionId: null, key: createPrepareKey(),
+        payload: { title: draft.title, description: draft.description, flows: (draft.flows || [{}]).map(flow => ({ ...flow, evidenceId: saved.item.id })), diaryMode: 'NONE' },
+      })
+      scrollToBottom()
+    } else toast.info(result?.message || '图片已保存在资产中，可以从账本手动记账。')
+  } catch (error) { toast.error(error.message || '图片未能识别，可以从账本手动记账') }
+  finally { receiptBusy.value = false }
+}
+async function prepareReceipt(offer, payload) {
+  if (offer.busy) return
+  offer.busy = true; offer.error = ''
+  try {
+    const card = await actions.prepare('ledger.create', payload, offer.key)
+    if (!card?.id) throw new Error('没有生成记账候选')
+    offer.actionId = card.id
+    offer.editing = false
+  } catch (error) { offer.error = error.message || '没有生成记账候选' }
+  finally { offer.busy = false }
+}
+
 const removeImageGuard = ui.registerNavigationGuard('chat-images', () => !imageCount.value || window.confirm('离开后将清除尚未发送的图片预览，继续吗？'))
 onBeforeUnmount(removeImageGuard)
 function onPasteImages(event) {
@@ -493,5 +542,5 @@ async function onRemoveSession(id) {
   chat.fetchSessions()
 }
 
-return { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessionsPanel, FilePreviewModal, VaultRefCard, VaultUploadCard, VaultDigestReceipt, ActionCard, ChatDaySummaryCard, ChatMemoryPanel, CreatedRecordReceipt, ToolTrail, FileTypeIcon, ChatMessageContent, router, isMobile, chat, actions, vault, toast, orderedMessages, input, messagesEl, inputEl, sceneEl, sceneActive, mailDate, showSessions, sessionsDialog, sessionsMotion, showMemoryPanel, showMore, moreDialog, openMemory, openModels, openHistory, imageDraft, imageCount, onPasteImages, canSend, retryingSummaryId, visibleEndedSummaries, summaryActions, retrySummary, actionCardsFor, receiptItems, previewItem, downloadRef, activeSessionTitle, emptyTitle, emptyDesc, chatScroll, followingBottom, scrollToBottom, vMessageEnter, autoGrow, send, onKeydown, openSource, openCreatedRecord, refreshRun, openVaultRef, onVaultPreviewLoaded, fileInput, dragOver, pendingUpload, pickFile, onPickChange, onDragOver, onDragLeave, onDrop, confirmUpload, cancelUpload, busyReceiptId, onReceiptConfirm, onReceiptSave, onReceiptSkip, onReceiptRemove, onOpenSession, onNewSession, onRemoveSession }
+return { LedgerActionForm, receiptEnabled, receiptBusy, receiptOffers, visibleReceiptOffers, toggleReceipt, recognizeChatImage, prepareReceipt, parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessionsPanel, FilePreviewModal, VaultRefCard, VaultUploadCard, VaultDigestReceipt, ActionCard, ChatDaySummaryCard, ChatMemoryPanel, CreatedRecordReceipt, ToolTrail, FileTypeIcon, ChatMessageContent, router, isMobile, chat, actions, vault, toast, orderedMessages, input, messagesEl, inputEl, sceneEl, sceneActive, mailDate, showSessions, sessionsDialog, sessionsMotion, showMemoryPanel, showMore, moreDialog, openMemory, openModels, openHistory, imageDraft, imageCount, onPasteImages, canSend, retryingSummaryId, visibleEndedSummaries, summaryActions, retrySummary, actionCardsFor, receiptItems, previewItem, downloadRef, activeSessionTitle, emptyTitle, emptyDesc, chatScroll, followingBottom, scrollToBottom, vMessageEnter, autoGrow, send, onKeydown, openSource, openCreatedRecord, refreshRun, openVaultRef, onVaultPreviewLoaded, fileInput, dragOver, pendingUpload, pickFile, onPickChange, onDragOver, onDragLeave, onDrop, confirmUpload, cancelUpload, busyReceiptId, onReceiptConfirm, onReceiptSave, onReceiptSkip, onReceiptRemove, onOpenSession, onNewSession, onRemoveSession }
 }

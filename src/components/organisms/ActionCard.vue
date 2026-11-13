@@ -7,6 +7,8 @@ import TodoActionForm from './action-forms/TodoActionForm.vue'
 import RecordActionForm from './action-forms/RecordActionForm.vue'
 import GrowthActionForm from './action-forms/GrowthActionForm.vue'
 import MemoryActionForm from './action-forms/MemoryActionForm.vue'
+import LedgerActionForm from '@/components/ledger/LedgerActionForm.vue'
+import { currency, flowLabels } from '@/utils/ledger'
 import DetailSheet from './DetailSheet.vue'
 import ActionPreview from './ActionPreview.vue'
 import { typeMap } from '@/constants/tags'
@@ -21,6 +23,9 @@ const growth = useGrowthStore()
 const records = useRecordsStore()
 const ui = useUIStore()
 const isRecordCandidate = computed(() => ['record.create', 'record.organize'].includes(props.proposal.kind))
+const isLedger = computed(() => props.proposal.kind === 'ledger.create')
+const ledgerFlows = computed(() => isLedger.value ? props.proposal.payload?.flows || props.proposal.preview?.flows || [] : [])
+const ledgerId = computed(() => props.proposal.result?.ledgerRecordId ?? props.proposal.result?.ledger_record_id)
 function openRecordWorkspace() {
   actions.upsert(props.proposal)
   const latest = actions.byId[props.proposal.id]
@@ -87,8 +92,8 @@ const description = computed(() => recordFallback.value
 const resultMessage = computed(() => {
   const result = props.proposal.result || {}
   if (result.outcome === 'SAVED_ONLY_FALLBACK' || result.outcome === 'SAVE_ONLY_FALLBACK') return '已仅保存，未加入记忆。'
-  if (props.proposal.state === 'SUCCEEDED') return result.message || '服务端已确认完成。'
-  if (props.proposal.state === 'CANCELLED') return props.proposal.kind?.startsWith('record.') ? '这条记录没有创建或整理。' : props.proposal.kind?.startsWith('memory.') ? '已放弃此候选，没有启用记忆。' : '没有创建或修改待办。'
+  if (props.proposal.state === 'SUCCEEDED') return result.message || (isLedger.value ? '账目已确认，已纳入镜子。' : '服务端已确认完成。')
+  if (props.proposal.state === 'CANCELLED') return isLedger.value ? '已取消，账目没有入账。' : props.proposal.kind?.startsWith('record.') ? '这条记录没有创建或整理。' : props.proposal.kind?.startsWith('memory.') ? '已放弃此候选，没有启用记忆。' : '没有创建或修改待办。'
   if (props.proposal.state === 'STALE') return '目标数据已变化，请重新发起操作。'
   return result.message || ''
 })
@@ -187,6 +192,7 @@ async function refreshStatus() {
     <header class="action-card-header"><span class="action-kind"><i aria-hidden="true">✦</i>{{ actionLabel }}</span><span class="action-state" :class="'state-' + String(proposal.state || '').toLowerCase()">{{ candidateNeedsRecheck ? '需要核对' : isPreparingRecord ? '整理中…' : stateLabel }}</span></header>
     <strong class="action-title">{{ title }}</strong>
     <p v-if="excerpt && excerpt !== title" class="action-excerpt">{{ excerpt }}</p>
+    <p v-if="isLedger && ledgerFlows.length" class="action-excerpt">{{ ledgerFlows.slice(0, 3).map(flow => flowLabels[flow.kind] + ' ' + currency(flow.amount)).join(' · ') }}<template v-if="ledgerFlows.length > 3"> · 等 {{ ledgerFlows.length }} 笔</template></p>
     <div v-if="categories.length" class="action-tags"><span v-for="category in categories.slice(0, 3)" :key="category">{{ category }}</span><span v-if="recordDraft?.segments?.length > 1">{{ recordDraft.segments.length }} 个片段</span></div>
     <p v-if="deleteImpact" class="action-notice action-warning" role="alert">{{ deleteImpact }}</p>
     <p v-else-if="proposal.kind === 'record.memory.disable' || proposal.kind === 'memory.forget'" class="action-notice action-warning">{{ description }}</p>
@@ -197,7 +203,8 @@ async function refreshStatus() {
     <p v-if="error" class="action-error" role="alert">{{ error }}</p>
     <footer class="action-controls">
       <button type="button" class="action-detail-button" @click="openDetails()">查看详情 <span aria-hidden="true">↗</span></button>
-      <div v-if="canCancel"><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canConfirmAction" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '处理中…' : '确认执行' }}</button></div>
+      <RouterLink v-if="ledgerId" :to="{ name: 'ledger', query: { record: ledgerId } }">查看已入账记录</RouterLink>
+      <div v-if="canCancel"><button type="button" :disabled="busy" @click="cancel">取消</button><button v-if="canConfirmAction" type="button" class="primary" :disabled="busy" @click="isLedger ? openDetails() : confirm()">{{ busy ? '处理中…' : isLedger ? '核对并入账' : '确认执行' }}</button></div>
       <button v-else-if="proposal.state === 'EXECUTING'" type="button" :disabled="busy" @click="refreshStatus">刷新状态</button>
     </footer>
   </section>
@@ -215,7 +222,15 @@ async function refreshStatus() {
         <RecordActionForm v-else-if="proposal.kind?.startsWith('record.')" :proposal="proposal" @save="save" @cancel="editing=false" />
         <GrowthActionForm v-else-if="isGrowthAction(proposal)" :proposal="proposal" @save="save" @cancel="editing=false" />
         <MemoryActionForm v-else-if="isMemoryAction(proposal)" :proposal="proposal" @save="save" @cancel="editing=false" />
+        <LedgerActionForm v-else-if="isLedger" :proposal="proposal" :busy="busy" @save="save" @cancel="editing=false" />
       </fieldset>
+      <div v-else-if="isLedger" class="action-ledger-review">
+        <p v-if="proposal.payload?.recordId">确认后追加到已有账目。</p>
+        <div v-for="(flow, index) in ledgerFlows" :key="flow.id || index">
+          <strong>{{ flowLabels[flow.kind] }} {{ currency(flow.amount) }}</strong>
+          <span>{{ flow.occurredOn || flow.occurred_on }} · {{ flow.note || '无备注' }}</span>
+        </div>
+      </div>
       <ActionPreview v-else :proposal="proposal" />
       <p v-if="resultMessage" class="action-result" role="status">{{ resultMessage }}</p>
       <p v-if="proposal.error_code" class="action-notice">状态编号：{{ proposal.error_code }}</p>
@@ -228,7 +243,7 @@ async function refreshStatus() {
           <button v-if="isPreparingRecord" type="button" :disabled="busy" @click="refreshStatus">刷新状态</button>
           <button v-if="canEditAction && !hideEdit" type="button" :disabled="busy" @click="editing=true">修改内容</button>
           <button type="button" :disabled="busy" @click="cancel">取消操作</button>
-          <button v-if="canConfirmAction" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '处理中…' : '确认执行' }}</button>
+          <button v-if="canConfirmAction" type="button" class="primary" :disabled="busy" @click="confirm">{{ busy ? '处理中…' : isLedger ? '确认入账' : '确认执行' }}</button>
         </div>
         <button v-else-if="proposal.state === 'EXECUTING'" type="button" :disabled="busy" @click="refreshStatus">刷新状态</button>
       </div>
@@ -237,6 +252,7 @@ async function refreshStatus() {
 </template>
 
 <style scoped>
+.action-ledger-review>div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:9px 0}.action-ledger-review span{color:#42638d;font-size:12px}.action-controls>a{font-size:13px;color:#174fbb}
 .action-card{position:relative;min-width:0;margin:14px 0;padding:18px 20px 14px;border:1px solid #b4c9d6;border-left:4px solid #1b59d5;border-radius:0 10px 0 0;background:#edf3ef;color:#19364c;max-width:620px;text-align:left;white-space:normal;box-shadow:4px 5px 0 #163b6a12;overflow-wrap:anywhere}
 .action-card:after{content:'';position:absolute;right:0;top:0;width:33px;height:5px;background:#83d7e0;transform:skew(-25deg);transform-origin:right}
 .action-card.action-danger{border-left-color:#c62a64;background:#fff0f3}

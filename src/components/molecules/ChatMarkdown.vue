@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { renderMarkdown } from '@/utils/mdPreview'
 
 const props = defineProps({
@@ -8,6 +9,7 @@ const props = defineProps({
   vaultRefs: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['open-source', 'open-vault'])
+const router = useRouter()
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -49,6 +51,12 @@ const html = computed(() => {
 function onClick(event) {
   const target = event.target instanceof Element ? event.target : null
   if (!target) return
+  const ledgerLink = target.closest('a')?.getAttribute('href')?.match(/^\/ledger\?record=([\da-f-]{36})$/i)
+  if (ledgerLink && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    event.preventDefault()
+    router.push({ name: 'ledger', query: { record: ledgerLink[1] } })
+    return
+  }
   const cite = target.closest('[data-cite-n]')
   if (cite) {
     const citation = findSource(Number(cite.getAttribute('data-cite-n')))

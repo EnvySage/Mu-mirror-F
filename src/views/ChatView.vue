@@ -1,6 +1,6 @@
 <script setup>
 import { useChatView } from '@/composables/useChatView'
-const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessionsPanel, FilePreviewModal, VaultRefCard, VaultUploadCard, VaultDigestReceipt, ActionCard, ChatDaySummaryCard, ChatMemoryPanel, CreatedRecordReceipt, ToolTrail, FileTypeIcon, ChatMessageContent, router, isMobile, chat, actions, vault, toast, orderedMessages, input, messagesEl, inputEl, sceneEl, sceneActive, mailDate, showSessions, sessionsDialog, sessionsMotion, showMemoryPanel, showMore, moreDialog, openMemory, openModels, openHistory, imageDraft, imageCount, onPasteImages, canSend, retryingSummaryId, visibleEndedSummaries, summaryActions, retrySummary, actionCardsFor, receiptItems, previewItem, downloadRef, activeSessionTitle, emptyTitle, emptyDesc, chatScroll, followingBottom, scrollToBottom, vMessageEnter, autoGrow, send, onKeydown, openSource, openCreatedRecord, refreshRun, openVaultRef, onVaultPreviewLoaded, fileInput, dragOver, pendingUpload, pickFile, onPickChange, onDragOver, onDragLeave, onDrop, confirmUpload, cancelUpload, busyReceiptId, onReceiptConfirm, onReceiptSave, onReceiptSkip, onReceiptRemove, onOpenSession, onNewSession, onRemoveSession } = useChatView()
+const { LedgerActionForm, receiptEnabled, receiptBusy, receiptOffers, visibleReceiptOffers, toggleReceipt, recognizeChatImage, prepareReceipt, parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessionsPanel, FilePreviewModal, VaultRefCard, VaultUploadCard, VaultDigestReceipt, ActionCard, ChatDaySummaryCard, ChatMemoryPanel, CreatedRecordReceipt, ToolTrail, FileTypeIcon, ChatMessageContent, router, isMobile, chat, actions, vault, toast, orderedMessages, input, messagesEl, inputEl, sceneEl, sceneActive, mailDate, showSessions, sessionsDialog, sessionsMotion, showMemoryPanel, showMore, moreDialog, openMemory, openModels, openHistory, imageDraft, imageCount, onPasteImages, canSend, retryingSummaryId, visibleEndedSummaries, summaryActions, retrySummary, actionCardsFor, receiptItems, previewItem, downloadRef, activeSessionTitle, emptyTitle, emptyDesc, chatScroll, followingBottom, scrollToBottom, vMessageEnter, autoGrow, send, onKeydown, openSource, openCreatedRecord, refreshRun, openVaultRef, onVaultPreviewLoaded, fileInput, dragOver, pendingUpload, pickFile, onPickChange, onDragOver, onDragLeave, onDrop, confirmUpload, cancelUpload, busyReceiptId, onReceiptConfirm, onReceiptSave, onReceiptSkip, onReceiptRemove, onOpenSession, onNewSession, onRemoveSession } = useChatView()
 </script>
 
 <template>
@@ -16,8 +16,9 @@ const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessio
       <div class="chat-more-heading"><h2 id="chat-more-heading">对话设置</h2><button type="button" aria-label="关闭更多操作" @click="showMore = false">×</button></div>
       <button type="button" class="chat-more-item" @click="openMemory"><span>聊天记忆<small>查看和管理对话中记住的内容</small></span><b aria-hidden="true">↗</b></button>
       <button type="button" class="chat-more-item" @click="openModels"><span>模型设置<small>选择模型与服务配置</small></span><b aria-hidden="true">↗</b></button>
+      <button type="button" class="chat-more-item" role="switch" :aria-checked="receiptEnabled" @click="toggleReceipt"><span>识别支付截图<small>发现账单时询问是否生成记账卡</small></span><b>{{ receiptEnabled ? '已开启' : '已关闭' }}</b></button>
     </dialog></Teleport>
-    <div v-if="!isMobile" class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button></PageMasthead></div>
+    <div v-if="!isMobile" class="chat-masthead-wrap"><PageMasthead title="与我对话" english="DIALOGUE" description="循着记录，听见自己的回响"><button class="p3-button secondary new-chat-btn" @click="onNewSession">今日对话</button><button class="p3-button secondary history-btn" @click="showSessions = !showSessions">历史会话</button><button class="p3-button secondary" @click="showMemoryPanel = true">聊天记忆</button><button class="p3-button secondary" role="switch" :aria-checked="receiptEnabled" @click="toggleReceipt">{{ receiptEnabled ? '已开启账单识别' : '识别支付截图' }}</button></PageMasthead></div>
     <ChatMemoryPanel v-if="showMemoryPanel" @close="showMemoryPanel = false" />
 
     <!-- 会话列表抽屉（<1440px 主入口；≥1440px 隐藏按钮但仍可通过 MobileHeader 打开） -->
@@ -47,7 +48,7 @@ const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessio
           </header>
           <div class="phone-divider" aria-hidden="true"><span>YOU / ME / EVERY LITTLE THING</span><i /><b>↙</b></div>
           <!-- 空态（含加载中 / 失败兜底 + vault 演示入口） -->
-          <div v-if="chat.messages.length === 0" class="chat-empty">
+          <div v-if="chat.messages.length === 0 && !visibleReceiptOffers.length" class="chat-empty">
 
             <span class="chat-empty-en" aria-hidden="true">HELLO, MYSELF.</span>
             <h2>{{ chat.historyLoading ? emptyTitle : chat.historyError ? '暂时没能找回这段对话' : '和另一个自己，聊聊。' }}</h2>
@@ -73,7 +74,7 @@ const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessio
             @retry="retrySummary"
             @open-session="onOpenSession"
           />
-          <div v-show="chat.messages.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="对话消息" @scroll.passive="chatScroll.onScroll" @wheel.passive="chatScroll.onWheel" @touchstart.passive="chatScroll.onTouchStart" @touchmove.passive="chatScroll.onTouchMove" @keydown="chatScroll.onKeydown">
+          <div v-show="chat.messages.length || visibleReceiptOffers.length" ref="messagesEl" class="chat-messages" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="对话消息" @scroll.passive="chatScroll.onScroll" @wheel.passive="chatScroll.onWheel" @touchstart.passive="chatScroll.onTouchStart" @touchmove.passive="chatScroll.onTouchMove" @keydown="chatScroll.onKeydown">
             <div
               v-for="msg in orderedMessages"
               :key="msg.id"
@@ -185,6 +186,17 @@ const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessio
               </div>
             </div>
 
+            <div v-for="offer in visibleReceiptOffers" :key="'ledger-offer-' + offer.id" class="chat-msg chat-msg-ai">
+              <div class="chat-msg-bubble chat-msg-bubble-receipt">
+                <ActionCard v-if="offer.actionId && actions.byId[offer.actionId]" :proposal="actions.byId[offer.actionId]" />
+                <section v-else class="chat-ledger-offer" aria-label="支付截图识别结果">
+                  <strong>这像一张支付截图，要生成记账卡吗？</strong>
+                  <LedgerActionForm v-if="offer.editing" :proposal="offer" :busy="offer.busy" @save="prepareReceipt(offer, $event)" @cancel="offer.editing = false" />
+                  <div v-else><button type="button" @click="offer.editing = true">生成记账卡</button><button type="button" @click="receiptOffers = receiptOffers.filter(item => item !== offer)">暂不记账</button></div>
+                  <p v-if="offer.error" role="alert">{{ offer.error }}</p>
+                </section>
+              </div>
+            </div>
             <div v-if="chat.recovering" class="chat-recovering" role="status">
               <span class="typing-dots"><i /><i /><i /></span>
               <span>上一轮回答仍在生成，完成后会自动出现</span>
@@ -195,7 +207,7 @@ const { parseCitations, citeTitle, ChatImageDraft, PageMasthead, ref, ChatSessio
             <button v-if="!followingBottom && chat.messages.length" type="button" class="chat-jump-bottom" @click="scrollToBottom">回到最新消息 <span aria-hidden="true">↓</span></button>
           </div>
 
-          <ChatImageDraft ref="imageDraft" @count="imageCount = $event" @error="toast.warning($event)" />
+          <ChatImageDraft ref="imageDraft" :receipt-enabled="receiptEnabled" :receipt-busy="receiptBusy" @count="imageCount = $event" @error="toast.warning($event)" @receipt="recognizeChatImage" />
           <!-- 输入条（附件按钮 + 拖拽上传区） -->
           <div
             :class="['chat-input-bar', { 'chat-input-drag': dragOver }]"

@@ -8,6 +8,7 @@ const labels = {
   'record.delete': '删除记录',
   'record.memory.disable': '永久移除记忆',
   'growth.adjust': '更正成长贡献',
+  'ledger.create': '记账候选',
   'memory.accept': '确认记忆候选',
   'memory.edit': '修改记忆候选',
   'memory.forget': '遗忘聊天记忆',
