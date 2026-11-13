@@ -2,6 +2,7 @@ import { defineAsyncComponent } from 'vue'
 
 const sharedPages = {
   models: defineAsyncComponent(() => import('@/views/ModelsView.vue')),
+  ledger: defineAsyncComponent(() => import('@/views/LedgerView.vue')),
   tarot: defineAsyncComponent(() => import('@/views/TarotView.vue')),
   gallery: defineAsyncComponent(() => import('@/views/GalleryView.vue')),
   chat: defineAsyncComponent(() => import('@/views/ChatView.vue')),

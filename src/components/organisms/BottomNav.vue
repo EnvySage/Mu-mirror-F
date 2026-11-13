@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/ui'
 import { useGlossaryStore } from '@/stores/glossary'
 
 const props = defineProps({ exploreOpen: Boolean })
-const emit = defineEmits(['explore'])
+const emit = defineEmits(['explore', 'create'])
 const glossary = useGlossaryStore()
 
 const router = useRouter()
@@ -21,7 +21,7 @@ const NAV = [
   { page: 'mirror', label: '镜子', slot: 3, icon: 'M16.5 16.5 20 20M7.5 16.5 4 20M9 21h6M12 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM12 7v4l2 2' },
   { action: 'explore', label: '探索', slot: 4, icon: 'm12 2 3.2 6.8L22 12l-6.8 3.2L12 22l-3.2-6.8L2 12l6.8-3.2ZM12 9v6M9 12h6' },
 ]
-const exploreActive = computed(() => props.exploreOpen || ['tarot', 'gallery', 'chat', 'vault', 'settings'].includes(route.name))
+const exploreActive = computed(() => props.exploreOpen || ['tarot', 'gallery', 'chat', 'ledger', 'vault', 'settings', 'models'].includes(route.name))
 const activeSlot = computed(() => exploreActive.value ? 4 : NAV.find(item => item.page === route.name)?.slot ?? -1)
 const navEl = ref(null), selectionEl = ref(null)
 useNavIndicatorMotion(navEl, selectionEl, activeSlot, '.nav-item.active .nav-icon', { skewX: -10 })
@@ -56,7 +56,7 @@ function handleNav(item) {
           </span>
           <span class="nav-label">{{ item.label }}</span>
         </button>
-        <button v-else class="nav-create" aria-label="新建记录" @click="ui.openWriteModal()">
+        <button v-else class="nav-create" aria-label="新建记录或账目" aria-haspopup="dialog" @click="emit('create')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           <span>新建</span>
         </button>

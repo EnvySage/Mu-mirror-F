@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { usePresentationMode } from '@/composables/usePresentationMode'
 import { useUIStore } from '@/stores/ui'
 import { useRecordsStore } from '@/stores/records'
@@ -30,6 +30,10 @@ const props = defineProps({
 
 const ui = useUIStore()
 const router = useRouter()
+const route = useRoute()
+watch(() => route.query.record, id => {
+  if (route.name === 'records' && typeof id === 'string' && /^\d+$/.test(id)) ui.openRecordDetail(id)
+}, { immediate: true })
 const presentation = usePresentationMode()
 const recordsStore = useRecordsStore()
 const summariesStore = useSummariesStore()

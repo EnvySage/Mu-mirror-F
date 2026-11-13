@@ -1,4 +1,5 @@
 <script setup>
+import LedgerDiaryLinks from '@/components/ledger/LedgerDiaryLinks.vue'
 import { useDetailPanel } from '@/composables/useDetailPanel'
 const { ref, ReviewPanel, ActionCard, formatFullDate, ui, panelEl, readerEl, reviewPanelRef, loadingRecord, detailError, closing, confirming, actionError, rawEditing, rawDraft, preparedRecordAction, memoryLifecycleAction, deleteRecordAction, record, journalDate, memoryState, memoryFailureReason, canEditMemorySource, processingStep, openRecord, headerTitle, showConfirm, close, retryLoad, growthReviewValid, onAuthorizationChange, onConfirm, saveRaw, organizeSavedRecord, onRecordActionUpdated, saveRecordActionDraft, prepareDisableMemory, onMemoryLifecycleUpdated, onDeleteRecordActionUpdated, submitting, retryProcessing, deleteRecord } = useDetailPanel()
 </script>
@@ -96,6 +97,7 @@ const { ref, ReviewPanel, ActionCard, formatFullDate, ui, panelEl, readerEl, rev
             <!-- 审核 / 只读（审核态内含待办建议卡，证据行可切记录） -->
             <ReviewPanel ref="reviewPanelRef" :record="record" :authorization-busy="confirming" @open-record="openRecord" @authorization-change="onAuthorizationChange" />
           </template>
+          <LedgerDiaryLinks v-if="['record_only', 'done'].includes(record.status)" :key="record.id" :diary-id="record.id" />
           </template>
         </div>
     </div>

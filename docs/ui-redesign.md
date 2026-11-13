@@ -83,3 +83,8 @@ User feedback: remove the game character cutouts and make movement carry more of
 - Reframed archive items as a responsive 1–3 column file shelf, compacted the upload slot, and connected preview open/close to the source file. Preview remains user-initiated and stale preview requests are discarded.
 - Added dirty-draft guards and focus handoff for writing and related dialogs. Reduced-motion mode bypasses large object travel while keeping keyboard open/close available.
 - Verification in the isolated `codex/mirror-ui-motion` worktree: production build and browser smoke pass. The smoke uses explicitly mocked local fixtures and checks 375, 768, 1280, 1440, and 1920px widths, record open/return and focus restoration, keyboard activation, filtering, one on-demand preview request, and reduced motion. Upload/confirm, save failure retention, authorization submit outcomes, delete undo, and live-backend behavior remain unverified; see the execution report under `.superpowers/sdd/2026-10-17-0111-feat-mirror-ui-motion/report.md`.
+
+
+## 账本恢复（2026-11-13）
+
+新增 `/ledger` 页面，延用 Blue hour 票据插画、斜切布局。手机新建入口可选日记或账目，探索与桌面侧栏有账本入口，展览馆和当前路由切换保留。今天/近七天简报、流水查询与导出、愿望和周期账单放在账本内。日历按实际发生日显示流水和愿望达成，并可打开原账目。镜子增加本月消费分布。

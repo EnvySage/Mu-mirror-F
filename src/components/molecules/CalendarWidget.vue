@@ -6,6 +6,8 @@ import { useCalendarMotion } from '@/motion/useCalendarMotion'
 const props = defineProps({
   mode: { type: String, default: 'mini' }, // mini | full
   modelValue: { type: Date, default: null },
+  ledgerDays: { type: Array, default: () => [] },
+  wishDays: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['selectDate', 'pickDate', 'update:modelValue', 'changeMonth'])
@@ -49,7 +51,8 @@ const calendarDays = computed(() => {
       effectiveSelected.value.getFullYear() === year.value &&
       effectiveSelected.value.getMonth() === month.value &&
       effectiveSelected.value.getDate() === day
-    days.push({ day, isToday, hasRecord, isSelected, otherMonth: false })
+    const key = year.value + '-' + String(month.value + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0')
+    days.push({ day, isToday, hasRecord, isSelected, otherMonth: false, hasLedger: props.ledgerDays.includes(key), hasWish: props.wishDays.includes(key) })
   }
 
   // Six weeks keep the legend and the page below in one stable position.
@@ -117,21 +120,26 @@ function selectDay(dayObj) {
             :key="i"
             :class="['calendar-day', { 'other-month': d.otherMonth, today: d.isToday, 'has-record': d.hasRecord, selected: d.isSelected }]"
             type="button" :disabled="d.otherMonth" :aria-pressed="!!d.isSelected"
-            :aria-label="`${year}年${month + 1}月${d.day}日${d.hasRecord ? '，有记录' : ''}`"
+            :aria-label="`${year}年${month + 1}月${d.day}日${d.hasRecord ? '，有记录' : ''}${d.hasLedger ? '，有账目' : ''}${d.hasWish ? '，愿望达成' : ''}`"
             @click="selectDay(d)"
-          ><span>{{ d.day }}</span><small v-if="mode === 'full' && d.isToday" class="calendar-today-label">TODAY</small></button>
+          ><span>{{ d.day }}</span><small v-if="mode === 'full' && d.isToday" class="calendar-today-label">TODAY</small><i v-if="d.hasLedger || d.hasWish" class="calendar-extra-mark" :class="{ wish: d.hasWish }" aria-hidden="true" /></button>
         </div>
       </div>
     <div class="calendar-legend">
       <div class="calendar-legend-item"><div class="calendar-dot has-record" /><span>有记录</span></div>
       <div class="calendar-legend-item"><div class="calendar-dot today" /><span>今天</span></div>
       <div v-if="mode === 'full'" class="calendar-legend-item"><div class="calendar-dot selected" /><span>已选中</span></div>
+      <div v-if="ledgerDays.length" class="calendar-legend-item"><i class="calendar-extra-key" />账目</div>
+      <div v-if="wishDays.length" class="calendar-legend-item"><i class="calendar-extra-key wish" />愿望达成</div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .calendar-widget { padding: 0; }
+.calendar-extra-mark,.calendar-extra-key{width:6px;height:6px;background:#50edfa;transform:rotate(45deg);display:block;pointer-events:none}
+.calendar-extra-mark{position:absolute;right:6px;bottom:7px}
+.calendar-extra-mark.wish,.calendar-extra-key.wish{background:#ee246a}
 
 .calendar-header {
   display: flex; align-items: center; justify-content: space-between;

@@ -19,6 +19,7 @@ const nav = [
  { page:'gallery', label:'展览馆', en:'GALLERY', path:'M3 4h18v16H3zM6 7h12v10H6zM12 8l3 4-3 4-3-4z' },
  { page:'records', label:'日常记录', en:'RECORDS', path:'M4 5h16M4 12h16M4 19h10' },
  { page:'calendar', label:'时间日历', en:'CALENDAR', path:'M8 2v5M16 2v5M3 10h18M4 5h16v16H4z' },
+ { page:'ledger', label:'记账与愿望', en:'LEDGER', path:'M5 3h14v18l-3-2-4 2-4-2-3 2zM8 8h8M8 12h8M8 16h5' },
  { page:'mirror', label:'我的镜子', en:'MIRROR', path:'M12 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 19v3M8 22h8M8 10l3-3' },
  { page:'chat', label:'与我对话', en:'DIALOGUE', path:'M4 4h16v13H9l-5 4V4zM8 9h8M8 13h5' },
  { page:'vault', label:'记忆资产', en:'ARCHIVE', path:'M3 4h18v5H3zM5 9v12h14V9M9 13h6' },

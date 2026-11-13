@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="360" viewBox="0 0 680 360" fill="none">
+ <defs><pattern id="dots" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1" fill="#50edfa" opacity=".45"/></pattern></defs>
+ <path fill="#0737bb" d="m215 0 465 0v360H71z"/><path fill="url(#dots)" d="M470 0h210v360H336z"/>
+ <path stroke="#50edfa" opacity=".37" stroke-width="2" d="M62 311 497 28M127 337 573 48M216 343 641 73"/>
+ <path fill="#1762ff" d="m281 332 371-169 28 50v147H238z"/>
+ <g transform="translate(320 25) rotate(12 120 145)">
+  <path fill="#ee246a" d="M21 19h222v257l-14 17-15-14-16 14-16-14-16 14-16-14-16 14-16-14-16 14-16-14-16 14-16-14-17 14V19Z"/>
+  <path fill="#f8fbff" d="M4 4h222v257l-14 17-15-14-16 14-16-14-16 14-16-14-16 14-16-14-16 14-16-14-16 14-16-14-17 14V4Z"/>
+  <path fill="#06123f" d="M25 28h177v26H25z"/><path stroke="#1762ff" stroke-width="6" d="M26 82h176M26 110h129M26 138h160M26 166h108"/>
+  <path stroke="#0737bb" stroke-dasharray="5 5" stroke-width="2" d="M25 190h180"/>
+  <path stroke="#06123f" stroke-width="3" d="M27 212v34m8-34v34m5-34v34m9-34v34m11-34v34m7-34v34m5-34v34m9-34v34m9-34v34m5-34v34m7-34v34m13-34v34m5-34v34m9-34v34m11-34v34m6-34v34m6-34v34m8-34v34m11-34v34m7-34v34m5-34v34m10-34v34m8-34v34"/>
+ </g>
+ <path fill="#50edfa" d="m581 66 8 15 16 5-16 7-7 16-6-15-16-8 16-4zM301 216l6 11 12 4-12 4-5 12-4-12-12-4 11-4z"/>
+ <path fill="#ee246a" d="m229 251 93-30-21 30-94 30z"/>
+</svg>

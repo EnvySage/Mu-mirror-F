@@ -12,6 +12,7 @@ import { IS_DEMO_PREVIEW } from '@/preview/mode'
 import AppSidebar from '@/components/organisms/AppSidebar.vue'
 import BottomNav from '@/components/organisms/BottomNav.vue'
 import MobileExploreSheet from '@/components/organisms/MobileExploreSheet.vue'
+import MobileCapturePicker from '@/components/ledger/MobileCapturePicker.vue'
 import PersonaBackdrop from '@/components/atoms/PersonaBackdrop.vue'
 import MobileHeader from '@/components/organisms/MobileHeader.vue'
 import WriteModal from '@/components/organisms/WriteModal.vue'
@@ -47,6 +48,7 @@ function onPageScroll(event) {
   // Track only the page itself, never a sidebar, picker, dialog or chat history.
   if (target.matches('.presentation-layout > .page > .page-content')) topScrollTarget.value = target
 }
+const mobileCaptureOpen = ref(false)
 const mobileChat = computed(() => presentation.mode.value === 'mobile' && route.name === 'chat')
 const chatViewportHeight = ref(null)
 const chatViewportTop = ref(0)
@@ -66,7 +68,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateChatViewport)
 })
 useRecordWorkflows()
-watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false; topScrollTarget.value = null })
+watch([() => route.fullPath, () => presentation.mode.value], () => { mobileExploreOpen.value = false; topScrollTarget.value = null; mobileCaptureOpen.value = false })
+function openLedgerCapture() {
+  mobileCaptureOpen.value = false
+  router.push({ name: 'ledger', query: { compose: '1' } })
+}
 const pageComponent = shallowRef(null)
 const renderedPage = ref(route.name)
 watch(pageComponent, () => { topScrollTarget.value = null })
@@ -110,7 +116,7 @@ useTodoPolling({
 
 /** 移动端 header 标题（对话页等也走这里） */
 const mobileTitle = computed(() => {
-  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', gallery: '展览馆', settings: '设置', models: '模型设置' }
+  const names = { records: '记录', calendar: '日历', chat: '对话', vault: '我的资产', mirror: '镜子', tarot: '塔罗', gallery: '展览馆', settings: '设置', models: '模型设置', ledger: '账本' }
   return names[route.name] || ''
 })
 
@@ -164,12 +170,13 @@ watch(() => route.name, () => {
       <BackToTop :target="topScrollTarget" />
       <div ref="routeWipe" class="route-wipe" aria-hidden="true">
         <i class="wipe-band wipe-band-back" /><i class="wipe-band wipe-band-front" />
-        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', gallery: 'GALLERY', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM', models: 'MODELS' })[renderedPage] }}</span>
+        <span>{{ ({ records: 'RECORDS', calendar: 'CALENDAR', mirror: 'REFLECT', tarot: 'TAROT', gallery: 'GALLERY', chat: 'DIALOGUE', vault: 'ARCHIVE', settings: 'SYSTEM', models: 'MODELS', ledger: 'LEDGER' })[renderedPage] }}</span>
       </div>
       <DetailPanel />
     </main>
-    <BottomNav v-if="!mobileChat" :explore-open="mobileExploreOpen" @explore="mobileExploreOpen = true" />
+    <BottomNav v-if="!mobileChat" :explore-open="mobileExploreOpen" @explore="mobileExploreOpen = true" @create="mobileCaptureOpen = true" />
     <MobileExploreSheet :open="mobileExploreOpen" @close="mobileExploreOpen = false" />
+    <MobileCapturePicker :open="mobileCaptureOpen" @close="mobileCaptureOpen = false" @diary="ui.openWriteModal()" @ledger="openLedgerCapture" />
     <WriteModal :show="ui.showWriteModal" @close="ui.closeWriteModal()" @saved="(record) => ui.highlightRecordId = record?.id ?? null" />
     <SummarySheet :show="ui.showSummarySheet" @close="ui.closeSummarySheet()" />
     <RecordReviewWorkspace />

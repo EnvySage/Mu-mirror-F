@@ -1,5 +1,6 @@
 import { tarotFixtureRoute } from './tarotFixtures'
 import { vaultFixtureRoute } from './vaultFixtures'
+import { ledgerFixtureRoute } from './ledgerFixtures'
 
 const userId = 'demo-visitor'
 let nextRecordId = 804
@@ -214,6 +215,8 @@ function route(config) {
   const method = String(config.method || 'get').toUpperCase()
   const params = { ...Object.fromEntries(parsed.searchParams.entries()), ...(config.params || {}) }
   const body = parseBody(config)
+  const ledger = ledgerFixtureRoute(config, path, method, params, body, result)
+  if (ledger) return ledger
 
   if (path === '/api/auth/login' || path === '/api/auth/register') {
     return result(config, { token: 'demo-preview-token', tokenType: 'Bearer', expiresIn: 86400, user: { id: userId, username: 'Mirror 访客', createdAt: demoTime(0) } })

@@ -23,6 +23,7 @@ const router = createRouter({
       children: [
         { path: '', redirect: preferredHome },
         { path: 'models', name: 'models', component: () => import('@/views/ModelsView.vue') },
+        { path: 'ledger', name: 'ledger', component: () => import('@/views/LedgerView.vue') },
         { path: 'tarot', name: 'tarot', component: () => import('@/views/TarotView.vue') },
         { path: 'gallery', name: 'gallery', component: () => import('@/views/GalleryView.vue') },
         {
